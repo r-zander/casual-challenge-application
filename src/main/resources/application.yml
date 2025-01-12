@@ -1,0 +1,5 @@
+spring:
+  application:
+    name: casual-challenge-application
+custom:
+  name: Real-Config

@@ -1,5 +1,13 @@
 spring:
   application:
     name: casual-challenge-application
+  datasource:
+    url: jdbc:postgresql://localhost:5432/casual_challenge
+    username: postgres
+    password: postgres
+  jpa:
+    show-sql: true
+  liquibase:
+    change-log: classpath:/db/changelog/changelog-master.xml
 custom:
   name: Real-Config

@@ -2,6 +2,7 @@
 
 -- changeset raoul_zander:20250112_2034_initial_schema.sql
 CREATE TYPE public.legality AS ENUM ('legal', 'not_legal', 'extended', 'banned');
+CREATE TYPE public.mtg_format AS ENUM ('standard', 'pioneer', 'pauper', 'modern', 'legacy', 'vintage');
 
 CREATE TABLE IF NOT EXISTS public.season
 (
@@ -23,6 +24,7 @@ CREATE TABLE IF NOT EXISTS public.card
     oracle_id uuid NOT NULL,
     name character varying(1023) NOT NULL,
     normalized_name character varying(1023) NOT NULL,
+    added_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     PRIMARY KEY (id)
 );
 
@@ -34,7 +36,7 @@ CREATE TABLE IF NOT EXISTS public.card_season_data
 (
     id bigserial NOT NULL,
     season_id integer NOT NULL,
-    card_id integer NOT NULL,
+    card_oracle_id uuid NOT NULL,
     budget_points integer,
     legality legality,
     meta_share_standard numeric(4, 3),
@@ -43,6 +45,9 @@ CREATE TABLE IF NOT EXISTS public.card_season_data
     meta_share_legacy numeric(4, 3),
     meta_share_vintage numeric(4, 3),
     meta_share_pauper numeric(4, 3),
+    banned_in mtg_format,
+    vintage_restricted boolean,
+
     PRIMARY KEY (id)
 );
 
@@ -55,11 +60,11 @@ ALTER TABLE IF EXISTS public.card_season_data
 
 
 ALTER TABLE IF EXISTS public.card_season_data
-    ADD FOREIGN KEY (card_id)
-    REFERENCES public.card (id) MATCH SIMPLE
+    ADD FOREIGN KEY (card_oracle_id)
+    REFERENCES public.card (oracle_id) MATCH SIMPLE
     ON UPDATE NO ACTION
        ON DELETE NO ACTION
     NOT VALID;
 
 CREATE UNIQUE INDEX card_season_data_ids_index
-    ON public.card_season_data (season_id ASC, card_id);
+    ON public.card_season_data (season_id ASC, card_oracle_id);

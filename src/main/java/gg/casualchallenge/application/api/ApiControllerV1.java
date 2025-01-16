@@ -8,6 +8,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Arrays;
 import java.util.List;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
+
+import static gg.casualchallenge.library.persistence.ParameterUtil.getPresenceBoolean;
 
 
 @RestController
@@ -22,12 +26,18 @@ public class ApiControllerV1 {
 
     @GetMapping(path = "/cards")
     public CardsResponse getCards(
-            @RequestParam(required = false, defaultValue = "") String names,
-            @RequestParam(required = false, defaultValue = "false") boolean displayExtended
+            @RequestParam String names,
+            @RequestParam(required = false) String displayExtended
     ) {
         List<String> nameList = Arrays.stream(names.split(";"))
                 .filter(name -> !name.isBlank())
+                .limit(100)
                 .toList();
-        return CardsResponseMapper.INSTANCE.toResponse(this.casualChallengeService.getCardData(null, nameList, displayExtended));
+        if (nameList.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The 'names' parameter is required and must contain at least one card name.");
+        }
+        return CardsResponseMapper.INSTANCE.toResponse(
+                this.casualChallengeService.getCardData(null, nameList, getPresenceBoolean(displayExtended))
+        );
     }
 }

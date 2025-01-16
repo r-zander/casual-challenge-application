@@ -1,12 +1,13 @@
 package gg.casualchallenge.application.model.values;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import lombok.Setter;
+import lombok.Value;
 
-@RequiredArgsConstructor
-@Setter
-@Getter
+import java.util.UUID;
+
+@Value
 public class CardVO {
-    private final String name;
+    int id;
+    UUID oracleId;
+    String name;
+    String normalizedName;
 }

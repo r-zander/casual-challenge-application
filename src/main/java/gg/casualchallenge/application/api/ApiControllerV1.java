@@ -1,7 +1,6 @@
-package gg.casualchallenge.application;
+package gg.casualchallenge.application.api;
 
-import gg.casualchallenge.application.mapper.CardMapper;
-import gg.casualchallenge.application.model.response.CardDTO;
+import gg.casualchallenge.application.model.response.CardsResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -22,10 +21,13 @@ public class ApiControllerV1 {
     }
 
     @GetMapping(path = "/cards")
-    public List<CardDTO> getCards(@RequestParam(required = false, defaultValue = "") String names) {
-        List<String> nameList = Arrays.stream(names.split(","))
+    public CardsResponse getCards(
+            @RequestParam(required = false, defaultValue = "") String names,
+            @RequestParam(required = false, defaultValue = "false") boolean displayExtended
+    ) {
+        List<String> nameList = Arrays.stream(names.split(";"))
                 .filter(name -> !name.isBlank())
                 .toList();
-        return CardMapper.INSTANCE.toDTOList(this.casualChallengeService.findCards(nameList));
+        return CardsResponseMapper.INSTANCE.toResponse(this.casualChallengeService.getCardData(null, nameList, displayExtended));
     }
 }

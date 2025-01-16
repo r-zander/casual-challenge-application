@@ -12,4 +12,5 @@ public interface SeasonRepository extends ListCrudRepository<Season, Integer> {
     @Query("SELECT s FROM Season s ORDER BY s.startDate DESC LIMIT 1")
     Season findCurrentSeason();
 
+    Season findBySeasonNumber(int seasonNumber);
 }

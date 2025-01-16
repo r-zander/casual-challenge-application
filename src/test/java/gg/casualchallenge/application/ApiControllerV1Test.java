@@ -1,5 +1,6 @@
 package gg.casualchallenge.application;
 
+import gg.casualchallenge.application.api.CasualChallengeService;
 import gg.casualchallenge.application.mapper.CardMapper;
 import gg.casualchallenge.application.model.response.CardDTO;
 import gg.casualchallenge.application.model.values.CardVO;

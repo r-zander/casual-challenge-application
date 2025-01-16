@@ -1,6 +1,7 @@
 package gg.casualchallenge.application.persistence.entity;
 
 import gg.casualchallenge.application.model.type.Legality;
+import gg.casualchallenge.application.model.type.MtgFormat;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -15,6 +16,7 @@ import jakarta.persistence.Table;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 @Data
 @Entity
@@ -29,14 +31,16 @@ public class CardSeasonData {
     @JoinColumn(name = "season_id", nullable = false)
     private Season season;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "card_id", nullable = false)
-    private Card card;
+//    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+//    @JoinColumn(name = "card_oracle_id", nullable = false)
+//    private Card card;
+
+    @Column(name = "card_oracle_id", nullable = false)
+    private UUID cardOracleId;
 
     @Column(name = "budget_points")
     private Integer budgetPoints;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "legality")
     private Legality legality;
 
@@ -57,4 +61,12 @@ public class CardSeasonData {
 
     @Column(name = "meta_share_pauper")
     private BigDecimal metaSharePauper;
+
+    @Column(name = "banned_in")
+    private MtgFormat bannedIn;
+
+    @Column(name = "vintage_restricted", nullable = false)
+    private boolean vintageRestricted;
+
+
 }

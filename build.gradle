@@ -17,6 +17,10 @@ java {
     }
 }
 
+compileJava {
+    options.compilerArgs << '-Amapstruct.unmappedTargetPolicy=ERROR'
+}
+
 configurations {
     compileOnly {
         extendsFrom annotationProcessor

@@ -3,6 +3,7 @@ package gg.casualchallenge.application.persistence.entity;
 import jakarta.persistence.*;
 import lombok.Data;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Data
@@ -22,4 +23,7 @@ public class Card {
 
     @Column(name = "normalized_name", nullable = false, length = 1023)
     private String normalizedName;
+
+    @Column(name = "added_at", nullable = false)
+    private Instant addedAt;
 }

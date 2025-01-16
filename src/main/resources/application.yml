@@ -9,5 +9,10 @@ spring:
     show-sql: true
   liquibase:
     change-log: classpath:/db/changelog/changelog-master.xml
-custom:
-  name: Real-Config
+casual-challenge:
+  security:
+    jwt:
+      secret-key: your-super-secret-key-for-env
+    rate-limit:
+      capacity: 2
+      refill-per-minute: 1

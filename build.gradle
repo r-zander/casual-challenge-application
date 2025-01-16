@@ -6,6 +6,7 @@ plugins {
 
 ext {
     mapstructVersion = '1.5.5.Final'
+    jjwtVersion = '0.11.5'
 }
 
 group = 'gg.casualchallenge'
@@ -43,6 +44,12 @@ dependencies {
     implementation 'org.liquibase:liquibase-core'
     implementation 'org.jsoup:jsoup:1.16.1'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.3'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation "io.jsonwebtoken:jjwt-api:${jjwtVersion}"
+    runtimeOnly "io.jsonwebtoken:jjwt-impl:${jjwtVersion}"
+    runtimeOnly "io.jsonwebtoken:jjwt-jackson:${jjwtVersion}"
+    implementation 'com.bucket4j:bucket4j_jdk17-core:8.14.0'
+
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

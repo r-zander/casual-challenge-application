@@ -1,0 +1,30 @@
+version: "3.7"
+services:
+  casual_challenge_application:
+    build: .
+    restart: no
+    ports:
+      - "8082:8080"
+    depends_on:
+      - postgresql_db
+    secrets:
+      - postgres_password
+      - jwt_private_key
+  postgresql_db:
+    image: "postgres:latest"
+    restart: no
+    ports:
+      - "5434:5432"
+    volumes:
+      - ./data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: casual_challenge
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+secrets:
+  postgres_password:
+    file: ./postgres_password.txt
+  jwt_private_key:
+    file: ./jwt_private_key.txt

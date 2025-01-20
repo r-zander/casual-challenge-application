@@ -36,3 +36,8 @@ out/
 ### VS Code ###
 .vscode/
 /src/main/resources/application-dev.yml
+
+### Custom ###
+/data/
+/jwt_private_key.txt
+/postgres_password.txt

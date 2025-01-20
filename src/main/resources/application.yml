@@ -1,6 +1,8 @@
 spring:
   application:
     name: casual-challenge-application
+  config:
+    import: optional:configtree:/run/secrets/
   datasource:
     url: jdbc:postgresql://localhost:5432/casual_challenge
     username: postgres
@@ -12,7 +14,15 @@ spring:
 casual-challenge:
   security:
     jwt:
-      secret-key: your-super-secret-key-for-env
+      secret-key: ${jwt_private_key}
     rate-limit:
       capacity: 2
       refill-per-minute: 1
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: jdbc:postgresql://postgresql_db:5432/casual_challenge
+    password: ${postgres_password}

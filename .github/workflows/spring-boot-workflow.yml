@@ -10,13 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
-          password: ${{ secrets.SSH_PASSWORD }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          key: ${{ secrets.SSH_KEY }}
           script: |
-            cd ${{ secrets.PROJECT_PATH }} # /home/wormies/wormies
+            cd ${{ secrets.PROJECT_PATH }}
             git pull origin master
             ./gradlew clean build
             docker compose up --build -d --remove-orphans

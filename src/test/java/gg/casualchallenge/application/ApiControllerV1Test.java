@@ -22,16 +22,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
-class ApiControllerV1Test {
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Mock
-    private CasualChallengeService casualChallengeService;
+//@SpringBootTest
+//@AutoConfigureMockMvc
+//@ActiveProfiles("test")
+//class ApiControllerV1Test {
+//
+//    @Autowired
+//    private MockMvc mockMvc;
+//
+//    @Mock
+//    private CasualChallengeService casualChallengeService;
 
 //    @Test
 //    void testGetCards_withValidNames() throws Exception {
@@ -68,4 +68,4 @@ class ApiControllerV1Test {
 //                .andExpect(status().isOk())
 //                .andExpect(jsonPath("$", hasSize(0)));
 //    }
-}
+//}

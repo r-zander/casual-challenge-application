@@ -32,12 +32,8 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests((authorize) -> authorize
-                        .requestMatchers(
-                                "/v3/api-docs/**",
-                                "/docs/**",
-                                "/swagger-ui/**",
-                                "/swagger-ui.html").permitAll() // Allow Swagger UI documentation
-                        .anyRequest().authenticated()
+                        .requestMatchers("/v1/**").authenticated() // API itself needs authentication
+                        .anyRequest().permitAll() // everything else (documentation, swagger-ui, landing page, error pages etc can be access freely)
                 )
 
                 .addFilterBefore(jwtAuthenticationFilter, LogoutFilter.class)

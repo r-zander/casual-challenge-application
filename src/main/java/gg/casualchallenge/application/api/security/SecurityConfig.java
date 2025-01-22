@@ -32,6 +32,11 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests((authorize) -> authorize
+                        .requestMatchers(
+                                "/v3/api-docs/**",
+                                "/docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html").permitAll() // Allow Swagger UI documentation
                         .anyRequest().authenticated()
                 )
 

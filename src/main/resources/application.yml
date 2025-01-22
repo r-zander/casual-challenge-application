@@ -11,6 +11,12 @@ spring:
     show-sql: true
   liquibase:
     change-log: classpath:/db/changelog/changelog-master.xml
+springdoc:
+  disable-i18n: true
+  show-spring-cloud-functions: false
+  swagger-ui:
+    disable-swagger-default-url: true
+    path: /docs
 casual-challenge:
   security:
     jwt:
@@ -18,6 +24,9 @@ casual-challenge:
     rate-limit:
       capacity: 2
       refill-per-minute: 1
+
+
+
 ---
 spring:
   config:

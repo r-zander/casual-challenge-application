@@ -15,7 +15,7 @@ import static gg.casualchallenge.library.persistence.ParameterUtil.getPresenceBo
 
 
 @RestController
-@RequestMapping("/api/v1")
+@RequestMapping("/v1")
 public class ApiControllerV1 {
 
     private final CasualChallengeService casualChallengeService;

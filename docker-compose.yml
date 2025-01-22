@@ -1,4 +1,3 @@
-version: "3.7"
 services:
   casual_challenge_application:
     build: .

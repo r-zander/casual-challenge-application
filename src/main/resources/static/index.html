@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Casual Challenge API</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Libre+Baskerville:wght@700&display=swap" rel="stylesheet">
+    <style>
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+
+            font-family: "Fira Code", monospace;
+        }
+
+        h1, h2 {
+            font-family: "Libre Baskerville", serif;
+        }
+
+        main {
+            flex: 1;
+        }
+
+        strong {
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+<div class="container py-5 d-flex flex-column min-vh-100">
+    <header class="text-center mb-5">
+        <h1 class="display-4">Casual Challenge API</h1>
+        <p class="lead">Build tools for the best Magic: The Gathering budget format.</p>
+    </header>
+
+    <main>
+        <section class="mb-4 text-center">
+            <a href="https://api.casualchallenge.gg/docs" class="btn btn-primary btn-lg mb-3">API Documentation</a>
+            <a href="https://www.casualchallenge.gg" class="btn btn-secondary btn-lg mb-3">Go to Player Page</a>
+        </section>
+
+        <section class="mb-4">
+            <h2>API Access</h2>
+            <p>
+                All requests to <code>https://api.casualchallenge.gg/v1/...</code> require an API token.
+                You can get a token by reaching out to <strong class="text-danger">Raoul, Merchant of the Void</strong> via Discord.
+            </p>
+        </section>
+
+        <section>
+            <h2>Motivation</h2>
+            <p>This API provides machine-readable data about cards in our custom <strong>Magic: the Gathering</strong> format, <strong>Casual Challenge</strong>.
+                The goal is to empower tech-savvy players to build their own tools, explore new ideas, and contribute to developing the format further.</p>
+            <p>Not sure why you’re here? Maybe you were looking for the <a href="https://www.casualchallenge.gg">format homepage</a>?</p>
+        </section>
+    </main>
+
+    <footer class="text-center mt-5">
+        <hr />
+
+        <p>&copy; 2025 Casual Challenge. All rights reserved.</p>
+        <p>
+            The information presented on this site about Magic: The Gathering, both literal and graphical, is copyrighted by Wizards of the Coast.<br />
+            This website is not produced, endorsed, supported, or affiliated with Wizards of the Coast.
+        </p>
+    </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

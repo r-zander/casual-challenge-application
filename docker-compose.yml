@@ -12,6 +12,7 @@ services:
     secrets:
       - postgres_password
       - jwt_private_key
+      - key_store_password
   postgresql_db:
     image: "postgres:latest"
     restart: no

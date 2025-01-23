@@ -28,6 +28,13 @@ casual-challenge:
 
 
 ---
+server:
+  port: 8443
+  ssl:
+    enabled: true
+    key-store: /etc/ssl/certs/ssl/cloudflare-origin.p12
+    key-store-password: ${key_store_password}
+    key-store-type: PKCS12
 spring:
   config:
     activate:

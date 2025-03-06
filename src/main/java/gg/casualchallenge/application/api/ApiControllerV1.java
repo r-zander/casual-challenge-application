@@ -1,6 +1,7 @@
 package gg.casualchallenge.application.api;
 
-import gg.casualchallenge.application.model.response.CardsResponse;
+import gg.casualchallenge.application.api.datamodel.CardsResponse;
+import gg.casualchallenge.application.model.mapper.CardsResponseMapper;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -11,7 +12,7 @@ import java.util.List;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 
-import static gg.casualchallenge.library.persistence.ParameterUtil.getPresenceBoolean;
+import static gg.casualchallenge.library.api.ParameterUtil.getPresenceBoolean;
 
 
 @RestController

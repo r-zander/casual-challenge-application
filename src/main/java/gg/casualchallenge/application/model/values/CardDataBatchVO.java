@@ -1,6 +1,5 @@
 package gg.casualchallenge.application.model.values;
 
-import gg.casualchallenge.application.model.response.CardDTO;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;

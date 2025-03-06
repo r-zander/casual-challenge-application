@@ -1,4 +1,4 @@
-package gg.casualchallenge.application.model.response;
+package gg.casualchallenge.application.api.datamodel;
 
 import gg.casualchallenge.application.model.type.AppliedRule;
 import gg.casualchallenge.application.model.type.Legality;

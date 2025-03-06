@@ -1,4 +1,4 @@
-package gg.casualchallenge.library.persistence;
+package gg.casualchallenge.library.api;
 
 import java.util.Locale;
 

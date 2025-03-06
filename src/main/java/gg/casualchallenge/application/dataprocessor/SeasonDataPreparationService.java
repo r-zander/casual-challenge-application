@@ -1,6 +1,9 @@
 package gg.casualchallenge.application.dataprocessor;
 
 import gg.casualchallenge.application.common.Constants;
+import gg.casualchallenge.application.model.mapper.SeasonMapper;
+import gg.casualchallenge.application.model.values.CreatedSeasonVO;
+import gg.casualchallenge.application.model.values.SeasonVO;
 import gg.casualchallenge.application.persistence.SeasonRepository;
 import gg.casualchallenge.application.persistence.entity.Season;
 import jakarta.transaction.Transactional;
@@ -8,7 +11,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.time.temporal.TemporalAdjusters;
 
 @Service
@@ -21,12 +23,12 @@ public class SeasonDataPreparationService {
     }
 
     @Transactional
-    public void prepareSeasonData() {
+    public CreatedSeasonVO prepareSeasonData() {
 
 //## How to: Start a new season
 //
 //1. Update [Season History](?tab=t.0#heading=h.442edbgnzano) by adding new season as top most row
-        this.createNewSeason();
+        SeasonVO newSeason = this.createNewSeason();
 
 //2. Update Prices
 //   1. Change [janik-budgetpoints/budget\_point\_calculator.py](https://github.com/r-zander/chrome-extension-casual-challenge/blob/master/janik-budgetpoints/budget_point_calculator.py)
@@ -87,10 +89,14 @@ public class SeasonDataPreparationService {
 //      1. The review for both platforms usually takes less than an hour, sometimes mere minutes
 //6. Communication
 //   1. Make post in Discord
-
+        return new CreatedSeasonVO(
+            newSeason,
+            null,
+            null
+        );
     }
 
-    private void createNewSeason() {
+    private SeasonVO createNewSeason() {
         Season currentSeason = seasonRepository.findCurrentSeason();
         int currentSeasonNumber;
         if (currentSeason == null) {
@@ -107,6 +113,7 @@ public class SeasonDataPreparationService {
         newSeason.setEndDate(findSeasonEndDate(newSeason.getStartDate()));
         seasonRepository.save(newSeason);
 
+        return SeasonMapper.INSTANCE.toVO(newSeason);
     }
 
     private static LocalDate findSeasonEndDate(LocalDate startDate) {

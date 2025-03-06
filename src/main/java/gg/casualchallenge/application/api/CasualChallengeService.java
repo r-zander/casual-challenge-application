@@ -1,6 +1,6 @@
 package gg.casualchallenge.application.api;
 
-import gg.casualchallenge.application.mapper.CardMapper;
+import gg.casualchallenge.application.model.mapper.CardMapper;
 import gg.casualchallenge.application.model.type.AppliedRule;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;

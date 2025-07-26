@@ -104,10 +104,11 @@ public class CasualChallengeService {
     /**
      * Normalize a card name by performing the following transformations:
      * 1. Replace diacritic characters (e.g. accents) with their base characters.
-     * 2. Replace all non-alphanumeric characters with a dash '-' (e.g. "Card!" -> "Card-").
-     * 3. Replace repeated dashes ("---") with a single dash ("-").
-     * 4. Remove leading and trailing dashes.
-     * 5. Convert the resulting string to lowercase.
+     * 2. Strip single quotes (according to scryfall's rules)
+     * 3. Replace all non-alphanumeric characters with a dash '-' (e.g. "Card!" -> "Card-").
+     * 4. Replace repeated dashes ("---") with a single dash ("-").
+     * 5. Remove leading and trailing dashes.
+     * 6. Convert the resulting string to lowercase.
      *
      * @param cardName The original card name to normalize
      * @return The normalized card name
@@ -117,22 +118,25 @@ public class CasualChallengeService {
             return "";
         }
 
-        // Step 1: Decompose the string into its base characters and remove diacritic marks
+        // Step: Decompose the string into its base characters and remove diacritic marks
         String normalized = Normalizer.normalize(cardName, Normalizer.Form.NFD);
 
         // Remove diacritic marks (Unicode category 'Mn')
         normalized = normalized.replaceAll("\\p{M}", "");
 
-        // Step 2: Replace non-alphanumeric characters with dashes
+        // Step: Strip single quotes
+        normalized = normalized.replaceAll("'", "");
+
+        // Step: Replace non-alphanumeric characters with dashes
         normalized = normalized.replaceAll("[^a-zA-Z0-9]", "-");
 
-        // Step 3: Replace multiple dashes with a single dash
+        // Step: Replace multiple dashes with a single dash
         normalized = normalized.replaceAll("-+", "-");
 
-        // Step 4: Remove leading and trailing dashes
+        // Step: Remove leading and trailing dashes
         normalized = normalized.replaceAll("^-|-$", "");
 
-        // Step 5: Convert to lowercase
+        // Step: Convert to lowercase
         return normalized.toLowerCase(Locale.ENGLISH);
     }
 

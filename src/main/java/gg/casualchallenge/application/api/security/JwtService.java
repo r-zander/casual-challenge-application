@@ -8,11 +8,7 @@ import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.util.Base64;
 import java.util.Date;
 
 @Component
@@ -43,17 +39,5 @@ public class JwtService {
 
     public boolean validateToken(String token) {
         return extractClaims(token).getExpiration().after(new Date());
-    }
-
-    public static void main(String[] args) {
-        SecretKey secretKey = Keys.secretKeyFor(SignatureAlgorithm.HS256);
-        System.out.println(new String(secretKey.getEncoded(), StandardCharsets.UTF_8));
-        System.out.println(Base64.getEncoder().encodeToString(secretKey.getEncoded()));
-
-        JwtService jwtService = new JwtService("BOYbP5W6Ri2DKUp4aMCHshJecnrg3wF9ZlXyTNLQG10uSkAEdx");
-        String token = jwtService.generateToken("discord-bot");
-        System.out.println(token);
-        System.out.println(jwtService.extractClaims(token));
-        System.out.println(jwtService.validateToken(token));
     }
 }

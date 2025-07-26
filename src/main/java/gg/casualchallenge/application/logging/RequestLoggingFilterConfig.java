@@ -1,4 +1,4 @@
-package gg.casualchallenge.application;
+package gg.casualchallenge.application.logging;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.context.annotation.Bean;

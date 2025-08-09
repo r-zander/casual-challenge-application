@@ -30,13 +30,18 @@ public class CliTools {
                 break;
             }
             case "generate-jwt": {
+                if (args.length < 2) {
+                    System.err.println("Please provide a name that's used as jwt username as 2nd parameter, e.g. 'discord-bot'.");
+                    return;
+                }
+
                 // Dynamically resolve the project root directory
                 Path projectRoot = Paths.get("").toAbsolutePath();
                 Path secretFile = projectRoot.resolve("jwt_private_key.txt");
                 String secretKey = Files.readString(secretFile).trim();
 
                 JwtService jwtService = new JwtService(secretKey);
-                String token = jwtService.generateToken("discord-bot");
+                String token = jwtService.generateToken(args[1]);
                 System.out.println("Token: " + token);
                 System.out.println(jwtService.extractClaims(token));
                 System.out.println(jwtService.validateToken(token));

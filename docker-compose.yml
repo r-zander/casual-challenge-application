@@ -1,7 +1,7 @@
 services:
   casual_challenge_application:
     build: .
-    restart: no
+    restart: always
     ports:
       - "443:8443"
     container_name: casual-challenge-app
@@ -15,7 +15,7 @@ services:
       - key_store_password
   postgresql_db:
     image: "postgres:latest"
-    restart: no
+    restart: always
     ports:
       - "127.0.0.1:5434:5432"
     container_name: casual-challenge-db

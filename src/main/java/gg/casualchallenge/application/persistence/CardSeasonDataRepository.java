@@ -10,4 +10,6 @@ import java.util.UUID;
 
 public interface CardSeasonDataRepository  extends ListCrudRepository<CardSeasonData, Long>  {
     List<CardSeasonData> findAllBySeasonAndCardOracleIdIn(Season season, Collection<UUID> cardOracleIds);
+
+    List<CardSeasonData> findAllBySeason(Season season);
 }

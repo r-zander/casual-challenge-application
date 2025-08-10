@@ -41,4 +41,13 @@ public class ApiControllerV1 {
                 this.casualChallengeService.getCardData(null, nameList, getPresenceBoolean(displayExtended))
         );
     }
+
+    @GetMapping(path = "/cards/all")
+    public CardsResponse getCards(
+            @RequestParam(required = false) String displayExtended
+    ) {
+        return CardsResponseMapper.INSTANCE.toResponse(
+                this.casualChallengeService.getAllCardData(null, getPresenceBoolean(displayExtended))
+        );
+    }
 }

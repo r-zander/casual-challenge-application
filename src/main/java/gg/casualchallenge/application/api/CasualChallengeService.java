@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -38,7 +39,8 @@ public class CasualChallengeService {
     private final CardRepository cardRepository;
     private final CardSeasonDataRepository cardSeasonDataRepository;
 
-    private final Map<String, CardVO> cardCache = new HashMap<>();
+    private final Map<String, CardVO> cardCacheByNormalizedName = new HashMap<>();
+    private final Map<UUID, CardVO> cardCacheByOracleId = new HashMap<>();
 
     public CasualChallengeService(
             SeasonRepository seasonRepository,
@@ -54,27 +56,25 @@ public class CasualChallengeService {
     public void preloadCards() {
         log.info("Start Preloading Cache.");
         List<Card> allCards = cardRepository.findAll();
-        cardCache.putAll(allCards.stream()
-                .map(CardMapper.INSTANCE::toVO)
+        List<CardVO> cardVOs = allCards.stream()
+                .map(CardMapper.INSTANCE::toVO).toList();
+        cardCacheByNormalizedName.putAll(cardVOs.stream()
                 .collect(Collectors.toMap(CardVO::getNormalizedName, cardVO -> cardVO)));
-        log.info("Preloading Cache done. Loaded {} cards into memory.", cardCache.size());
+        cardCacheByOracleId.putAll(cardVOs.stream()
+                .collect(Collectors.toMap(CardVO::getOracleId, cardVO -> cardVO)));
+        log.info("Preloading Cache done. Loaded {} cards into memory.", cardCacheByNormalizedName.size());
     }
 
     /**
      * @param seasonNumber null = current season
      */
     public CardDataBatchVO getCardData(Integer seasonNumber, List<String> cardNames, boolean displayExtended) {
-        Season season;
-        if (seasonNumber == null) {
-            season = this.seasonRepository.findCurrentSeason();
-        } else {
-            season = this.seasonRepository.findBySeasonNumber(seasonNumber);
-        }
+        Season season = getSeason(seasonNumber);
 
         Map<UUID, CardVO> foundCards = new HashMap<>();
         List<String> missingCardNames = new LinkedList<>();
         for (String cardName : cardNames) {
-            CardVO cardVO = cardCache.get(normalizeCardName(cardName));
+            CardVO cardVO = cardCacheByNormalizedName.get(normalizeCardName(cardName));
             if (cardVO == null) {
                 missingCardNames.add(cardName);
             } else {
@@ -83,9 +83,28 @@ public class CasualChallengeService {
         }
 
         List<CardSeasonData> cardDataList = cardSeasonDataRepository.findAllBySeasonAndCardOracleIdIn(season, foundCards.keySet());
+
+        return new CardDataBatchVO(
+                buildCardWithDataVOs(displayExtended, cardDataList, foundCards),
+                missingCardNames
+        );
+    }
+
+    public CardDataBatchVO getAllCardData(Integer seasonNumber, boolean displayExtended) {
+        Season season = getSeason(seasonNumber);
+
+        List<CardSeasonData> cardDataList = cardSeasonDataRepository.findAllBySeason(season);
+
+        return new CardDataBatchVO(
+                buildCardWithDataVOs(displayExtended, cardDataList, cardCacheByOracleId),
+                Collections.emptyList()
+        );
+    }
+
+    private List<CardWithDataVO> buildCardWithDataVOs(boolean displayExtended, List<CardSeasonData> cardDataList, Map<UUID, CardVO> cardCacheByOracleId) {
         List<CardWithDataVO> cardWithDataVOs = new ArrayList<>(cardDataList.size());
         for (CardSeasonData cardSeasonData : cardDataList) {
-            CardVO cardVO = foundCards.get(cardSeasonData.getCardOracleId());
+            CardVO cardVO = cardCacheByOracleId.get(cardSeasonData.getCardOracleId());
             cardWithDataVOs.add(new CardWithDataVO(
                     cardVO.getId(),
                     cardVO.getOracleId(),
@@ -98,7 +117,17 @@ public class CasualChallengeService {
             ));
         }
 
-        return new CardDataBatchVO(cardWithDataVOs, missingCardNames);
+        return cardWithDataVOs;
+    }
+
+    private Season getSeason(Integer seasonNumber) {
+        Season season;
+        if (seasonNumber == null) {
+            season = this.seasonRepository.findCurrentSeason();
+        } else {
+            season = this.seasonRepository.findBySeasonNumber(seasonNumber);
+        }
+        return season;
     }
 
     /**
@@ -113,7 +142,7 @@ public class CasualChallengeService {
      * @param cardName The original card name to normalize
      * @return The normalized card name
      */
-    public static String normalizeCardName(String cardName) {
+    private static String normalizeCardName(String cardName) {
         if (cardName == null || cardName.isEmpty()) {
             return "";
         }
@@ -241,5 +270,4 @@ public class CasualChallengeService {
 
         return false;
     }
-
 }

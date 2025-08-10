@@ -11,6 +11,9 @@ spring:
     show-sql: true
   liquibase:
     change-log: classpath:/db/changelog/changelog-master.xml
+server:
+  compression:
+    enabled: true # enable compression for requests with Accept-Encoding: gzip
 springdoc:
   disable-i18n: true
   show-spring-cloud-functions: false

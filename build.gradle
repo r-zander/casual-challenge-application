@@ -49,6 +49,8 @@ dependencies {
     runtimeOnly "io.jsonwebtoken:jjwt-impl:${jjwtVersion}"
     runtimeOnly "io.jsonwebtoken:jjwt-jackson:${jjwtVersion}"
     implementation 'com.bucket4j:bucket4j_jdk17-core:8.14.0'
+    implementation 'org.hibernate.validator:hibernate-validator:8.0.3.Final'
+    implementation 'io.hypersistence:hypersistence-utils-hibernate-63:3.10.1'
 
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

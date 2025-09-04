@@ -4,7 +4,7 @@ spring:
   config:
     import: optional:configtree:/run/secrets/
   datasource:
-    url: jdbc:postgresql://localhost:5432/casual_challenge
+    url: jdbc:postgresql://localhost:5432/casual_challenge?stringtype=unspecified
     username: postgres
     password: postgres
   jpa:

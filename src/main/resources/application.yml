@@ -25,8 +25,8 @@ casual-challenge:
     jwt:
       secret-key: ${jwt_private_key}
     rate-limit:
-      capacity: 2
-      refill-per-minute: 1
+      capacity: 8
+      refill-per-minute: 2
 
 
 

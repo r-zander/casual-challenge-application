@@ -1,9 +1,11 @@
 package gg.casualchallenge.application.api.legacy;
 
+import gg.casualchallenge.application.model.mapper.SeasonMapper;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.api.legacy.values.BannedCardVO;
 import gg.casualchallenge.application.api.legacy.values.CardBudgetPointsVO;
 import gg.casualchallenge.application.api.legacy.datamodel.LegacyMtgFormat;
+import gg.casualchallenge.application.model.values.SeasonVO;
 import gg.casualchallenge.application.persistence.CardRepository;
 import gg.casualchallenge.application.persistence.CardSeasonDataRepository;
 import gg.casualchallenge.application.persistence.SeasonRepository;
@@ -113,5 +115,9 @@ public class CasualChallengeLegacyService {
         }
         
         return metaShares;
+    }
+
+    public SeasonVO getCurrentSeason() {
+        return SeasonMapper.INSTANCE.toVO(seasonRepository.findCurrentSeason());
     }
 }

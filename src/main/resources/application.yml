@@ -43,5 +43,5 @@ spring:
     activate:
       on-profile: prod
   datasource:
-    url: jdbc:postgresql://postgresql_db:5432/casual_challenge
+    url: jdbc:postgresql://postgresql_db:5432/casual_challenge?stringtype=unspecified
     password: ${postgres_password}

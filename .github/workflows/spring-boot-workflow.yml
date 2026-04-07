@@ -17,7 +17,9 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           passphrase: ${{ secrets.SSH_PASSPHRASE }}
           key: ${{ secrets.SSH_KEY }}
+          script_stop: true
           script: |
+            set -euo pipefail
             cd ${{ secrets.PROJECT_PATH }}
             git pull origin master
             ./gradlew clean build

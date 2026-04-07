@@ -2,7 +2,8 @@
 
 -- changeset janik_nissen:20260406_0005_00_add_season_20.sql
 UPDATE public.season
-    SET end_date = '2026-05-04'
+    SET end_date = '2026-04-04',
+        updated_at = now()
     WHERE id = 19;
 INSERT INTO public.season (id, season_number, start_date, end_date, updated_at)
 VALUES

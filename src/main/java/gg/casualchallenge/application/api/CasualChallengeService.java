@@ -1,5 +1,6 @@
 package gg.casualchallenge.application.api;
 
+import gg.casualchallenge.application.common.CardNameNormalizer;
 import gg.casualchallenge.application.model.mapper.CardMapper;
 import gg.casualchallenge.application.model.type.AppliedRule;
 import gg.casualchallenge.application.model.type.Legality;
@@ -18,14 +19,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -55,6 +54,8 @@ public class CasualChallengeService {
     @PostConstruct
     public void preloadCards() {
         log.info("Start Preloading Cache.");
+        cardCacheByNormalizedName.clear();
+        cardCacheByOracleId.clear();
         List<Card> allCards = cardRepository.findAll();
         List<CardVO> cardVOs = allCards.stream()
                 .map(CardMapper.INSTANCE::toVO).toList();
@@ -74,7 +75,7 @@ public class CasualChallengeService {
         Map<UUID, CardVO> foundCards = new HashMap<>();
         List<String> missingCardNames = new LinkedList<>();
         for (String cardName : cardNames) {
-            CardVO cardVO = cardCacheByNormalizedName.get(normalizeCardName(cardName));
+            CardVO cardVO = cardCacheByNormalizedName.get(CardNameNormalizer.normalize(cardName));
             if (cardVO == null) {
                 missingCardNames.add(cardName);
             } else {
@@ -128,45 +129,6 @@ public class CasualChallengeService {
             season = this.seasonRepository.findBySeasonNumber(seasonNumber);
         }
         return season;
-    }
-
-    /**
-     * Normalize a card name by performing the following transformations:
-     * 1. Replace diacritic characters (e.g. accents) with their base characters.
-     * 2. Strip single quotes (according to scryfall's rules)
-     * 3. Replace all non-alphanumeric characters with a dash '-' (e.g. "Card!" -> "Card-").
-     * 4. Replace repeated dashes ("---") with a single dash ("-").
-     * 5. Remove leading and trailing dashes.
-     * 6. Convert the resulting string to lowercase.
-     *
-     * @param cardName The original card name to normalize
-     * @return The normalized card name
-     */
-    private static String normalizeCardName(String cardName) {
-        if (cardName == null || cardName.isEmpty()) {
-            return "";
-        }
-
-        // Step: Decompose the string into its base characters and remove diacritic marks
-        String normalized = Normalizer.normalize(cardName, Normalizer.Form.NFD);
-
-        // Remove diacritic marks (Unicode category 'Mn')
-        normalized = normalized.replaceAll("\\p{M}", "");
-
-        // Step: Strip single quotes
-        normalized = normalized.replaceAll("'", "");
-
-        // Step: Replace non-alphanumeric characters with dashes
-        normalized = normalized.replaceAll("[^a-zA-Z0-9]", "-");
-
-        // Step: Replace multiple dashes with a single dash
-        normalized = normalized.replaceAll("-+", "-");
-
-        // Step: Remove leading and trailing dashes
-        normalized = normalized.replaceAll("^-|-$", "");
-
-        // Step: Convert to lowercase
-        return normalized.toLowerCase(Locale.ENGLISH);
     }
 
     private Legality filterLegality(Legality legality, boolean displayExtended) {

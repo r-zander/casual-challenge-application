@@ -116,6 +116,12 @@ public class SeasonPreparationService {
     }
 
     public synchronized SeasonPreparationJobVO prepare(SeasonPreparationRequestVO request) {
+        if (!request.getEndDate().isAfter(request.getStartDate())) {
+            throw new IllegalArgumentException("A season that starts on " + request.getStartDate() + " can't end on " + request.getEndDate() + ".");
+        }
+        if (request.getPriceWindow().getEnd().isAfter(request.getStartDate())) {
+            throw new IllegalArgumentException("The price window has to end at the start of the season at the latest, but it ends on " + request.getPriceWindow().getEnd() + ".");
+        }
         if (job.getState() == SeasonPreparationState.RUNNING) {
             throw new IllegalStateException("A season is already being prepared since " + job.getStartedAt() + ".");
         }
@@ -140,17 +146,20 @@ public class SeasonPreparationService {
         jobExecutor.shutdownNow(); // the executor thread is not a daemon --> the JVM would wait for it on every deploy
     }
 
-    public SeasonPreparationRequestVO defaultRequest() {
+    public SeasonPreparationRequestVO defaultRequest(LocalDate startDate) {
         Season currentSeason = seasonRepository.findCurrentSeason();
         if (currentSeason == null) {
             throw new IllegalStateException("There is no current season to continue.");
         }
 
-        LocalDate startDate = LocalDate.now(Constants.TIMEZONE);
+        LocalDate endDate = SeasonDates.defaultEndDate(currentSeason.getEndDate());
+        if (!endDate.isAfter(startDate)) {
+            endDate = SeasonDates.defaultEndDate(startDate); // the previous season ended ages ago --> count the ten weeks from the new start instead
+        }
 
         return new SeasonPreparationRequestVO(
                 startDate,
-                SeasonDates.defaultEndDate(currentSeason.getEndDate()),
+                endDate,
                 PriceWindowVO.of(startDate, priceWindowDays),
                 MetaShareSource.MTGGOLDFISH,
                 null,
@@ -420,6 +429,7 @@ public class SeasonPreparationService {
         List<SeasonDraftReportVO.LeftOutCardVO> skippedCards = new ArrayList<>();
         List<SeasonDraftReportVO.OracleIdChangeVO> oracleIdChanges = new ArrayList<>();
         List<SeasonDraftReportVO.RenamedCardVO> renamedCards = new ArrayList<>();
+        List<SeasonDraftReportVO.RenamedCardVO> normalizedNameFixes = new ArrayList<>();
         Set<UUID> knownOracleIds = new HashSet<>(cards.size());
         int cardCount = 0;
         int newCardCount = 0;
@@ -441,8 +451,11 @@ public class SeasonPreparationService {
                 oracleIdChanges.add(new SeasonDraftReportVO.OracleIdChangeVO(card.getName(), card.getPreviousOracleId(), card.getOracleId(), printings.getCardsByName().get(card.getName()).getFirstSetCode()));
                 existingCard = existingCardsByOracleId.get(card.getPreviousOracleId()); // still sitting on its old oracle id --> it can be renamed on top of the remap
             }
-            if (existingCard != null && (!existingCard.getName().equals(card.getName()) || !existingCard.getNormalizedName().equals(card.getNormalizedName()))) {
+            if (existingCard != null && !existingCard.getName().equals(card.getName())) {
                 renamedCards.add(new SeasonDraftReportVO.RenamedCardVO(card.getOracleId(), existingCard.getName(), card.getName(), card.getNormalizedName()));
+            } else if (existingCard != null && !existingCard.getNormalizedName().equals(card.getNormalizedName())) {
+                // Same name, other normalized name: the old python tool turned apostrophes into a dash --> the commit repairs those rows on the way
+                normalizedNameFixes.add(new SeasonDraftReportVO.RenamedCardVO(card.getOracleId(), existingCard.getName(), card.getName(), card.getNormalizedName()));
             }
 
             UUID previousOracleId = card.getPreviousOracleId() != null ? card.getPreviousOracleId() : card.getOracleId();
@@ -507,6 +520,7 @@ public class SeasonPreparationService {
         SeasonDraftReportVO.CountsVO counts = new SeasonDraftReportVO.CountsVO(
                 cardCount,
                 newCardCount,
+                normalizedNameFixes.size(),
                 zeroBudgetPointCardCount,
                 legalities,
                 budgetPoints.getExchangeRate(),
@@ -544,6 +558,7 @@ public class SeasonPreparationService {
                 skippedCards,
                 oracleIdChanges,
                 renamedCards,
+                normalizedNameFixes,
                 findSetsReleased(printings, request),
                 scryfallDecks(newBans, unbans, cards)
         );

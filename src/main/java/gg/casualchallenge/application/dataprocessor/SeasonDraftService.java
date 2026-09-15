@@ -23,6 +23,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 @Slf4j
@@ -50,8 +52,16 @@ public class SeasonDraftService {
         this.migrationAuthor = migrationAuthor;
     }
 
+    /** @return null when no season was ever prepared */
+    public SeasonDraftVO latestDraft() {
+        return seasonDraftRepository.findDraft();
+    }
+
     public SeasonDraftReportVO report() {
-        return toReport(latestDraft());
+        SeasonDraftVO draft = latestDraft();
+        if (draft == null) return null;
+
+        return toReport(draft);
     }
 
     public CommittedSeasonVO commit() {
@@ -67,14 +77,14 @@ public class SeasonDraftService {
             try {
                 writeSqlFiles(committedDraft);
             } catch (IOException e) {
-                throw new IllegalStateException("Season " + committedDraft.getSeasonNumber() + " is committed, but writing the migration files failed: " + e.getMessage(), e);
+                throw new RuntimeException("Season " + committedDraft.getSeasonNumber() + " is committed, but writing the migration files failed: " + e.getMessage(), e);
             }
         }
 
         try {
             casualChallengeService.preloadCards();
         } catch (RuntimeException e) {
-            throw new IllegalStateException("Season " + committedDraft.getSeasonNumber() + " is committed, but reloading the card cache failed: " + e.getMessage(), e);
+            throw new RuntimeException("Season " + committedDraft.getSeasonNumber() + " is committed, but reloading the card cache failed: " + e.getMessage(), e);
         }
 
         SeasonDraftReportVO report = toReport(committedDraft);
@@ -99,6 +109,7 @@ public class SeasonDraftService {
 
     public SeasonSqlFileVO exportSql(SeasonSqlFile part) {
         SeasonDraftVO draft = latestDraft();
+        if (draft == null) return null;
 
         return new SeasonSqlFileVO(sqlFileName(draft, part), sqlContent(draft, part));
     }
@@ -140,21 +151,17 @@ public class SeasonDraftService {
     private String addSeason(SeasonDraftVO draft) {
         SeasonDraftReportVO report = toReport(draft);
 
+        // A replay on an untouched database needs the repaired normalized names as well, not just the real renames
+        List<SeasonDraftReportVO.RenamedCardVO> renamedCards = new ArrayList<>(report.getRenamedCards().size() + report.getNormalizedNameFixes().size());
+        renamedCards.addAll(report.getRenamedCards());
+        renamedCards.addAll(report.getNormalizedNameFixes());
+
         return SeasonMigrationSql.addSeason(
                 migrationAuthor,
                 sqlFileName(draft, SeasonSqlFile.ADD_SEASON),
                 draft,
                 report.getOracleIdChanges(),
-                report.getRenamedCards());
-    }
-
-    private SeasonDraftVO latestDraft() {
-        SeasonDraftVO draft = seasonDraftRepository.findDraft();
-        if (draft == null) {
-            throw new IllegalStateException("There is no season draft.");
-        }
-
-        return draft;
+                renamedCards);
     }
 
     private SeasonDraftVO uncommittedDraft(String action) {

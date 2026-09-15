@@ -14,6 +14,8 @@ spring:
 server:
   compression:
     enabled: true # enable compression for requests with Accept-Encoding: gzip
+  error:
+    include-message: always # the messages on 400/404/409 are written to be read by whoever called
 springdoc:
   disable-i18n: true
   show-spring-cloud-functions: false

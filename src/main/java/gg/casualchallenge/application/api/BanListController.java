@@ -120,7 +120,11 @@ public class BanListController {
     }
 
     private void addMetaShare(List<String> reasons, MtgFormat mtgFormat, BigDecimal metaShare) {
-        if (metaShare == null || metaShare.signum() == 0) return;
+        if (metaShare == null) return;
+        if (metaShare.signum() == 0) { // MtgGoldfish rounds down to full percent --> a card at the end of the list has a share of 0
+            reasons.add(toDisplayName(mtgFormat) + " (< 1%)");
+            return;
+        }
 
         reasons.add(toDisplayName(mtgFormat) + " (" + metaShare.movePointRight(2).stripTrailingZeros().toPlainString() + "%)");
     }

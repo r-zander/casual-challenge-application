@@ -185,12 +185,14 @@ class SeasonPreparationServiceTest {
         assertEquals(JOVEN_OLD, report.getOracleIdChanges().get(0).getPreviousOracleId());
         assertEquals(JOVEN_NEW, report.getOracleIdChanges().get(0).getOracleId());
         assertEquals("Lava, Axe", report.getOracleIdChanges().get(1).getName());
-        assertEquals(2, report.getRenamedCards().size());
+        assertEquals(1, report.getRenamedCards().size());
         assertEquals("Lorien Revealed", report.getRenamedCards().get(0).getPreviousName());
         assertEquals("Lórien Revealed", report.getRenamedCards().get(0).getName());
-        assertEquals("Lava, Axe", report.getRenamedCards().get(1).getName());
-        assertEquals("lava,-axe", report.getRenamedCards().get(1).getNormalizedName());
-        assertEquals(LAVA_AXE_AGAIN, report.getRenamedCards().get(1).getOracleId());
+        assertEquals(1, report.getNormalizedNameFixes().size()); // same name, other normalized name --> not a rename
+        assertEquals(1, report.getCounts().getNormalizedNameFixes());
+        assertEquals("Lava, Axe", report.getNormalizedNameFixes().get(0).getName());
+        assertEquals("lava,-axe", report.getNormalizedNameFixes().get(0).getNormalizedName());
+        assertEquals(LAVA_AXE_AGAIN, report.getNormalizedNameFixes().get(0).getOracleId());
     }
 
     @Test

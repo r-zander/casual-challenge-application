@@ -40,6 +40,7 @@ public class SeasonDraftReportVO {
     List<LeftOutCardVO> skippedCards;
     List<OracleIdChangeVO> oracleIdChanges;
     List<RenamedCardVO> renamedCards;
+    List<RenamedCardVO> normalizedNameFixes;
     List<MtgSetVO> setsReleased;
     ScryfallDecksVO scryfallDecks;
 
@@ -47,6 +48,7 @@ public class SeasonDraftReportVO {
     public static class CountsVO {
         int cards;
         int newCards;
+        int normalizedNameFixes;
         int zeroBudgetPointCards;
         Map<Legality, Integer> legalities;
         double exchangeRate;

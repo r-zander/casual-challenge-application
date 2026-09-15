@@ -78,6 +78,7 @@ class SeasonDraftServiceTest {
         SeasonDraftReportVO.CountsVO counts = new SeasonDraftReportVO.CountsVO(
                 30206,
                 412,
+                1868,
                 8901,
                 Map.of(Legality.LEGAL, 20000, Legality.BANNED, 2),
                 1.0834,
@@ -113,6 +114,7 @@ class SeasonDraftServiceTest {
                 List.of(new SeasonDraftReportVO.LeftOutCardVO("Lava, Axe", null, "duplicate normalized name")),
                 List.of(new SeasonDraftReportVO.OracleIdChangeVO("Joven and Chandler", JOVEN_OLD, JOVEN_NEW, "ATQ")),
                 List.of(new SeasonDraftReportVO.RenamedCardVO(JOVEN_NEW, "Joven", "Joven and Chandler", "joven-and-chandler")),
+                List.of(new SeasonDraftReportVO.RenamedCardVO(UUID.fromString("fc2ccab7-cab1-4463-b73d-898070136d74"), "Ancestor's Chosen", "Ancestor's Chosen", "ancestors-chosen")),
                 List.of(new MtgSetVO("Edge of Eternities", "EOE", LocalDate.of(2026, 10, 2), "expansion", List.of("Cosmic Conquest"))),
                 new SeasonDraftReportVO.ScryfallDecksVO("Black Lotus\nBrainstorm", "Sol Ring", "Brainstorm"));
     }

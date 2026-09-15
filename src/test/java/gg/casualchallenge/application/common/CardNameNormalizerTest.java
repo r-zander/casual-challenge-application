@@ -25,11 +25,4 @@ class CardNameNormalizerTest {
         assertEquals("troll-of-khazad-dum", CardNameNormalizer.normalize("Troll of Khazad-dûm"));
         assertEquals("juzam-djinn", CardNameNormalizer.normalize("Juzám Djinn"));
     }
-
-    @Test
-    void testSomewhatNormalize() {
-        assertEquals("rampant,-growth", CardNameNormalizer.somewhatNormalize("Rampant, Growth"));
-        assertEquals("rampant-growth", CardNameNormalizer.normalize("Rampant, Growth"));
-        assertEquals("gather,-the-townsfolk", CardNameNormalizer.somewhatNormalize("Gather, the Townsfolk"));
-    }
 }

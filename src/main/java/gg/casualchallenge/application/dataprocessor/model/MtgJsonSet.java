@@ -1,5 +1,6 @@
 package gg.casualchallenge.application.dataprocessor.model;
 
+import gg.casualchallenge.application.model.type.MtgSetType;
 import lombok.Value;
 
 import java.time.LocalDate;
@@ -10,7 +11,7 @@ public class MtgJsonSet {
     String name;
     String code;
     LocalDate releaseDate;
-    String type;
+    MtgSetType setType;
     String parentCode;
     boolean onlineOnly;
     List<MtgJsonDeck> decks;
@@ -18,7 +19,7 @@ public class MtgJsonSet {
     @Value
     public static class MtgJsonDeck {
         String name;
-        String type;
+        String deckType; // free text, "Commander Deck" and "MTGO Commander Deck" are both a thing
         LocalDate releaseDate;
     }
 

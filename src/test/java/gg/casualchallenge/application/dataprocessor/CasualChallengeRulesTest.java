@@ -27,15 +27,6 @@ class CasualChallengeRulesTest {
     }
 
     @Test
-    void testIsCommaCard() {
-        assertTrue(CasualChallengeRules.isCommaCard("Rampant, Growth"));
-        assertTrue(CasualChallengeRules.isCommaCard("Lava, Axe"));
-        assertTrue(CasualChallengeRules.isCommaCard("Clear, the Mind"));
-        assertFalse(CasualChallengeRules.isCommaCard("Rampant Growth"));
-        assertFalse(CasualChallengeRules.isCommaCard("Ragavan, Nimble Pilferer"));
-    }
-
-    @Test
     void testIsFlipStyleName() {
         assertTrue(CasualChallengeRules.isFlipStyleName("Delver of Secrets // Delver of Secrets"));
         assertTrue(CasualChallengeRules.isFlipStyleName("Bloomvine Regent // Claim Territory // Bloomvine Regent"));

@@ -36,6 +36,8 @@ casual-challenge:
     archived-seasons: 5 # 0 = don't keep the raw input of a run
     export-directory: "" # empty = don't write the files
     price-window-days: 70
+    length-in-weeks: 10
+    finals-weekday: FRIDAY
     migration-author: raoul_zander
 
 

@@ -2,9 +2,11 @@ package gg.casualchallenge.application.dataprocessor.model;
 
 import lombok.Value;
 
+import java.util.UUID;
+
 @Value
 public class MtgJsonPrinting {
-    String uuid;
+    UUID uuid;
     String cardName;
     boolean foil;
     boolean nonFoil;

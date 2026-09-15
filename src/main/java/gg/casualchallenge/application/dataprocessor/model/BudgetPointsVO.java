@@ -9,5 +9,5 @@ public class BudgetPointsVO {
     Map<String, Cents> pricesByCardName;
     double exchangeRate;
     double adjustedExchangeRate;
-    int pricesFixedByExchangeRate;
+    int pricesFixedByExchangeRateCount;
 }

@@ -45,23 +45,4 @@ public final class CardNameNormalizer {
         // Step: Convert to lowercase
         return normalized.toLowerCase(Locale.ENGLISH);
     }
-
-    /**
-     * Same as {@link #normalize(String)} but only whitespace becomes a dash, all other punctuation stays.
-     * Needed for the "funny" cards whose fully normalized name clashes with a real card,
-     * e.g. "Rampant, Growth" --> "rampant,-growth" instead of "rampant-growth"
-     */
-    public static String somewhatNormalize(String cardName) {
-        if (cardName == null || cardName.isEmpty()) {
-            return "";
-        }
-
-        String normalized = Normalizer.normalize(cardName, Normalizer.Form.NFD);
-        normalized = normalized.replaceAll("\\p{M}", "");
-        normalized = normalized.replaceAll("'", "");
-        normalized = normalized.replaceAll("\\s", "-");
-        normalized = normalized.replaceAll("-+", "-");
-        normalized = normalized.replaceAll("^-|-$", "");
-        return normalized.toLowerCase(Locale.ENGLISH);
-    }
 }

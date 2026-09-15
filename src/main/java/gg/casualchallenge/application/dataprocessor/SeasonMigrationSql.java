@@ -35,19 +35,28 @@ public final class SeasonMigrationSql { // the files data-preparer.py used to wr
             List<SeasonDraftReportVO.RenamedCardVO> renamedCards
     ) {
         // Commit already wrote all of this into the database, the file only has to survive a replay on a fresh one
-        StringBuilder sql = new StringBuilder("-- liquibase formatted sql\n"
-                + "\n"
-                + "-- changeset " + author + ":" + fileName + "\n"
-                + "UPDATE public.season\n"
-                + "    SET end_date = '" + draft.getStartDate().minusDays(1) + "',\n"
-                + "        updated_at = now()\n"
-                + "    WHERE id = " + draft.getPreviousSeasonId() + ";\n"
-                + "INSERT INTO public.season (id, season_number, start_date, end_date, updated_at)\n"
-                + "VALUES\n"
-                + "    (" + draft.getSeasonNumber() + ", " + draft.getSeasonNumber() + ", '" + draft.getStartDate() + "', '" + draft.getEndDate() + "', now())\n"
-                + "ON CONFLICT (id) DO NOTHING;\n");
+        StringBuilder sql = new StringBuilder("""
+                -- liquibase formatted sql
 
-        sql.append("SELECT setval('season_id_seq', (SELECT MAX(id) FROM public.season));\n");
+                -- changeset %s:%s
+                UPDATE public.season
+                    SET end_date = '%s',
+                        updated_at = now()
+                    WHERE id = %d;
+                INSERT INTO public.season (id, season_number, start_date, end_date, updated_at)
+                VALUES
+                    (%d, %d, '%s', '%s', now())
+                ON CONFLICT (id) DO NOTHING;
+                SELECT setval('season_id_seq', (SELECT MAX(id) FROM public.season));
+                """.formatted(
+                author,
+                fileName,
+                draft.getStartDate().minusDays(1),
+                draft.getPreviousSeasonId(),
+                draft.getSeasonNumber(),
+                draft.getSeasonNumber(),
+                draft.getStartDate(),
+                draft.getEndDate()));
 
         if (!oracleIdChanges.isEmpty()) {
             sql.append("\n");

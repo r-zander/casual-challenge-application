@@ -1,9 +1,11 @@
-package gg.casualchallenge.application.dataprocessor.model;
+package gg.casualchallenge.application.dataprocessor;
 
+import gg.casualchallenge.application.dataprocessor.model.Cents;
 import lombok.Getter;
 
 import java.util.Arrays;
 
+// One instance per card and market, folding every printing in as it streams by, so the gigabyte of AllPrices.json never sits in memory
 public class PriceSeries {
 
     private static final long NO_PRICE = -1; // no card ever costs a negative amount of cents
@@ -70,7 +72,7 @@ public class PriceSeries {
         return dayCount;
     }
 
-    // All prices of a printing being the same is an anomaly - as long as there is at least one printing left without it
+    // A price that never moves is an anomaly --> the flat printings only count when there is no other printing to fall back on
     private long[] cheapestOfEveryDay() {
         return flatPrintingCount < printingCount ? cheapestPerDay : cheapestFlatPerDay;
     }

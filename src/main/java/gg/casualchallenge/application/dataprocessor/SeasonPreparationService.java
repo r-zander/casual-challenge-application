@@ -6,6 +6,7 @@ import gg.casualchallenge.application.common.CardNameNormalizer;
 import gg.casualchallenge.application.common.Constants;
 import gg.casualchallenge.application.common.RomanNumeral;
 import gg.casualchallenge.application.common.SeasonDates;
+import gg.casualchallenge.application.dataprocessor.model.AssembledDraftVO;
 import gg.casualchallenge.application.dataprocessor.model.BudgetPointsVO;
 import gg.casualchallenge.application.dataprocessor.model.CardPrices;
 import gg.casualchallenge.application.dataprocessor.model.Cents;
@@ -15,13 +16,12 @@ import gg.casualchallenge.application.dataprocessor.model.MtgJsonCard;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPricesVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrintingsVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonSet;
-import gg.casualchallenge.application.dataprocessor.model.PreparedSeasonVO;
-import gg.casualchallenge.application.dataprocessor.model.PriceSeries;
 import gg.casualchallenge.application.dataprocessor.model.PriceWindowVO;
 import gg.casualchallenge.application.dataprocessor.model.SeasonPreparationState;
 import gg.casualchallenge.application.dataprocessor.model.Staple;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
+import gg.casualchallenge.application.model.type.MtgSetType;
 import gg.casualchallenge.application.model.values.MtgSetVO;
 import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
 import gg.casualchallenge.application.model.values.SeasonDraftReportVO;
@@ -52,6 +52,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -79,16 +80,12 @@ public class SeasonPreparationService {
     private static final int RELEVANT_CHANGE_IN_BUDGET_POINTS = 100;
     private static final int TOP_CHANGES = 20;
 
-    // Cards above this are out of reach anyway, so the Scryfall decks don't bother listing them
-    private static final int MAX_BUDGET_POINTS = 2500;
-
-    private static final int EXCHANGE_RATE_SCALE = 6;
-
     private static final String SEASON_DIRECTORY_PREFIX = "season-";
     private static final String REQUEST_FILE = "request.json";
     private static final String STAPLES_FILE = "staples.json";
 
-    private static final Set<String> PLAYABLE_SET_TYPES = Set.of("expansion", "core", "masters", "draft_innovation", "commander");
+    // the sets we announce in the report - MtgJsonClient.IGNORED_SET_TYPES is the other list, the one the card identity uses
+    private static final Set<MtgSetType> PLAYABLE_SET_TYPES = EnumSet.of(MtgSetType.EXPANSION, MtgSetType.CORE, MtgSetType.MASTERS, MtgSetType.DRAFT_INNOVATION, MtgSetType.COMMANDER);
 
     private final MtgJsonClient mtgJsonClient;
     private final MtgGoldfishClient mtgGoldfishClient;
@@ -97,6 +94,7 @@ public class SeasonPreparationService {
     private final CardRepository cardRepository;
     private final CardSeasonDataRepository cardSeasonDataRepository;
     private final SeasonDraftRepository seasonDraftRepository;
+    private final SeasonDates seasonDates;
     private final ObjectMapper objectMapper;
     private final int priceWindowDays;
     private final Path archiveDirectory;
@@ -120,6 +118,7 @@ public class SeasonPreparationService {
             CardRepository cardRepository,
             CardSeasonDataRepository cardSeasonDataRepository,
             SeasonDraftRepository seasonDraftRepository,
+            SeasonDates seasonDates,
             ObjectMapper objectMapper,
             @Value("${casual-challenge.season.price-window-days}") int priceWindowDays,
             @Value("${casual-challenge.season.archive-directory}") String archiveDirectory,
@@ -132,6 +131,7 @@ public class SeasonPreparationService {
         this.cardRepository = cardRepository;
         this.cardSeasonDataRepository = cardSeasonDataRepository;
         this.seasonDraftRepository = seasonDraftRepository;
+        this.seasonDates = seasonDates;
         this.objectMapper = objectMapper;
         this.priceWindowDays = priceWindowDays;
         this.archiveDirectory = Paths.get(archiveDirectory);
@@ -181,9 +181,9 @@ public class SeasonPreparationService {
             throw new IllegalStateException("There is no current season to continue.");
         }
 
-        LocalDate endDate = SeasonDates.defaultEndDate(currentSeason.getEndDate());
+        LocalDate endDate = seasonDates.defaultEndDate(currentSeason.getEndDate());
         if (!endDate.isAfter(startDate)) {
-            endDate = SeasonDates.defaultEndDate(startDate); // the previous season ended ages ago --> count the ten weeks from the new start instead
+            endDate = seasonDates.defaultEndDate(startDate); // the previous season ended ages ago --> count the season length from the new start instead
         }
 
         return new SeasonPreparationRequestVO(
@@ -253,22 +253,23 @@ public class SeasonPreparationService {
         if (cancelRequested.get()) return null;
 
         startStep(4, "Calculating budget points and assembling the draft - the big step");
-        PreparedSeasonVO preparedSeason = assemble(
+        AssembledDraftVO assembledDraft = assemble(
                 printings,
                 prices,
                 metaShares,
                 cardRepository.findAll(),
                 cardSeasonDataRepository.findAllBySeason(currentSeason),
                 request,
-                currentSeason
+                currentSeason,
+                seasonDates
         );
         if (cancelRequested.get()) return null;
 
         startStep(5, "Storing the season draft");
-        SeasonDraftVO draft = toDraft(preparedSeason.getReport(), printings, request, currentSeason);
-        seasonDraftRepository.replace(draft, preparedSeason.getCards());
+        SeasonDraftVO draft = toDraft(assembledDraft.getReport(), printings, request, currentSeason);
+        seasonDraftRepository.replace(draft, assembledDraft.getCards());
         pruneArchive(archiveDirectory, archivedSeasons);
-        log.info("{} / {} | All done. Season {} is ready for review with {} cards.", TOTAL_STEPS, TOTAL_STEPS, draft.getSeasonNumber(), preparedSeason.getCards().size());
+        log.info("{} / {} | All done. Season {} is ready for review with {} cards.", TOTAL_STEPS, TOTAL_STEPS, draft.getSeasonNumber(), assembledDraft.getCards().size());
 
         return draft;
     }
@@ -383,14 +384,15 @@ public class SeasonPreparationService {
         Files.delete(seasonDirectory);
     }
 
-    public static PreparedSeasonVO assemble(
+    public static AssembledDraftVO assemble(
             MtgJsonPrintingsVO printings,
             MtgJsonPricesVO prices,
             MetaSharesVO metaShares,
             List<Card> existingCards,
             List<CardSeasonData> previousSeasonData,
             SeasonPreparationRequestVO request,
-            Season currentSeason
+            Season currentSeason,
+            SeasonDates seasonDates
     ) {
         BudgetPointsVO budgetPoints = calculateBudgetPoints(printings, prices.getPricesByCardName());
 
@@ -403,6 +405,14 @@ public class SeasonPreparationService {
             existingCardsByOracleId.put(existingCard.getOracleId(), existingCard);
         }
 
+        // Playtest and joke cards share their normalized name with the real card often enough, and the order of the sets in the file is nothing to decide that by
+        Map<String, String> legalNamesByNormalizedName = new HashMap<>(printings.getCardsByName().size());
+        for (MtgJsonCard card : printings.getCardsByName().values()) {
+            if (!card.isVintageLegal() || card.getOracleId() == null || CasualChallengeRules.isFlipStyleName(card.getName())) continue;
+
+            legalNamesByNormalizedName.putIfAbsent(CardNameNormalizer.normalize(card.getName()), card.getName());
+        }
+
         List<SeasonDraftCardVO> cards = new ArrayList<>(printings.getCardsByName().size());
         Map<String, String> namesByNormalizedName = new HashMap<>(printings.getCardsByName().size());
         Map<UUID, String> namesByOracleId = new HashMap<>(printings.getCardsByName().size());
@@ -413,8 +423,8 @@ public class SeasonPreparationService {
 
             Card cardWithSameName = existingCardsByName.get(cardName);
             Card cardWithSameOracleId = existingCardsByOracleId.get(card.getOracleId());
-            String normalizedName = CasualChallengeRules.isCommaCard(cardName) ? CardNameNormalizer.somewhatNormalize(cardName) : CardNameNormalizer.normalize(cardName);
-            String skipReason = findSkipReason(cardName, normalizedName, card.getOracleId(), cardWithSameName, cardWithSameOracleId, existingCardsByNormalizedName, namesByNormalizedName, namesByOracleId);
+            String normalizedName = CardNameNormalizer.normalize(cardName);
+            String skipReason = findSkipReason(card, normalizedName, cardWithSameName, cardWithSameOracleId, existingCardsByNormalizedName, namesByNormalizedName, namesByOracleId, legalNamesByNormalizedName);
             // skip_reason is a varchar(255) and card names can be silly long
             if (skipReason != null && skipReason.length() > MAX_SKIP_REASON_LENGTH) skipReason = skipReason.substring(0, MAX_SKIP_REASON_LENGTH);
             if (skipReason == null) {
@@ -485,7 +495,7 @@ public class SeasonPreparationService {
             ));
         }
 
-        return new PreparedSeasonVO(cards, buildReport(cards, existingCardsByOracleId, previousSeasonData, printings, metaShares, budgetPoints, prices, request, currentSeason));
+        return new AssembledDraftVO(cards, buildReport(cards, existingCardsByOracleId, previousSeasonData, printings, metaShares, budgetPoints, prices, request, currentSeason, seasonDates));
     }
 
     private static BudgetPointsVO calculateBudgetPoints(MtgJsonPrintingsVO printings, Map<String, CardPrices> pricesByCardName) {
@@ -503,8 +513,8 @@ public class SeasonPreparationService {
                 continue;
             }
 
-            eurPricesByCardName.put(cardName, BudgetPoints.fromSeries(cardPrices.getEur()));
-            usdPricesByCardName.put(cardName, BudgetPoints.fromSeries(cardPrices.getUsd()));
+            eurPricesByCardName.put(cardName, BudgetPointsUtil.fromSeries(cardPrices.getEur()));
+            usdPricesByCardName.put(cardName, BudgetPointsUtil.fromSeries(cardPrices.getUsd()));
             double eurAverage = averageCents(cardPrices.getEur());
             if (eurAverage > 0) {
                 totalExchangeRate += averageCents(cardPrices.getUsd()) / eurAverage;
@@ -513,29 +523,29 @@ public class SeasonPreparationService {
         }
 
         double exchangeRate = exchangeRateCount > 0 ? totalExchangeRate / exchangeRateCount : 0;
-        double adjustedExchangeRate = BudgetPoints.adjustExchangeRate(exchangeRate);
+        double adjustedExchangeRate = BudgetPointsUtil.adjustExchangeRate(exchangeRate);
         log.info("Average exchange rate is {}, adjusted to {}.", exchangeRate, adjustedExchangeRate);
 
-        int pricesFixedByExchangeRate = 0;
+        int pricesFixedByExchangeRateCount = 0;
         for (Map.Entry<String, Cents> entry : eurPricesByCardName.entrySet()) {
             if (entry.getValue().getAmount() != 0) continue;
 
             Cents usdPrice = usdPricesByCardName.get(entry.getKey());
             if (usdPrice.getAmount() == 0) continue;
 
-            entry.setValue(BudgetPoints.fromUsd(usdPrice, adjustedExchangeRate));
-            pricesFixedByExchangeRate++;
+            entry.setValue(BudgetPointsUtil.fromUsd(usdPrice, adjustedExchangeRate));
+            pricesFixedByExchangeRateCount++;
         }
-        log.info("Fixed {} card prices with the exchange rate.", pricesFixedByExchangeRate);
+        log.info("Fixed {} card prices with the exchange rate.", pricesFixedByExchangeRateCount);
 
-        return new BudgetPointsVO(eurPricesByCardName, exchangeRate, adjustedExchangeRate, pricesFixedByExchangeRate);
+        return new BudgetPointsVO(eurPricesByCardName, exchangeRate, adjustedExchangeRate, pricesFixedByExchangeRateCount);
     }
 
-    // The exchange rate is a ratio and stays a double, but the two averages it divides are still counted to the cent
+    // The exchange rate is a ratio, so its two averages divide in plain doubles - just like they did in the python tool
     private static double averageCents(PriceSeries series) {
         if (series.pricedDays() == 0) return 0;
 
-        return BigDecimal.valueOf(series.sumOfCheapest().getAmount()).divide(BigDecimal.valueOf(series.pricedDays()), EXCHANGE_RATE_SCALE, RoundingMode.HALF_EVEN).doubleValue();
+        return (double) series.sumOfCheapest().getAmount() / series.pricedDays();
     }
 
     private static SeasonDraftReportVO buildReport(
@@ -547,7 +557,8 @@ public class SeasonPreparationService {
             BudgetPointsVO budgetPoints,
             MtgJsonPricesVO prices,
             SeasonPreparationRequestVO request,
-            Season currentSeason
+            Season currentSeason,
+            SeasonDates seasonDates
     ) {
         Map<UUID, CardSeasonData> previousDataByOracleId = new HashMap<>(previousSeasonData.size());
         for (CardSeasonData cardSeasonData : previousSeasonData) {
@@ -666,7 +677,7 @@ public class SeasonPreparationService {
                 legalities,
                 budgetPoints.getExchangeRate(),
                 budgetPoints.getAdjustedExchangeRate(),
-                budgetPoints.getPricesFixedByExchangeRate(),
+                budgetPoints.getPricesFixedByExchangeRateCount(),
                 prices.getPricedDays(),
                 metaShares.getTop50Rows(),
                 metaShares.getTop150Rows(),
@@ -688,8 +699,8 @@ public class SeasonPreparationService {
                 RomanNumeral.of(seasonNumber),
                 request.getStartDate(),
                 request.getEndDate(),
-                SeasonDates.finalsFriday(request.getEndDate()),
-                SeasonDates.nextSeasonStart(request.getEndDate()),
+                seasonDates.finalsFriday(request.getEndDate()),
+                seasonDates.nextSeasonStart(request.getEndDate()),
                 request.getPriceWindow().getStart(),
                 request.getPriceWindow().getEnd(),
                 printings.getMetaDate(),
@@ -698,6 +709,7 @@ public class SeasonPreparationService {
                 currentSeason.getSeasonNumber(),
                 LocalDateTime.now(Constants.TIMEZONE),
                 counts,
+                metaShares.getDuplicateNames(),
                 newBans,
                 unbans,
                 newExtended,
@@ -720,14 +732,14 @@ public class SeasonPreparationService {
         List<MtgSetVO> setsReleased = new ArrayList<>();
         for (MtgJsonSet mtgSet : printings.getSets()) {
             if (mtgSet.getReleaseDate() == null || mtgSet.isOnlineOnly()) continue;
-            if (!PLAYABLE_SET_TYPES.contains(mtgSet.getType())) continue;
+            if (!PLAYABLE_SET_TYPES.contains(mtgSet.getSetType())) continue;
             if (mtgSet.getReleaseDate().isBefore(request.getStartDate()) || mtgSet.getReleaseDate().isAfter(request.getEndDate())) continue;
 
             List<String> commanderDecks = new ArrayList<>();
             for (MtgJsonSet.MtgJsonDeck deck : mtgSet.getDecks()) {
-                if (deck.getType() != null && deck.getType().contains("Commander")) commanderDecks.add(deck.getName());
+                if (deck.getDeckType() != null && deck.getDeckType().contains("Commander")) commanderDecks.add(deck.getName());
             }
-            setsReleased.add(new MtgSetVO(mtgSet.getName(), mtgSet.getCode(), mtgSet.getReleaseDate(), mtgSet.getType(), commanderDecks));
+            setsReleased.add(new MtgSetVO(mtgSet.getName(), mtgSet.getCode(), mtgSet.getReleaseDate(), mtgSet.getSetType(), commanderDecks));
         }
 
         return setsReleased;
@@ -747,7 +759,7 @@ public class SeasonPreparationService {
         for (SeasonDraftReportVO.BanChangeVO unban : unbans) {
             // A card that is still banned in paper or too expensive to play stays out of the unban deck
             if (unban.getBannedIn() != null || unban.isVintageRestricted()) continue;
-            if (unban.getBudgetPoints() > MAX_BUDGET_POINTS) continue;
+            if (unban.getBudgetPoints() > CasualChallengeRules.MAX_BUDGET_POINTS) continue;
 
             unbanNames.add(unban.getName());
         }
@@ -755,7 +767,7 @@ public class SeasonPreparationService {
         List<String> currentBanNames = new ArrayList<>();
         for (SeasonDraftCardVO card : cards) {
             if (card.getSkipReason() != null || card.getLegality() != Legality.BANNED) continue;
-            if (card.getBudgetPoints() > MAX_BUDGET_POINTS) continue;
+            if (card.getBudgetPoints() > CasualChallengeRules.MAX_BUDGET_POINTS) continue;
 
             currentBanNames.add(card.getName());
         }
@@ -768,15 +780,22 @@ public class SeasonPreparationService {
     }
 
     private static String findSkipReason(
-            String cardName,
+            MtgJsonCard card,
             String normalizedName,
-            UUID oracleId,
             Card cardWithSameName,
             Card cardWithSameOracleId,
             Map<String, Card> existingCardsByNormalizedName,
             Map<String, String> namesByNormalizedName,
-            Map<UUID, String> namesByOracleId
+            Map<UUID, String> namesByOracleId,
+            Map<String, String> legalNamesByNormalizedName
     ) {
+        String cardName = card.getName();
+        UUID oracleId = card.getOracleId();
+
+        // A card MTGJSON knows no vintage legality for never takes the name away from one it does, whichever of the two comes first
+        String legalCardName = card.isVintageLegal() ? null : legalNamesByNormalizedName.get(normalizedName);
+        if (legalCardName != null) return "duplicate normalized name '" + normalizedName + "' (first: '" + legalCardName + "')";
+
         String firstCardName = namesByNormalizedName.get(normalizedName);
         if (firstCardName != null) return "duplicate normalized name '" + normalizedName + "' (first: '" + firstCardName + "')";
 

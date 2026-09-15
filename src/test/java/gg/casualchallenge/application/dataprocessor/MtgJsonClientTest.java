@@ -8,6 +8,7 @@ import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrintingsVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonSet;
 import gg.casualchallenge.application.dataprocessor.model.PriceWindowVO;
 import gg.casualchallenge.application.model.type.MtgFormat;
+import gg.casualchallenge.application.model.type.MtgSetType;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -26,6 +27,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MtgJsonClientTest {
+
+    private static final UUID SOL_RING_ALPHA = UUID.fromString("1f3c8b2a-6e45-59d7-8c10-b4a2e76f3d09");
+    private static final UUID SOL_RING_COMMANDER = UUID.fromString("8f6a9d1c-4b3e-5a7d-9c21-6e0f5a2b7d43");
 
     private final MtgJsonClient mtgJsonClient = new MtgJsonClient("https://mtgjson.com/api/v5", System.getProperty("java.io.tmpdir"));
 
@@ -91,10 +95,10 @@ class MtgJsonClientTest {
         assertEquals("5.2.2+20260913", printings.getMetaVersion());
         assertEquals(List.of("Sol Ring", "Chaos Orb", "Red Herring", "Tundra", "Comet, Stellar Pup"), new ArrayList<>(printings.getCardsByName().keySet()));
         assertEquals(7, printings.getPrintingsByUuid().size());
-        assertFalse(printings.getPrintingsByUuid().containsKey("2d7b4e90-1a6c-5f38-b4e7-9c1d05a6f2b8"));
-        assertFalse(printings.getPrintingsByUuid().containsKey("4e8d1b53-2f70-5a94-b6c8-1d59f0a83e27"));
-        assertFalse(printings.getPrintingsByUuid().containsKey("7d09f3b6-5c28-541a-93e0-8b6f21c07d4a"));
-        assertFalse(printings.getPrintingsByUuid().containsKey("3a5c7e11-8d92-5064-bf37-2c8016d4a95e"));
+        assertFalse(printings.getPrintingsByUuid().containsKey(UUID.fromString("2d7b4e90-1a6c-5f38-b4e7-9c1d05a6f2b8")));
+        assertFalse(printings.getPrintingsByUuid().containsKey(UUID.fromString("4e8d1b53-2f70-5a94-b6c8-1d59f0a83e27")));
+        assertFalse(printings.getPrintingsByUuid().containsKey(UUID.fromString("7d09f3b6-5c28-541a-93e0-8b6f21c07d4a")));
+        assertFalse(printings.getPrintingsByUuid().containsKey(UUID.fromString("3a5c7e11-8d92-5064-bf37-2c8016d4a95e")));
 
         MtgJsonCard solRing = printings.getCardsByName().get("Sol Ring");
         assertEquals("LEA", solRing.getFirstSetCode());
@@ -112,8 +116,8 @@ class MtgJsonClientTest {
         assertEquals(UUID.fromString("f0ee45b5-697b-48f8-b1a6-cb3ae75e4a29"), redHerring.getOracleId());
         assertEquals("MKM", redHerring.getFirstSetCode());
         assertEquals(MtgFormat.STANDARD, redHerring.getBannedIn());
-        assertTrue(printings.getPrintingsByUuid().get("6b2f90d4-7c13-5e48-9a05-3d8b17e6c204").isFoil());
-        assertFalse(printings.getPrintingsByUuid().get("5a1e3c72-9d84-5b06-a1f3-7e2c48d905b1").isFoil());
+        assertTrue(printings.getPrintingsByUuid().get(UUID.fromString("6b2f90d4-7c13-5e48-9a05-3d8b17e6c204")).isFoil());
+        assertFalse(printings.getPrintingsByUuid().get(UUID.fromString("5a1e3c72-9d84-5b06-a1f3-7e2c48d905b1")).isFoil());
 
         assertEquals("SUM", printings.getCardsByName().get("Tundra").getFirstSetCode());
 
@@ -127,12 +131,12 @@ class MtgJsonClientTest {
         assertEquals("MB1", printings.getSets().get(1).getParentCode());
         MtgJsonSet karlovManor = printings.getSets().get(3);
         assertEquals("Murders at Karlov Manor", karlovManor.getName());
-        assertEquals("expansion", karlovManor.getType());
+        assertEquals(MtgSetType.EXPANSION, karlovManor.getSetType());
         assertEquals(LocalDate.of(2024, 2, 9), karlovManor.getReleaseDate());
         assertFalse(karlovManor.isOnlineOnly());
         assertEquals(1, karlovManor.getDecks().size());
         assertEquals("Deadly Disguise", karlovManor.getDecks().get(0).getName());
-        assertEquals("Commander Deck", karlovManor.getDecks().get(0).getType());
+        assertEquals("Commander Deck", karlovManor.getDecks().get(0).getDeckType());
         assertEquals(LocalDate.of(2024, 2, 9), karlovManor.getDecks().get(0).getReleaseDate());
     }
 
@@ -164,9 +168,9 @@ class MtgJsonClientTest {
                   }
                 }""";
 
-        Map<String, MtgJsonPrinting> printingsByUuid = new HashMap<>();
-        printingsByUuid.put("1f3c8b2a-6e45-59d7-8c10-b4a2e76f3d09", new MtgJsonPrinting("1f3c8b2a-6e45-59d7-8c10-b4a2e76f3d09", "Sol Ring", false, true));
-        printingsByUuid.put("8f6a9d1c-4b3e-5a7d-9c21-6e0f5a2b7d43", new MtgJsonPrinting("8f6a9d1c-4b3e-5a7d-9c21-6e0f5a2b7d43", "Sol Ring", true, true));
+        Map<UUID, MtgJsonPrinting> printingsByUuid = new HashMap<>();
+        printingsByUuid.put(SOL_RING_ALPHA, new MtgJsonPrinting(SOL_RING_ALPHA, "Sol Ring", false, true));
+        printingsByUuid.put(SOL_RING_COMMANDER, new MtgJsonPrinting(SOL_RING_COMMANDER, "Sol Ring", true, true));
         PriceWindowVO window = PriceWindowVO.of(LocalDate.of(2025, 6, 7), 3);
 
         Map<String, CardPrices> pricesByCardName = mtgJsonClient.readPrices(toStream(allPrices), printingsByUuid, window).getPricesByCardName();

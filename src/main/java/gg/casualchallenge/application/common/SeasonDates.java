@@ -1,24 +1,35 @@
 package gg.casualchallenge.application.common;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
 
-public final class SeasonDates {
+@Component
+public class SeasonDates {
 
-    private static final int REGULAR_SEASON_LENGTH_IN_WEEKS = 10;
+    private final int seasonLengthInWeeks;
+    private final DayOfWeek finalsWeekday;
 
-    private SeasonDates() {}
-
-    public static LocalDate defaultEndDate(LocalDate previousSeasonEnd) {
-        return previousSeasonEnd.plusWeeks(REGULAR_SEASON_LENGTH_IN_WEEKS);
+    public SeasonDates(
+            @Value("${casual-challenge.season.length-in-weeks}") int seasonLengthInWeeks,
+            @Value("${casual-challenge.season.finals-weekday}") DayOfWeek finalsWeekday
+    ) {
+        this.seasonLengthInWeeks = seasonLengthInWeeks;
+        this.finalsWeekday = finalsWeekday;
     }
 
-    public static LocalDate finalsFriday(LocalDate endDate) {
-        return endDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.FRIDAY));
+    public LocalDate defaultEndDate(LocalDate previousSeasonEnd) {
+        return previousSeasonEnd.plusWeeks(seasonLengthInWeeks);
     }
 
-    public static LocalDate nextSeasonStart(LocalDate endDate) {
+    public LocalDate finalsFriday(LocalDate endDate) {
+        return endDate.with(TemporalAdjusters.previousOrSame(finalsWeekday));
+    }
+
+    public LocalDate nextSeasonStart(LocalDate endDate) {
         return endDate.plusDays(1);
     }
 }

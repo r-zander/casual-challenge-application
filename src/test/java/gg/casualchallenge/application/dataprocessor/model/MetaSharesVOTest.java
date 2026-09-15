@@ -46,7 +46,7 @@ class MetaSharesVOTest {
     void testFromStaples() {
         Map<MtgFormat, List<Staple>> top50 = Map.of(
                 MtgFormat.MODERN, List.of(new Staple("Ragavan, Nimble Pilferer", new BigDecimal("0.180"))),
-                MtgFormat.LEGACY, List.of(new Staple("Ragavan, Nimble Pilferer", new BigDecimal("0.150")), new Staple("Brainstorm", new BigDecimal("0.400")))
+                MtgFormat.LEGACY, List.of(new Staple("Ragavan, Nimble Pilferer", new BigDecimal("0.150")), new Staple("Brainstorm", new BigDecimal("0.400")), new Staple("Brainstorm", new BigDecimal("0.380")))
         );
         Map<MtgFormat, List<Staple>> top150 = Map.of(
                 MtgFormat.MODERN, List.of(new Staple("Ragavan, Nimble Pilferer", new BigDecimal("0.180")), new Staple("Ancient Stirrings", new BigDecimal("0.080"))),
@@ -59,12 +59,14 @@ class MetaSharesVOTest {
         assertEquals(new BigDecimal("0.180"), metaShares.findBan("Ragavan, Nimble Pilferer").get(MtgFormat.MODERN));
         assertEquals(new BigDecimal("0.150"), metaShares.findBan("Ragavan, Nimble Pilferer").get(MtgFormat.LEGACY));
         assertEquals(new BigDecimal("0.180"), metaShares.findExtendedBan("Ragavan, Nimble Pilferer").get(MtgFormat.MODERN));
+        assertEquals(new BigDecimal("0.380"), metaShares.findBan("Brainstorm").get(MtgFormat.LEGACY));
         assertNull(metaShares.findBan("Ancient Stirrings"));
         assertEquals(new BigDecimal("0.080"), metaShares.findExtendedBan("Ancient Stirrings").get(MtgFormat.MODERN));
         assertEquals(1, metaShares.getTop50Rows().get(MtgFormat.MODERN).intValue());
-        assertEquals(2, metaShares.getTop50Rows().get(MtgFormat.LEGACY).intValue());
+        assertEquals(3, metaShares.getTop50Rows().get(MtgFormat.LEGACY).intValue());
         assertEquals(2, metaShares.getTop150Rows().get(MtgFormat.MODERN).intValue());
         assertNull(metaShares.getTop50Rows().get(MtgFormat.VINTAGE));
+        assertEquals(List.of("Brainstorm"), metaShares.getDuplicateNames());
     }
 
     @Test
@@ -85,6 +87,7 @@ class MetaSharesVOTest {
         assertEquals(1, metaShares.getTop50Rows().get(MtgFormat.VINTAGE).intValue());
         assertEquals(1, metaShares.getTop150Rows().get(MtgFormat.MODERN).intValue());
         assertNull(metaShares.getTop50Rows().get(MtgFormat.MODERN));
+        assertEquals(List.of(), metaShares.getDuplicateNames());
     }
 
     @Test
@@ -100,5 +103,6 @@ class MetaSharesVOTest {
         assertEquals(new BigDecimal("0.12"), metaShares.findBan("Brainstorm").get(MtgFormat.PAUPER));
         assertNull(metaShares.findBan("Brainstorm").get(MtgFormat.LEGACY));
         assertNull(metaShares.findBan("Brainstorm").get(MtgFormat.VINTAGE));
+        assertEquals(List.of("Brainstorm"), metaShares.getDuplicateNames());
     }
 }

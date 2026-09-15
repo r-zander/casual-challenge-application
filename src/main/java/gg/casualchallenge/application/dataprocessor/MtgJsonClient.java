@@ -12,9 +12,9 @@ import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrinting;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPricesVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrintingsVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonSet;
-import gg.casualchallenge.application.dataprocessor.model.PriceSeries;
 import gg.casualchallenge.application.dataprocessor.model.PriceWindowVO;
 import gg.casualchallenge.application.model.type.MtgFormat;
+import gg.casualchallenge.application.model.type.MtgSetType;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,6 +36,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -57,7 +58,7 @@ public class MtgJsonClient {
 
     private static final long REQUIRED_DISK_SPACE = 2L * 1024 * 1024 * 1024;
 
-    private static final Set<String> ILLEGAL_SET_TYPES = Set.of("funny", "memorabilia", "minigame");
+    private static final Set<MtgSetType> IGNORED_SET_TYPES = EnumSet.of(MtgSetType.FUNNY, MtgSetType.MEMORABILIA, MtgSetType.MINIGAME);
 
     // The order decides which format ends up in banned_in for a card that is banned in more than one of them
     private final static Map<String, MtgFormat> FORMATS_BY_LEGALITY_KEY = new LinkedHashMap<>();
@@ -104,7 +105,7 @@ public class MtgJsonClient {
     }
 
     /** @param archiveDirectory null = download into a temp directory and throw the file away afterwards */
-    public MtgJsonPricesVO fetchPrices(Map<String, MtgJsonPrinting> printingsByUuid, PriceWindowVO window, Path archiveDirectory) {
+    public MtgJsonPricesVO fetchPrices(Map<UUID, MtgJsonPrinting> printingsByUuid, PriceWindowVO window, Path archiveDirectory) {
         Path directory = archiveDirectory != null ? archiveDirectory : createDownloadDirectory();
         try (ZipInputStream zipStream = new ZipInputStream(new BufferedInputStream(Files.newInputStream(download(PRICES_ZIP, directory))))) {
             positionOnEntry(zipStream, PRICES_FILE);
@@ -117,7 +118,7 @@ public class MtgJsonClient {
     }
 
     public MtgJsonPrintingsVO readPrintings(InputStream allPrintingsJson) {
-        Map<String, MtgJsonPrinting> printingsByUuid = new HashMap<>();
+        Map<UUID, MtgJsonPrinting> printingsByUuid = new HashMap<>();
         Map<String, IdentityCandidate> identitiesByName = new LinkedHashMap<>();
         List<MtgJsonSet> sets = new ArrayList<>();
         LocalDate metaDate = null;
@@ -166,9 +167,9 @@ public class MtgJsonClient {
         return new MtgJsonPrintingsVO(cardsByName, printingsByUuid, sets, metaDate, metaVersion);
     }
 
-    public MtgJsonPricesVO readPrices(InputStream allPricesJson, Map<String, MtgJsonPrinting> printingsByUuid, PriceWindowVO window) {
+    public MtgJsonPricesVO readPrices(InputStream allPricesJson, Map<UUID, MtgJsonPrinting> printingsByUuid, PriceWindowVO window) {
         Map<String, CardPrices> pricesByCardName = new HashMap<>();
-        boolean[] pricedDays = new boolean[window.length()];
+        boolean[] pricedDays = new boolean[window.lengthInDays()];
 
         try (JsonParser parser = new JsonFactory().createParser(allPricesJson)) {
             parser.nextToken();
@@ -180,7 +181,7 @@ public class MtgJsonClient {
                     continue;
                 }
                 while (parser.nextToken() != JsonToken.END_OBJECT) {
-                    MtgJsonPrinting printing = printingsByUuid.get(parser.currentName());
+                    MtgJsonPrinting printing = printingsByUuid.get(UUID.fromString(parser.currentName()));
                     parser.nextToken();
                     if (printing == null) {
                         parser.skipChildren();
@@ -266,12 +267,12 @@ public class MtgJsonClient {
             JsonParser parser,
             String setCode,
             Map<String, IdentityCandidate> identitiesByName,
-            Map<String, MtgJsonPrinting> printingsByUuid
+            Map<UUID, MtgJsonPrinting> printingsByUuid
     ) throws IOException {
         List<IdentityCandidate> identityCandidates = new ArrayList<>();
         List<MtgJsonSet.MtgJsonDeck> decks = new ArrayList<>();
         String setName = null;
-        String setType = null;
+        MtgSetType setType = null;
         String parentCode = null;
         LocalDate releaseDate = null;
         boolean isOnlineOnly = false;
@@ -284,7 +285,7 @@ public class MtgJsonClient {
                     setName = parser.getValueAsString();
                     break;
                 case "type":
-                    setType = parser.getValueAsString();
+                    setType = MtgSetType.fromMtgJson(parser.getValueAsString());
                     break;
                 case "parentCode":
                     parentCode = parser.getValueAsString();
@@ -311,9 +312,9 @@ public class MtgJsonClient {
         }
 
         // The cards come before the set attributes in the file --> we can only judge them once the set is done
-        boolean isIllegalSetType = ILLEGAL_SET_TYPES.contains(setType);
+        boolean isIgnoredSetType = IGNORED_SET_TYPES.contains(setType);
         for (IdentityCandidate candidate : identityCandidates) {
-            if (isIllegalSetType && !candidate.isVintageLegal()) continue;
+            if (isIgnoredSetType && !candidate.isVintageLegal()) continue;
 
             candidate.setReleaseDate(releaseDate);
             IdentityCandidate identity = identitiesByName.get(candidate.getCardName());
@@ -329,7 +330,7 @@ public class MtgJsonClient {
             JsonParser parser,
             String setCode,
             List<IdentityCandidate> identityCandidates,
-            Map<String, MtgJsonPrinting> printingsByUuid
+            Map<UUID, MtgJsonPrinting> printingsByUuid
     ) throws IOException {
         Map<MtgFormat, String> legalities = new EnumMap<>(MtgFormat.class);
         String cardName = null;
@@ -407,7 +408,8 @@ public class MtgJsonClient {
         if (!isPaper || isOversized || "silver".equals(borderColor) || "gold".equals(borderColor)) return;
 
         if (!isIgnoredForPrices(cardName, setCode)) {
-            printingsByUuid.put(uuid, new MtgJsonPrinting(uuid, cardName, foil, nonFoil));
+            UUID printingUuid = UUID.fromString(uuid);
+            printingsByUuid.put(printingUuid, new MtgJsonPrinting(printingUuid, cardName, foil, nonFoil));
         }
         if (isRebalanced) return;
         if (isFunny && !legalities.containsKey(MtgFormat.VINTAGE)) return; // MTGJSON flags every Unfinity card as funny, but the eternal legal ones are real cards
@@ -470,7 +472,7 @@ public class MtgJsonClient {
                     parser.skipChildren();
                     continue;
                 }
-                CardPrices cardPrices = pricesByCardName.computeIfAbsent(printing.getCardName(), cardName -> new CardPrices(window.length()));
+                CardPrices cardPrices = pricesByCardName.computeIfAbsent(printing.getCardName(), cardName -> new CardPrices(window.lengthInDays()));
                 PriceSeries series = "cardmarket".equals(marketIdentifier) ? cardPrices.getEur() : cardPrices.getUsd();
                 readRetailPrices(parser, printing, window, series, pricedDays);
             }
@@ -499,7 +501,7 @@ public class MtgJsonClient {
     }
 
     private static Cents[] readPricesPerDay(JsonParser parser, PriceWindowVO window, boolean[] pricedDays) throws IOException {
-        Cents[] centsPerDay = new Cents[window.length()];
+        Cents[] centsPerDay = new Cents[window.lengthInDays()];
 
         while (parser.nextToken() != JsonToken.END_OBJECT) {
             LocalDate date = LocalDate.parse(parser.currentName());

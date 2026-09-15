@@ -1,5 +1,6 @@
-package gg.casualchallenge.application.dataprocessor.model;
+package gg.casualchallenge.application.dataprocessor;
 
+import gg.casualchallenge.application.dataprocessor.model.Cents;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

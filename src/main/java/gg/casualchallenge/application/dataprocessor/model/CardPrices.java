@@ -1,5 +1,6 @@
 package gg.casualchallenge.application.dataprocessor.model;
 
+import gg.casualchallenge.application.dataprocessor.PriceSeries;
 import lombok.Getter;
 
 @Getter

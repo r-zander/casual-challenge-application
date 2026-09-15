@@ -14,7 +14,7 @@ public class PriceWindowVO {
         return new PriceWindowVO(seasonStart.minusDays(days), seasonStart);
     }
 
-    public int length() {
+    public int lengthInDays() {
         return (int) ChronoUnit.DAYS.between(start, end);
     }
 

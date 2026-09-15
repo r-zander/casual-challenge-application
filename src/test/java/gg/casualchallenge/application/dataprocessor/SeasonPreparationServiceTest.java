@@ -2,6 +2,8 @@ package gg.casualchallenge.application.dataprocessor;
 
 import gg.casualchallenge.application.api.legacy.datamodel.BanDTO;
 import gg.casualchallenge.application.api.legacy.datamodel.LegacyMtgFormat;
+import gg.casualchallenge.application.common.SeasonDates;
+import gg.casualchallenge.application.dataprocessor.model.AssembledDraftVO;
 import gg.casualchallenge.application.dataprocessor.model.CardPrices;
 import gg.casualchallenge.application.dataprocessor.model.Cents;
 import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
@@ -14,7 +16,7 @@ import gg.casualchallenge.application.dataprocessor.model.PriceWindowVO;
 import gg.casualchallenge.application.dataprocessor.model.Staple;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
-import gg.casualchallenge.application.dataprocessor.model.PreparedSeasonVO;
+import gg.casualchallenge.application.model.type.MtgSetType;
 import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
 import gg.casualchallenge.application.model.values.SeasonDraftReportVO;
 import gg.casualchallenge.application.model.values.SeasonPreparationRequestVO;
@@ -27,6 +29,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -55,6 +58,8 @@ class SeasonPreparationServiceTest {
     private static final UUID DELVER_OF_SECRETS = UUID.fromString("edd531b9-f615-4399-8c8c-1c5e18c4acbf");
     private static final UUID FRESH_FACE = UUID.fromString("bb1c9a77-4e6d-4f2a-9b3c-0a1d2e3f4a5b");
     private static final UUID FRESH_FACE_AGAIN = UUID.fromString("3f7d2b91-5a08-4c64-9e17-8d0b6c4a2f35");
+    private static final UUID GLIMPSE_THE_UNTHINKABLE = UUID.fromString("552f0163-a19d-4671-888f-044fc0354875");
+    private static final UUID GLIMPSE_THE_UNTHINKABLE_PLAYTEST = UUID.fromString("ab6b0048-0be6-4ff2-916e-b6a246eb765f");
     private static final UUID JOVEN_NEW = UUID.fromString("11db8545-eca6-43f5-b9e8-f302acef53a5");
     private static final UUID JOVEN_OLD = UUID.fromString("86b47725-1764-4716-993d-e4dfcea2346c");
     private static final UUID LAVA_AXE = UUID.fromString("387b6b07-a283-412d-94c3-f7f1dc76e858");
@@ -71,6 +76,8 @@ class SeasonPreparationServiceTest {
     private static final LocalDate MTGJSON_DATE = LocalDate.of(2026, 9, 13);
     private static final LocalDate RELEASE_DATE = LocalDate.of(1993, 8, 5);
     private static final int WINDOW_LENGTH = 2;
+
+    private static final SeasonDates SEASON_DATES = new SeasonDates(10, DayOfWeek.FRIDAY);
 
     @Test
     void testAssemble() {
@@ -92,8 +99,8 @@ class SeasonPreparationServiceTest {
                 Map.of(MtgFormat.LEGACY, List.of(new Staple("Brainstorm", new BigDecimal("0.350"))))
         );
 
-        PreparedSeasonVO preparedSeason = SeasonPreparationService.assemble(printings, new MtgJsonPricesVO(pricesByCardName, WINDOW_LENGTH), metaShares, List.of(), List.of(), request(MetaShareSource.MTGGOLDFISH), currentSeason());
-        List<SeasonDraftCardVO> cards = preparedSeason.getCards();
+        AssembledDraftVO assembledDraft = SeasonPreparationService.assemble(printings, new MtgJsonPricesVO(pricesByCardName, WINDOW_LENGTH), metaShares, List.of(), List.of(), request(MetaShareSource.MTGGOLDFISH), currentSeason(), SEASON_DATES);
+        List<SeasonDraftCardVO> cards = assembledDraft.getCards();
 
         assertEquals(3, cards.size());
 
@@ -109,11 +116,11 @@ class SeasonPreparationServiceTest {
         assertEquals(320, cards.get(1).getBudgetPoints().intValue());
 
         assertEquals("Lava, Axe", cards.get(2).getName());
-        assertEquals("lava,-axe", cards.get(2).getNormalizedName());
+        assertEquals("lava-axe", cards.get(2).getNormalizedName());
         assertNotNull(cards.get(2).getBudgetPoints());
         assertEquals(0, cards.get(2).getBudgetPoints().intValue());
 
-        assertEquals(1, preparedSeason.getReport().getCounts().getPricesFixedByExchangeRate());
+        assertEquals(1, assembledDraft.getReport().getCounts().getPricesFixedByExchangeRateCount());
     }
 
     @Test
@@ -145,15 +152,18 @@ class SeasonPreparationServiceTest {
                 existingCard("Bee-Bee Gun", "bee-bee-gun", BEE_BEE_GUN),
                 existingCard("Trivia Contest", "trivia-contest", TRIVIA_CONTEST),
                 existingCard("The Superlatorium", "the-superlatorium", SUPERLATORIUM),
-                existingCard("Lava, Axe", "lava-axe", LAVA_AXE)
+                existingCard("Lava, Axe", "lava,-axe", LAVA_AXE)
         );
         MetaSharesVO metaShares = MetaSharesVO.fromBanFiles(
-                List.of(new BanDTO("Lorien Revealed", Map.of(LegacyMtgFormat.PAUPER, new BigDecimal("0.46")))),
+                List.of(
+                        new BanDTO("Lorien Revealed", Map.of(LegacyMtgFormat.PAUPER, new BigDecimal("0.46"))),
+                        new BanDTO("Lórien Revealed", Map.of(LegacyMtgFormat.PAUPER, new BigDecimal("0.46")))
+                ),
                 List.of()
         );
 
-        PreparedSeasonVO preparedSeason = SeasonPreparationService.assemble(printings, new MtgJsonPricesVO(pricesByCardName, WINDOW_LENGTH), metaShares, existingCards, List.of(), request(MetaShareSource.FILES), currentSeason());
-        List<SeasonDraftCardVO> cards = preparedSeason.getCards();
+        AssembledDraftVO assembledDraft = SeasonPreparationService.assemble(printings, new MtgJsonPricesVO(pricesByCardName, WINDOW_LENGTH), metaShares, existingCards, List.of(), request(MetaShareSource.FILES), currentSeason(), SEASON_DATES);
+        List<SeasonDraftCardVO> cards = assembledDraft.getCards();
 
         assertEquals(11, cards.size());
 
@@ -178,7 +188,8 @@ class SeasonPreparationServiceTest {
         assertEquals("duplicate oracle id '" + FRESH_FACE + "' (first: 'Fresh Face')", cards.get(6).getSkipReason());
         assertEquals("oracle id '" + SUPERLATORIUM + "' already belongs to 'The Superlatorium'", cards.get(7).getSkipReason());
 
-        SeasonDraftReportVO report = preparedSeason.getReport();
+        SeasonDraftReportVO report = assembledDraft.getReport();
+        assertEquals(List.of("Lórien Revealed"), report.getDuplicateMetaShareNames());
         assertEquals(7, report.getCounts().getCards());
         assertEquals(1, report.getCounts().getNewCards());
         assertEquals(5, report.getSkippedCards().size());
@@ -196,8 +207,8 @@ class SeasonPreparationServiceTest {
         assertEquals(1, report.getNormalizedNameFixes().size()); // same name, other normalized name --> not a rename
         assertEquals(1, report.getCounts().getNormalizedNameFixes());
         assertEquals("Lava, Axe", report.getNormalizedNameFixes().get(0).getName());
-        assertEquals("lava-axe", report.getNormalizedNameFixes().get(0).getPreviousNormalizedName());
-        assertEquals("lava,-axe", report.getNormalizedNameFixes().get(0).getNormalizedName());
+        assertEquals("lava,-axe", report.getNormalizedNameFixes().get(0).getPreviousNormalizedName());
+        assertEquals("lava-axe", report.getNormalizedNameFixes().get(0).getNormalizedName());
         assertEquals(LAVA_AXE_AGAIN, report.getNormalizedNameFixes().get(0).getOracleId());
 
         assertEquals("Bee-Bee Gun", cards.get(9).getName()); // no printing left, but the card table still knows it
@@ -212,15 +223,39 @@ class SeasonPreparationServiceTest {
     }
 
     @Test
+    void testAssemble_withPlaytestCardBeforeTheRealOne() {
+        MtgJsonPrintingsVO printings = printings(
+                List.of(),
+                new MtgJsonCard("Glimpse, the Unthinkable", GLIMPSE_THE_UNTHINKABLE_PLAYTEST, false, false, null, "MB2", LocalDate.of(2024, 11, 8)),
+                card("Glimpse the Unthinkable", GLIMPSE_THE_UNTHINKABLE)
+        );
+
+        Map<String, CardPrices> pricesByCardName = new HashMap<>();
+        pricesByCardName.put("Glimpse the Unthinkable", cardPrices(300, 0));
+
+        AssembledDraftVO assembledDraft = SeasonPreparationService.assemble(printings, new MtgJsonPricesVO(pricesByCardName, WINDOW_LENGTH), MetaSharesVO.fromBanFiles(List.of(), List.of()), List.of(), List.of(), request(MetaShareSource.FILES), currentSeason(), SEASON_DATES);
+        List<SeasonDraftCardVO> cards = assembledDraft.getCards();
+
+        assertEquals(2, cards.size());
+        assertEquals("Glimpse, the Unthinkable", cards.get(0).getName());
+        assertEquals("duplicate normalized name 'glimpse-the-unthinkable' (first: 'Glimpse the Unthinkable')", cards.get(0).getSkipReason());
+        assertEquals("Glimpse the Unthinkable", cards.get(1).getName());
+        assertEquals("glimpse-the-unthinkable", cards.get(1).getNormalizedName());
+        assertNull(cards.get(1).getSkipReason());
+        assertEquals(1, assembledDraft.getReport().getSkippedCards().size());
+        assertEquals("Glimpse, the Unthinkable", assembledDraft.getReport().getSkippedCards().get(0).getName());
+    }
+
+    @Test
     void testAssemble_report() {
         List<MtgJsonSet> sets = List.of(
-                new MtgJsonSet("Aetherdrift", "DFT", LocalDate.of(2026, 2, 14), "expansion", null, false, List.of()),
-                new MtgJsonSet("Edge of Eternities", "EOE", LocalDate.of(2026, 10, 2), "expansion", null, false, List.of(
+                new MtgJsonSet("Aetherdrift", "DFT", LocalDate.of(2026, 2, 14), MtgSetType.EXPANSION, null, false, List.of()),
+                new MtgJsonSet("Edge of Eternities", "EOE", LocalDate.of(2026, 10, 2), MtgSetType.EXPANSION, null, false, List.of(
                         new MtgJsonSet.MtgJsonDeck("Cosmic Conquest", "Commander Deck", LocalDate.of(2026, 10, 2)),
                         new MtgJsonSet.MtgJsonDeck("Edge of Eternities", "Draft Deck", LocalDate.of(2026, 10, 2))
                 )),
-                new MtgJsonSet("Secret Lair Drop", "SLD", LocalDate.of(2026, 10, 10), "box", null, false, List.of()),
-                new MtgJsonSet("Alchemy: Edge of Eternities", "YEOE", LocalDate.of(2026, 10, 15), "expansion", "EOE", true, List.of())
+                new MtgJsonSet("Secret Lair Drop", "SLD", LocalDate.of(2026, 10, 10), MtgSetType.BOX, null, false, List.of()),
+                new MtgJsonSet("Alchemy: Edge of Eternities", "YEOE", LocalDate.of(2026, 10, 15), MtgSetType.EXPANSION, "EOE", true, List.of())
         );
         MtgJsonPrintingsVO printings = printings(
                 sets,
@@ -270,8 +305,8 @@ class SeasonPreparationServiceTest {
                 Map.of(MtgFormat.MODERN, List.of(new Staple("Ancient Stirrings", new BigDecimal("0.080"))))
         );
 
-        PreparedSeasonVO preparedSeason = SeasonPreparationService.assemble(printings, new MtgJsonPricesVO(pricesByCardName, WINDOW_LENGTH), metaShares, existingCards, previousSeasonData, request(MetaShareSource.MTGGOLDFISH), currentSeason());
-        SeasonDraftReportVO report = preparedSeason.getReport();
+        AssembledDraftVO assembledDraft = SeasonPreparationService.assemble(printings, new MtgJsonPricesVO(pricesByCardName, WINDOW_LENGTH), metaShares, existingCards, previousSeasonData, request(MetaShareSource.MTGGOLDFISH), currentSeason(), SEASON_DATES);
+        SeasonDraftReportVO report = assembledDraft.getReport();
 
         assertEquals(21, report.getSeasonNumber());
         assertEquals("XXI", report.getRomanSeasonNumber());
@@ -326,7 +361,7 @@ class SeasonPreparationServiceTest {
         assertEquals(1, report.getSetsReleased().size());
         assertEquals("Edge of Eternities", report.getSetsReleased().get(0).getName());
         assertEquals("EOE", report.getSetsReleased().get(0).getCode());
-        assertEquals("expansion", report.getSetsReleased().get(0).getType());
+        assertEquals(MtgSetType.EXPANSION, report.getSetsReleased().get(0).getType());
         assertEquals(List.of("Cosmic Conquest"), report.getSetsReleased().get(0).getCommanderDecks());
     }
 
@@ -370,8 +405,8 @@ class SeasonPreparationServiceTest {
                 Map.of()
         );
 
-        PreparedSeasonVO preparedSeason = SeasonPreparationService.assemble(printings, new MtgJsonPricesVO(pricesByCardName, WINDOW_LENGTH), metaShares, existingCards, previousSeasonData, request(MetaShareSource.MTGGOLDFISH), currentSeason());
-        SeasonDraftReportVO.ScryfallDecksVO scryfallDecks = preparedSeason.getReport().getScryfallDecks();
+        AssembledDraftVO assembledDraft = SeasonPreparationService.assemble(printings, new MtgJsonPricesVO(pricesByCardName, WINDOW_LENGTH), metaShares, existingCards, previousSeasonData, request(MetaShareSource.MTGGOLDFISH), currentSeason(), SEASON_DATES);
+        SeasonDraftReportVO.ScryfallDecksVO scryfallDecks = assembledDraft.getReport().getScryfallDecks();
 
         assertEquals("Black Lotus\nBrainstorm", scryfallDecks.getNewBans());
         assertEquals("Sol Ring", scryfallDecks.getUnbans());

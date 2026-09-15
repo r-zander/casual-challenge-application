@@ -35,6 +35,7 @@ public class SeasonDraftService {
 
     private final SeasonDraftRepository seasonDraftRepository;
     private final CasualChallengeService casualChallengeService;
+    private final SeasonDates seasonDates;
     private final ObjectMapper objectMapper;
     private final String exportDirectory;
     private final String migrationAuthor;
@@ -42,12 +43,14 @@ public class SeasonDraftService {
     public SeasonDraftService(
             SeasonDraftRepository seasonDraftRepository,
             CasualChallengeService casualChallengeService,
+            SeasonDates seasonDates,
             ObjectMapper objectMapper,
             @Value("${casual-challenge.season.export-directory}") String exportDirectory,
             @Value("${casual-challenge.season.migration-author}") String migrationAuthor
     ) {
         this.seasonDraftRepository = seasonDraftRepository;
         this.casualChallengeService = casualChallengeService;
+        this.seasonDates = seasonDates;
         this.objectMapper = objectMapper;
         this.exportDirectory = exportDirectory;
         this.migrationAuthor = migrationAuthor;
@@ -61,7 +64,7 @@ public class SeasonDraftService {
     }
 
     public CommittedSeasonVO commit() {
-        SeasonDraftVO draft = uncommittedDraft("commit");
+        SeasonDraftVO draft = uncommittedDraft(DraftAction.COMMIT);
 
         CommittedSeasonCountsVO counts;
         casualChallengeService.lockCards();
@@ -95,9 +98,9 @@ public class SeasonDraftService {
                 committedDraft.getSeasonNumber(),
                 RomanNumeral.of(committedDraft.getSeasonNumber()),
                 committedDraft.getStartDate(),
-                SeasonDates.finalsFriday(committedDraft.getEndDate()),
+                seasonDates.finalsFriday(committedDraft.getEndDate()),
                 committedDraft.getEndDate(),
-                SeasonDates.nextSeasonStart(committedDraft.getEndDate()),
+                seasonDates.nextSeasonStart(committedDraft.getEndDate()),
                 report.getSetsReleased(),
                 report.getScryfallDecks(),
                 counts
@@ -105,7 +108,7 @@ public class SeasonDraftService {
     }
 
     public void discard() {
-        uncommittedDraft("discard");
+        uncommittedDraft(DraftAction.DISCARD);
         seasonDraftRepository.discard();
     }
 
@@ -166,7 +169,7 @@ public class SeasonDraftService {
                 renamedCards);
     }
 
-    private SeasonDraftVO uncommittedDraft(String action) {
+    private SeasonDraftVO uncommittedDraft(DraftAction action) {
         SeasonDraftVO draft = seasonDraftRepository.findUncommittedDraft();
         if (draft != null) return draft;
 
@@ -183,6 +186,17 @@ public class SeasonDraftService {
             return objectMapper.readValue(draft.getReport(), SeasonDraftReportVO.class);
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Couldn't read the report of the draft for season " + draft.getSeasonNumber() + ".", e);
+        }
+    }
+
+    private enum DraftAction {
+        COMMIT,
+        DISCARD,
+        ;
+
+        @Override
+        public String toString() {
+            return this.name().toLowerCase();
         }
     }
 }

@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @Value
-public class SeasonDraftReportVO { // everything a human needs to decide whether the draft is good enough to commit
+public class SeasonDraftReportVO { // everything you need to decide whether the draft is good enough to commit
     int seasonNumber;
     String romanSeasonNumber;
     LocalDate startDate;
@@ -27,6 +27,7 @@ public class SeasonDraftReportVO { // everything a human needs to decide whether
     int previousSeasonNumber;
     LocalDateTime preparedAt;
     CountsVO counts;
+    List<String> duplicateMetaShareNames;
     List<BanChangeVO> newBans;
     List<BanChangeVO> unbans;
     List<BanChangeVO> newExtended;
@@ -51,7 +52,7 @@ public class SeasonDraftReportVO { // everything a human needs to decide whether
         Map<Legality, Integer> legalities;
         double exchangeRate;
         double adjustedExchangeRate;
-        int pricesFixedByExchangeRate;
+        int pricesFixedByExchangeRateCount;
         int pricedDays;
         Map<MtgFormat, Integer> top50Rows;
         Map<MtgFormat, Integer> top150Rows;

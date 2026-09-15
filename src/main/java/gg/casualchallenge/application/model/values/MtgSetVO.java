@@ -1,5 +1,6 @@
 package gg.casualchallenge.application.model.values;
 
+import gg.casualchallenge.application.model.type.MtgSetType;
 import lombok.Value;
 
 import java.time.LocalDate;
@@ -10,6 +11,6 @@ public class MtgSetVO {
     String name;
     String code;
     LocalDate releaseDate;
-    String type;
+    MtgSetType type;
     List<String> commanderDecks;
 }

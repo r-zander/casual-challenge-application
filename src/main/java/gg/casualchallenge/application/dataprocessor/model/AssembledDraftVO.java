@@ -7,7 +7,7 @@ import lombok.Value;
 import java.util.List;
 
 @Value
-public class PreparedSeasonVO {
+public class AssembledDraftVO {
     List<SeasonDraftCardVO> cards;
     SeasonDraftReportVO report;
 }

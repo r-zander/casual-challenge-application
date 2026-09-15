@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import gg.casualchallenge.application.api.legacy.datamodel.BanDTO;
 import gg.casualchallenge.application.common.SeasonDates;
+import gg.casualchallenge.application.dataprocessor.model.AssembledDraftVO;
 import gg.casualchallenge.application.dataprocessor.model.CardPrices;
 import gg.casualchallenge.application.dataprocessor.model.Cents;
 import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
@@ -13,7 +14,6 @@ import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrinting;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPricesVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrintingsVO;
 import gg.casualchallenge.application.dataprocessor.model.PriceWindowVO;
-import gg.casualchallenge.application.dataprocessor.model.PreparedSeasonVO;
 import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
 import gg.casualchallenge.application.model.values.SeasonPreparationRequestVO;
 import gg.casualchallenge.application.persistence.entity.Season;
@@ -28,6 +28,7 @@ import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -52,6 +53,7 @@ class SeasonReplayTest {
     private static final String PRINTINGS_FILE = "AllPrintings.json";
 
     private static final int PRICE_WINDOW_DAYS = 70;
+    private static final SeasonDates SEASON_DATES = new SeasonDates(10, DayOfWeek.FRIDAY);
     private static final int MAX_PRINTED_LINES = 20;
 
     // added_at is the timestamp of the run, there is nothing to compare there
@@ -64,7 +66,8 @@ class SeasonReplayTest {
 
     // The python treats Wasteland as a basic land (a typo that survived twenty seasons) and doesn't know that Wastes is one.
     // Millicent and Strefan are only "not legal" for it because their first printing in file order is the oversized OVOC one, which carries no legalities at all.
-    private static final Set<String> FIXED_BY_US = Set.of("Wasteland", "Wastes", "Millicent, Restless Revenant", "Strefan, Maurer Progenitor");
+    // The season 21 ban files spell Dain's Company and Kili the Resourceful without their accents, the python matched the raw names and missed both, our normalizer doesn't.
+    private static final Set<String> FIXED_BY_US = Set.of("Wasteland", "Wastes", "Millicent, Restless Revenant", "Strefan, Maurer Progenitor", "Dáin's Company", "Kíli the Resourceful");
 
     // Season 21 was built in September 2026, the newest AllPrintings.json we have is from November 2025 --> everything MTGJSON decided in between lands in these columns
     private static final Set<String> DRIFTING_COLUMNS = Set.of("name", "normalized_name", "legality", "banned_in", "vintage_restricted");
@@ -317,15 +320,15 @@ class SeasonReplayTest {
 
         SeasonPreparationRequestVO request = new SeasonPreparationRequestVO(
                 startDate,
-                SeasonDates.defaultEndDate(previousSeason.getEndDate()),
+                SEASON_DATES.defaultEndDate(previousSeason.getEndDate()),
                 PriceWindowVO.of(startDate, PRICE_WINDOW_DAYS),
                 MetaShareSource.FILES,
                 List.of(),
                 List.of()
         );
 
-        PreparedSeasonVO preparedSeason = SeasonPreparationService.assemble(printings, new MtgJsonPricesVO(pricesByCardName, PRICE_WINDOW_DAYS), metaShares, List.of(), List.of(), request, previousSeason);
-        return preparedSeason.getCards();
+        AssembledDraftVO assembledDraft = SeasonPreparationService.assemble(printings, new MtgJsonPricesVO(pricesByCardName, PRICE_WINDOW_DAYS), metaShares, List.of(), List.of(), request, previousSeason, SEASON_DATES);
+        return assembledDraft.getCards();
     }
 
     private static ReplayDiff compare(

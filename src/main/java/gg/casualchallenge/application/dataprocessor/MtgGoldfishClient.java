@@ -40,11 +40,12 @@ public class MtgGoldfishClient implements MetaGameSourceClient {
     private final static int MAX_DELAY_IN_MILLISECONDS = 2 * 1000;
     private final static int BACKOFF_IN_MILLISECONDS = 5 * 1000;
     private final static int TIMEOUT_IN_MILLISECONDS = 30 * 1000;
+    private final static String CHROME_131_ON_WINDOWS_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
     // MtgGoldfish hands out a _mtg_session cookie on the first request and gets touchy when the following 23 don't send it back
     private final Connection session = Jsoup.newSession()
             .timeout(TIMEOUT_IN_MILLISECONDS)
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+            .header("User-Agent", CHROME_131_ON_WINDOWS_USER_AGENT)
             .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
             .header("Accept-Language", "en-US,en;q=0.9");
 

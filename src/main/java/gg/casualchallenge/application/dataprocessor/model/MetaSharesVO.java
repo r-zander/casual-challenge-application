@@ -7,18 +7,22 @@ import gg.casualchallenge.application.model.type.MtgFormat;
 import lombok.Value;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Value
 public class MetaSharesVO {
 
     Map<String, Map<MtgFormat, BigDecimal>> bans;
     Map<String, Map<MtgFormat, BigDecimal>> extendedBans;
-    Map<MtgFormat, Integer> top50Rows;
+    Map<MtgFormat, Integer> top50Rows; // rows per format, sanity check in the report
     Map<MtgFormat, Integer> top150Rows;
+    List<String> duplicateNames;
     MetaShareSource source;
 
     public Map<MtgFormat, BigDecimal> findBan(String cardName) {
@@ -41,35 +45,50 @@ public class MetaSharesVO {
     }
 
     public static MetaSharesVO fromStaples(MetaShareSource source, Map<MtgFormat, List<Staple>> top50, Map<MtgFormat, List<Staple>> top150) {
-        return new MetaSharesVO(toMetaSharesByName(top50), toMetaSharesByName(top150), countStaplesPerFormat(top50), countStaplesPerFormat(top150), source);
+        Set<String> duplicateNames = new LinkedHashSet<>();
+        return new MetaSharesVO(
+                toMetaSharesByName(top50, duplicateNames),
+                toMetaSharesByName(top150, duplicateNames),
+                countStaplesPerFormat(top50),
+                countStaplesPerFormat(top150),
+                new ArrayList<>(duplicateNames),
+                source);
     }
 
     public static MetaSharesVO fromBanFiles(List<BanDTO> bans, List<BanDTO> extendedBans) {
-        return new MetaSharesVO(toMetaSharesByName(bans), toMetaSharesByName(extendedBans), countCardsPerFormat(bans), countCardsPerFormat(extendedBans), MetaShareSource.FILES);
+        Set<String> duplicateNames = new LinkedHashSet<>();
+        return new MetaSharesVO(
+                toMetaSharesByName(bans, duplicateNames),
+                toMetaSharesByName(extendedBans, duplicateNames),
+                countCardsPerFormat(bans),
+                countCardsPerFormat(extendedBans),
+                new ArrayList<>(duplicateNames),
+                MetaShareSource.FILES);
     }
 
-    private static Map<String, Map<MtgFormat, BigDecimal>> toMetaSharesByName(Map<MtgFormat, List<Staple>> staplesByFormat) {
+    private static Map<String, Map<MtgFormat, BigDecimal>> toMetaSharesByName(Map<MtgFormat, List<Staple>> staplesByFormat, Set<String> duplicateNames) {
         Map<String, Map<MtgFormat, BigDecimal>> metaSharesByName = new HashMap<>();
         for (Map.Entry<MtgFormat, List<Staple>> entry : staplesByFormat.entrySet()) {
             for (Staple staple : entry.getValue()) {
-                metaSharesByName
+                BigDecimal knownShare = metaSharesByName
                         .computeIfAbsent(CardNameNormalizer.normalize(staple.getCardName()), cardName -> new EnumMap<>(MtgFormat.class))
                         .put(entry.getKey(), staple.getPercentageOfDecks());
+                if (knownShare != null) duplicateNames.add(staple.getCardName());
             }
         }
 
         return metaSharesByName;
     }
 
-    private static Map<String, Map<MtgFormat, BigDecimal>> toMetaSharesByName(List<BanDTO> bans) {
+    private static Map<String, Map<MtgFormat, BigDecimal>> toMetaSharesByName(List<BanDTO> bans, Set<String> duplicateNames) {
         Map<String, Map<MtgFormat, BigDecimal>> metaSharesByName = new HashMap<>();
         for (BanDTO ban : bans) {
             Map<MtgFormat, BigDecimal> metaShares = new EnumMap<>(MtgFormat.class);
             for (Map.Entry<LegacyMtgFormat, BigDecimal> entry : ban.getFormats().entrySet()) {
                 metaShares.put(toMtgFormat(entry.getKey()), entry.getValue());
             }
-            // A second row for the same card replaces the first one, just like the python tool does
-            metaSharesByName.put(CardNameNormalizer.normalize(ban.getName()), metaShares);
+            // A second row for the same card replaces the first one, just like the python tool does - the report says which ones
+            if (metaSharesByName.put(CardNameNormalizer.normalize(ban.getName()), metaShares) != null) duplicateNames.add(ban.getName());
         }
 
         return metaSharesByName;

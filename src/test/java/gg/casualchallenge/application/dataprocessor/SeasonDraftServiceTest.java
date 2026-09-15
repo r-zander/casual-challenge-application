@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import gg.casualchallenge.application.dataprocessor.model.SeasonSqlFile;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
+import gg.casualchallenge.application.model.type.MtgSetType;
 import gg.casualchallenge.application.model.values.MtgSetVO;
 import gg.casualchallenge.application.model.values.SeasonDraftReportVO;
 import gg.casualchallenge.application.model.values.SeasonDraftVO;
@@ -19,6 +20,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class SeasonDraftServiceTest {
 
@@ -55,6 +57,23 @@ class SeasonDraftServiceTest {
         SeasonDraftReportVO readBack = objectMapper.readValue(objectMapper.writeValueAsString(report), SeasonDraftReportVO.class);
 
         assertEquals(report, readBack);
+    }
+
+    @Test
+    void testReport_withReportOfAnOlderSeason() throws JsonProcessingException {
+        String storedReport = """
+                {"seasonNumber": 20, "romanSeasonNumber": "XX", "metaSource": "mtggoldfish",
+                 "counts": {"cards": 30206, "pricesFixedByExchangeRate": 63},
+                 "setsReleased": [{"name": "Edge of Eternities", "code": "EOE", "releaseDate": "2026-10-02", "type": "expansion", "commanderDecks": []}]}""";
+        ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json().build();
+
+        SeasonDraftReportVO report = objectMapper.readValue(storedReport, SeasonDraftReportVO.class);
+
+        assertEquals(20, report.getSeasonNumber());
+        assertEquals(30206, report.getCounts().getCards());
+        assertEquals(0, report.getCounts().getPricesFixedByExchangeRateCount()); // the old name is gone, nothing to read it into
+        assertNull(report.getDuplicateMetaShareNames());
+        assertEquals(MtgSetType.EXPANSION, report.getSetsReleased().get(0).getType());
     }
 
     private static SeasonDraftVO draft(LocalDateTime committedAt) {
@@ -103,6 +122,7 @@ class SeasonDraftServiceTest {
                 20,
                 PREPARED_AT,
                 counts,
+                List.of("Lórien Revealed"),
                 List.of(new SeasonDraftReportVO.BanChangeVO("Brainstorm", 300, Map.of(MtgFormat.LEGACY, new BigDecimal("0.400")), MtgFormat.LEGACY, false)),
                 List.of(new SeasonDraftReportVO.BanChangeVO("Sol Ring", 50, Map.of(), null, false)),
                 List.of(),
@@ -116,7 +136,7 @@ class SeasonDraftServiceTest {
                 List.of(new SeasonDraftReportVO.OracleIdChangeVO("Joven and Chandler", JOVEN_OLD, JOVEN_NEW, "ATQ")),
                 List.of(new SeasonDraftReportVO.RenamedCardVO(JOVEN_NEW, "Joven", "joven", "Joven and Chandler", "joven-and-chandler")),
                 List.of(new SeasonDraftReportVO.RenamedCardVO(ANCESTORS_CHOSEN, "Ancestor's Chosen", "ancestor-s-chosen", "Ancestor's Chosen", "ancestors-chosen")),
-                List.of(new MtgSetVO("Edge of Eternities", "EOE", LocalDate.of(2026, 10, 2), "expansion", List.of("Cosmic Conquest"))),
+                List.of(new MtgSetVO("Edge of Eternities", "EOE", LocalDate.of(2026, 10, 2), MtgSetType.EXPANSION, List.of("Cosmic Conquest"))),
                 new SeasonDraftReportVO.ScryfallDecksVO("Black Lotus\nBrainstorm", "Sol Ring", "Brainstorm"));
     }
 }

@@ -15,7 +15,7 @@ public class SeasonDraftVO {
     LocalDate priceWindowEnd;
     int previousSeasonId;
     LocalDateTime previousSeasonUpdatedAt;
-    String mtgjsonDate;
+    String mtgJsonDate;
     String metaSource;
     LocalDateTime preparedAt;
     LocalDateTime committedAt;

@@ -58,7 +58,7 @@ public class SeasonDraftRepository {
                 draft.getPriceWindowEnd(),
                 draft.getPreviousSeasonId(),
                 draft.getPreviousSeasonUpdatedAt(),
-                draft.getMtgjsonDate(),
+                draft.getMtgJsonDate(),
                 draft.getMetaSource(),
                 draft.getPreparedAt(),
                 draft.getReport());

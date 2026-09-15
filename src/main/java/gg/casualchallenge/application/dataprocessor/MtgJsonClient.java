@@ -325,13 +325,14 @@ public class MtgJsonClient {
         }
 
         // The cards come before the set attributes in the file --> we can only judge them once the set is done
-        if (!ILLEGAL_SET_TYPES.contains(setType)) {
-            for (IdentityCandidate candidate : identityCandidates) {
-                candidate.setReleaseDate(releaseDate);
-                IdentityCandidate identity = identitiesByName.get(candidate.getCardName());
-                if (identity == null || isOlderPrinting(candidate, identity)) {
-                    identitiesByName.put(candidate.getCardName(), candidate);
-                }
+        boolean isIllegalSetType = ILLEGAL_SET_TYPES.contains(setType);
+        for (IdentityCandidate candidate : identityCandidates) {
+            if (isIllegalSetType && !candidate.isVintageLegal()) continue;
+
+            candidate.setReleaseDate(releaseDate);
+            IdentityCandidate identity = identitiesByName.get(candidate.getCardName());
+            if (identity == null || isOlderPrinting(candidate, identity)) {
+                identitiesByName.put(candidate.getCardName(), candidate);
             }
         }
 
@@ -422,7 +423,8 @@ public class MtgJsonClient {
         if (!isIgnoredForPrices(cardName, setCode)) {
             printingsByUuid.put(uuid, new MtgJsonPrinting(uuid, cardName, hasFoil, hasNonFoil));
         }
-        if (isFunny || isRebalanced || isExcludedForIdentity(cardName, setCode)) return;
+        if (isRebalanced || isExcludedForIdentity(cardName, setCode)) return;
+        if (isFunny && !legalities.containsKey(MtgFormat.VINTAGE)) return; // MTGJSON flags every Unfinity card as funny, but the eternal legal ones are real cards
 
         String vintage = legalities.get(MtgFormat.VINTAGE);
         IdentityCandidate candidate = new IdentityCandidate();

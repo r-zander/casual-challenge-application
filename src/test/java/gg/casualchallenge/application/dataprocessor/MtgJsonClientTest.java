@@ -68,6 +68,13 @@ class MtgJsonClientTest {
                       ],
                       "code": "SUM", "isOnlineOnly": false, "name": "Summer Magic / Edgar", "releaseDate": "1994-07-01", "type": "core"
                     },
+                    "UNF": {
+                      "cards": [
+                        {"availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil", "foil"], "identifiers": {"scryfallOracleId": "c9d3a2f8-16b4-4e07-8d5a-4f1b2c6e7093"}, "isFunny": true, "legalities": {"legacy": "Legal", "vintage": "Legal"}, "name": "Comet, Stellar Pup", "number": "132", "uuid": "0e7a2c58-4d13-5b96-8f42-7c3a91d6b05e"},
+                        {"availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil"], "identifiers": {"scryfallOracleId": "7b6e0d34-2a91-4c58-b0e7-9d1f3a4c6285"}, "isFunny": true, "legalities": {}, "name": "Sole Performer", "number": "111", "uuid": "8c1b6f03-9e27-54da-b731-2f6a0c85e94d"}
+                      ],
+                      "code": "UNF", "isOnlineOnly": false, "name": "Unfinity", "releaseDate": "2022-10-07", "type": "funny"
+                    },
                     "UGL": {
                       "cards": [
                         {"availability": ["paper"], "borderColor": "silver", "finishes": ["nonfoil"], "identifiers": {"scryfallOracleId": "8d4a1c07-3f52-4b6e-91a8-5c0e7d2b4396"}, "legalities": {}, "name": "Bee-Bee Gun", "number": "71", "uuid": "7d09f3b6-5c28-541a-93e0-8b6f21c07d4a"}
@@ -81,8 +88,8 @@ class MtgJsonClientTest {
 
         assertEquals(LocalDate.of(2026, 9, 13), printings.getMetaDate());
         assertEquals("5.2.2+20260913", printings.getMetaVersion());
-        assertEquals(List.of("Sol Ring", "Chaos Orb", "Red Herring", "Tundra"), new ArrayList<>(printings.getCardsByName().keySet()));
-        assertEquals(5, printings.getPrintingsByUuid().size());
+        assertEquals(List.of("Sol Ring", "Chaos Orb", "Red Herring", "Tundra", "Comet, Stellar Pup"), new ArrayList<>(printings.getCardsByName().keySet()));
+        assertEquals(7, printings.getPrintingsByUuid().size());
         assertFalse(printings.getPrintingsByUuid().containsKey("2d7b4e90-1a6c-5f38-b4e7-9c1d05a6f2b8"));
         assertFalse(printings.getPrintingsByUuid().containsKey("4e8d1b53-2f70-5a94-b6c8-1d59f0a83e27"));
         assertFalse(printings.getPrintingsByUuid().containsKey("7d09f3b6-5c28-541a-93e0-8b6f21c07d4a"));
@@ -109,7 +116,13 @@ class MtgJsonClientTest {
 
         assertEquals("SUM", printings.getCardsByName().get("Tundra").getFirstSetCode());
 
-        assertEquals(6, printings.getSets().size());
+        MtgJsonCard cometStellarPup = printings.getCardsByName().get("Comet, Stellar Pup");
+        assertEquals("UNF", cometStellarPup.getFirstSetCode());
+        assertTrue(cometStellarPup.isVintageLegal());
+        assertFalse(printings.getCardsByName().containsKey("Sole Performer"));
+        assertFalse(printings.getCardsByName().containsKey("Bee-Bee Gun"));
+
+        assertEquals(7, printings.getSets().size());
         assertEquals("MB1", printings.getSets().get(1).getParentCode());
         MtgJsonSet karlovManor = printings.getSets().get(3);
         assertEquals("Murders at Karlov Manor", karlovManor.getName());

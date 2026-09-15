@@ -63,8 +63,20 @@ public class SeasonDraftService {
     public CommittedSeasonVO commit() {
         SeasonDraftVO draft = uncommittedDraft("commit");
 
-        // prepared_at is what the exported migration writes into card.added_at, so the database gets the very same value
-        CommittedSeasonCountsVO counts = seasonDraftRepository.commit(draft.getId(), draft.getPreparedAt(), LocalDateTime.now(Constants.TIMEZONE));
+        CommittedSeasonCountsVO counts;
+        casualChallengeService.lockCards();
+        try {
+            // prepared_at is what the exported migration writes into card.added_at, so the database gets the very same value
+            counts = seasonDraftRepository.commit(draft.getId(), draft.getPreparedAt(), LocalDateTime.now(Constants.TIMEZONE));
+            try {
+                casualChallengeService.preloadCards();
+            } catch (RuntimeException e) {
+                throw new RuntimeException("Season " + draft.getSeasonNumber() + " is committed, but reloading the card cache failed: " + e.getMessage() + " Call POST /admin/v1/cards/reload.", e);
+            }
+        } finally {
+            casualChallengeService.unlockCards();
+        }
+
         log.info("Committed season {}. {} cards added, {} names or normalized names updated, {} remapped, {} season data rows written.",
                 draft.getSeasonNumber(), counts.getInsertedCards(), counts.getUpdatedCardNames(), counts.getRemappedCards(), counts.getUpsertedCardSeasonData());
 
@@ -75,12 +87,6 @@ public class SeasonDraftService {
             } catch (IOException e) {
                 throw new RuntimeException("Season " + committedDraft.getSeasonNumber() + " is committed, but writing the migration files failed: " + e.getMessage(), e);
             }
-        }
-
-        try {
-            casualChallengeService.preloadCards();
-        } catch (RuntimeException e) {
-            throw new RuntimeException("Season " + committedDraft.getSeasonNumber() + " is committed, but reloading the card cache failed: " + e.getMessage() + " Call POST /admin/v1/cards/reload once the database is reachable again.", e);
         }
 
         SeasonDraftReportVO report = toReport(committedDraft);

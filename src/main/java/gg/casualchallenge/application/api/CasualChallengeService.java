@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,8 +39,11 @@ public class CasualChallengeService {
     private final CardRepository cardRepository;
     private final CardSeasonDataRepository cardSeasonDataRepository;
 
-    private volatile Map<String, CardVO> cardCacheByNormalizedName = new HashMap<>();
-    private volatile Map<UUID, CardVO> cardCacheByOracleId = new HashMap<>();
+    // Requests wait for a season commit instead of answering from a cache without the new cards
+    private final ReentrantReadWriteLock cacheLock = new ReentrantReadWriteLock();
+
+    private final Map<String, CardVO> cardCacheByNormalizedName = new HashMap<>();
+    private final Map<UUID, CardVO> cardCacheByOracleId = new HashMap<>();
 
     public CasualChallengeService(
             SeasonRepository seasonRepository,
@@ -53,61 +57,85 @@ public class CasualChallengeService {
 
     @PostConstruct
     public void preloadCards() {
-        log.info("Start Preloading Cache.");
-        List<Card> allCards = cardRepository.findAll();
-        List<CardVO> cardVOs = allCards.stream()
-                .map(CardMapper.INSTANCE::toVO).toList();
-        Map<String, CardVO> cardsByNormalizedName = cardVOs.stream()
-                .collect(Collectors.toMap(CardVO::getNormalizedName, cardVO -> cardVO));
-        Map<UUID, CardVO> cardsByOracleId = cardVOs.stream()
-                .collect(Collectors.toMap(CardVO::getOracleId, cardVO -> cardVO));
-        // Swapped in instead of refilled, a season commit reloads the cache while requests are running
-        cardCacheByNormalizedName = cardsByNormalizedName;
-        cardCacheByOracleId = cardsByOracleId;
-        log.info("Preloading Cache done. Loaded {} cards into memory.", cardCacheByNormalizedName.size());
+        cacheLock.writeLock().lock();
+        try {
+            log.info("Start Preloading Cache.");
+            List<Card> allCards = cardRepository.findAll();
+            List<CardVO> cardVOs = allCards.stream()
+                    .map(CardMapper.INSTANCE::toVO).toList();
+            Map<String, CardVO> cardsByNormalizedName = cardVOs.stream()
+                    .collect(Collectors.toMap(CardVO::getNormalizedName, cardVO -> cardVO));
+            Map<UUID, CardVO> cardsByOracleId = cardVOs.stream()
+                    .collect(Collectors.toMap(CardVO::getOracleId, cardVO -> cardVO));
+            cardCacheByNormalizedName.clear();
+            cardCacheByNormalizedName.putAll(cardsByNormalizedName);
+            cardCacheByOracleId.clear();
+            cardCacheByOracleId.putAll(cardsByOracleId);
+            log.info("Preloading Cache done. Loaded {} cards into memory.", cardCacheByNormalizedName.size());
+        } finally {
+            cacheLock.writeLock().unlock();
+        }
+    }
+
+    public void lockCards() {
+        cacheLock.writeLock().lock();
+    }
+
+    public void unlockCards() {
+        cacheLock.writeLock().unlock();
     }
 
     /**
      * @param seasonNumber null = current season
      */
     public CardDataBatchVO getCardData(Integer seasonNumber, List<String> cardNames, boolean displayExtended) {
-        Season season = getSeason(seasonNumber);
+        cacheLock.readLock().lock();
+        try {
+            Season season = getSeason(seasonNumber);
 
-        Map<UUID, CardVO> foundCards = new HashMap<>();
-        List<String> missingCardNames = new LinkedList<>();
-        for (String cardName : cardNames) {
-            CardVO cardVO = cardCacheByNormalizedName.get(CardNameNormalizer.normalize(cardName));
-            if (cardVO == null) {
-                missingCardNames.add(cardName);
-            } else {
-                foundCards.put(cardVO.getOracleId(), cardVO);
+            Map<UUID, CardVO> foundCards = new HashMap<>();
+            List<String> missingCardNames = new LinkedList<>();
+            for (String cardName : cardNames) {
+                CardVO cardVO = cardCacheByNormalizedName.get(CardNameNormalizer.normalize(cardName));
+                if (cardVO == null) {
+                    missingCardNames.add(cardName);
+                } else {
+                    foundCards.put(cardVO.getOracleId(), cardVO);
+                }
             }
+
+            List<CardSeasonData> cardDataList = cardSeasonDataRepository.findAllBySeasonAndCardOracleIdIn(season, foundCards.keySet());
+
+            return new CardDataBatchVO(
+                    buildCardWithDataVOs(displayExtended, cardDataList, foundCards),
+                    missingCardNames
+            );
+        } finally {
+            cacheLock.readLock().unlock();
         }
-
-        List<CardSeasonData> cardDataList = cardSeasonDataRepository.findAllBySeasonAndCardOracleIdIn(season, foundCards.keySet());
-
-        return new CardDataBatchVO(
-                buildCardWithDataVOs(displayExtended, cardDataList, foundCards),
-                missingCardNames
-        );
     }
 
     public CardDataBatchVO getAllCardData(Integer seasonNumber, boolean displayExtended) {
-        Season season = getSeason(seasonNumber);
+        cacheLock.readLock().lock();
+        try {
+            Season season = getSeason(seasonNumber);
 
-        List<CardSeasonData> cardDataList = cardSeasonDataRepository.findAllBySeason(season);
+            List<CardSeasonData> cardDataList = cardSeasonDataRepository.findAllBySeason(season);
 
-        return new CardDataBatchVO(
-                buildCardWithDataVOs(displayExtended, cardDataList, cardCacheByOracleId),
-                Collections.emptyList()
-        );
+            return new CardDataBatchVO(
+                    buildCardWithDataVOs(displayExtended, cardDataList, cardCacheByOracleId),
+                    Collections.emptyList()
+            );
+        } finally {
+            cacheLock.readLock().unlock();
+        }
     }
 
     private List<CardWithDataVO> buildCardWithDataVOs(boolean displayExtended, List<CardSeasonData> cardDataList, Map<UUID, CardVO> cardCacheByOracleId) {
         List<CardWithDataVO> cardWithDataVOs = new ArrayList<>(cardDataList.size());
         for (CardSeasonData cardSeasonData : cardDataList) {
             CardVO cardVO = cardCacheByOracleId.get(cardSeasonData.getCardOracleId());
-            if (cardVO == null) continue; // a season commit writes the rows before it reloads the cache --> the card shows up a moment later
+            if (cardVO == null) throw new IllegalStateException("Card '" + cardSeasonData.getCardOracleId() + "' has season data but isn't in the card cache. Call POST /admin/v1/cards/reload.");
             cardWithDataVOs.add(new CardWithDataVO(
                     cardVO.getId(),
                     cardVO.getOracleId(),

@@ -42,10 +42,10 @@ public class SeasonDraftRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    /** There is only ever one draft, so the old one is dropped. */
+    /** There is only ever one draft to work on, so the old one is dropped. Committed drafts stay, they are the only record of a season start. */
     @Transactional
     public void replace(SeasonDraftVO draft, List<SeasonDraftCardVO> cards) {
-        jdbcTemplate.update("DELETE FROM public.season_draft"); // season_draft_card is cascaded
+        jdbcTemplate.update("DELETE FROM public.season_draft WHERE committed_at IS NULL"); // season_draft_card is cascaded
 
         Integer draftId = jdbcTemplate.queryForObject(
                 "INSERT INTO public.season_draft (season_number, start_date, end_date, price_window_start, price_window_end, previous_season_id, previous_season_updated_at, mtgjson_date, meta_source, prepared_at, report)" +
@@ -96,6 +96,12 @@ public class SeasonDraftRepository {
 
     public SeasonDraftVO findDraft() {
         List<SeasonDraftVO> drafts = jdbcTemplate.query(SELECT_DRAFT + " ORDER BY id DESC LIMIT 1", SeasonDraftRepository::toDraftVO);
+        if (drafts.isEmpty()) return null;
+        return drafts.get(0);
+    }
+
+    public SeasonDraftVO findUncommittedDraft() {
+        List<SeasonDraftVO> drafts = jdbcTemplate.query(SELECT_DRAFT + " WHERE committed_at IS NULL ORDER BY id DESC LIMIT 1", SeasonDraftRepository::toDraftVO);
         if (drafts.isEmpty()) return null;
         return drafts.get(0);
     }
@@ -159,6 +165,20 @@ public class SeasonDraftRepository {
             }
         }
 
+        List<Map<String, Object>> renames = jdbcTemplate.queryForList(
+                "SELECT card.oracle_id, card.name AS previous_name, draft_card.name, draft_card.normalized_name" +
+                        " FROM public.season_draft_card draft_card JOIN public.card ON card.oracle_id = COALESCE(draft_card.previous_oracle_id, draft_card.oracle_id)" +
+                        " WHERE draft_card.season_draft_id = ? AND draft_card.skip_reason IS NULL" +
+                        " AND (card.name <> draft_card.name OR card.normalized_name <> draft_card.normalized_name) ORDER BY draft_card.id",
+                draftId);
+        for (Map<String, Object> rename : renames) {
+            List<String> otherNames = jdbcTemplate.queryForList("SELECT name FROM public.card WHERE (name = ? OR normalized_name = ?) AND oracle_id <> ?",
+                    String.class, rename.get("name"), rename.get("normalized_name"), rename.get("oracle_id"));
+            if (!otherNames.isEmpty()) {
+                throw new IllegalStateException("Card '" + rename.get("previous_name") + "' would be renamed to '" + rename.get("name") + "', which already belongs to '" + otherNames.get(0) + "'.");
+            }
+        }
+
         // Step: close the previous season and open the new one
         jdbcTemplate.update("UPDATE public.season SET end_date = ?, updated_at = now() WHERE id = ?", draft.getStartDate().minusDays(1), draft.getPreviousSeasonId());
         jdbcTemplate.update("INSERT INTO public.season (id, season_number, start_date, end_date, updated_at) VALUES (?, ?, ?, ?, now())", seasonNumber, seasonNumber, draft.getStartDate(), draft.getEndDate());
@@ -173,6 +193,14 @@ public class SeasonDraftRepository {
                     remap.get("oracle_id"),
                     remap.get("previous_oracle_id"));
         }
+
+        // Step: MTGJSON renames cards from time to time, the card table has to follow or the API stops finding them
+        int renamedCards = jdbcTemplate.update(
+                "UPDATE public.card SET name = draft_card.name, normalized_name = draft_card.normalized_name" +
+                        " FROM public.season_draft_card draft_card" +
+                        " WHERE card.oracle_id = draft_card.oracle_id AND draft_card.season_draft_id = ? AND draft_card.skip_reason IS NULL" +
+                        " AND (card.name <> draft_card.name OR card.normalized_name <> draft_card.normalized_name)",
+                draftId);
 
         int insertedCards = jdbcTemplate.update(
                 "INSERT INTO public.card (oracle_id, name, normalized_name, added_at)" +
@@ -201,12 +229,12 @@ public class SeasonDraftRepository {
 
         jdbcTemplate.update("UPDATE public.season_draft SET committed_at = now() WHERE id = ?", draftId);
 
-        return new CommittedSeasonCountsVO(remaps.size(), insertedCards, upsertedCardSeasonData);
+        return new CommittedSeasonCountsVO(remaps.size(), renamedCards, insertedCards, upsertedCardSeasonData);
     }
 
     @Transactional
     public void discard() {
-        jdbcTemplate.update("DELETE FROM public.season_draft"); // season_draft_card is cascaded
+        jdbcTemplate.update("DELETE FROM public.season_draft WHERE committed_at IS NULL"); // season_draft_card is cascaded
     }
 
     private static SeasonVO toSeasonVO(ResultSet resultSet, int rowNumber) throws SQLException {

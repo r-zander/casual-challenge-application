@@ -18,6 +18,7 @@ import gg.casualchallenge.application.dataprocessor.model.SeasonPreparationState
 import gg.casualchallenge.application.dataprocessor.model.Staple;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
+import gg.casualchallenge.application.model.values.MtgSetVO;
 import gg.casualchallenge.application.model.values.PreparedSeasonVO;
 import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
 import gg.casualchallenge.application.model.values.SeasonDraftReportVO;
@@ -66,6 +67,9 @@ public class SeasonPreparationService {
     private static final int RELEVANT_CHANGE_IN_PERCENT = 50;
     private static final int RELEVANT_CHANGE_IN_BUDGET_POINTS = 100;
     private static final int TOP_CHANGES = 20;
+
+    // Cards above this are out of reach anyway, so the Scryfall decks don't bother listing them
+    private static final int MAX_BUDGET_POINTS = 2500;
 
     private static final Set<String> PLAYABLE_SET_TYPES = Set.of("expansion", "core", "masters", "draft_innovation", "commander");
 
@@ -435,8 +439,10 @@ public class SeasonPreparationService {
             Card existingCard = existingCardsByOracleId.get(card.getOracleId());
             if (card.getPreviousOracleId() != null) {
                 oracleIdChanges.add(new SeasonDraftReportVO.OracleIdChangeVO(card.getName(), card.getPreviousOracleId(), card.getOracleId(), printings.getCardsByName().get(card.getName()).getFirstSetCode()));
-            } else if (!card.isNewCard() && existingCard != null && !existingCard.getName().equals(card.getName())) {
-                renamedCards.add(new SeasonDraftReportVO.RenamedCardVO(card.getOracleId(), existingCard.getName(), card.getName()));
+                existingCard = existingCardsByOracleId.get(card.getPreviousOracleId()); // still sitting on its old oracle id --> it can be renamed on top of the remap
+            }
+            if (existingCard != null && (!existingCard.getName().equals(card.getName()) || !existingCard.getNormalizedName().equals(card.getNormalizedName()))) {
+                renamedCards.add(new SeasonDraftReportVO.RenamedCardVO(card.getOracleId(), existingCard.getName(), card.getName(), card.getNormalizedName()));
             }
 
             UUID previousOracleId = card.getPreviousOracleId() != null ? card.getPreviousOracleId() : card.getOracleId();
@@ -538,12 +544,13 @@ public class SeasonPreparationService {
                 skippedCards,
                 oracleIdChanges,
                 renamedCards,
-                findSetsReleased(printings, request)
+                findSetsReleased(printings, request),
+                scryfallDecks(newBans, unbans, cards)
         );
     }
 
-    private static List<SeasonDraftReportVO.SetReleasedVO> findSetsReleased(MtgJsonPrintingsVO printings, SeasonPreparationRequestVO request) {
-        List<SeasonDraftReportVO.SetReleasedVO> setsReleased = new ArrayList<>();
+    private static List<MtgSetVO> findSetsReleased(MtgJsonPrintingsVO printings, SeasonPreparationRequestVO request) {
+        List<MtgSetVO> setsReleased = new ArrayList<>();
         for (MtgJsonSet mtgSet : printings.getSets()) {
             if (mtgSet.getReleaseDate() == null || mtgSet.isOnlineOnly()) continue;
             if (!PLAYABLE_SET_TYPES.contains(mtgSet.getType())) continue;
@@ -553,10 +560,44 @@ public class SeasonPreparationService {
             for (MtgJsonSet.MtgJsonDeck deck : mtgSet.getDecks()) {
                 if (deck.getType() != null && deck.getType().contains("Commander")) commanderDecks.add(deck.getName());
             }
-            setsReleased.add(new SeasonDraftReportVO.SetReleasedVO(mtgSet.getName(), mtgSet.getCode(), mtgSet.getReleaseDate(), commanderDecks));
+            setsReleased.add(new MtgSetVO(mtgSet.getName(), mtgSet.getCode(), mtgSet.getReleaseDate(), mtgSet.getType(), commanderDecks));
         }
 
         return setsReleased;
+    }
+
+    private static SeasonDraftReportVO.ScryfallDecksVO scryfallDecks(
+            List<SeasonDraftReportVO.BanChangeVO> newBans,
+            List<SeasonDraftReportVO.BanChangeVO> unbans,
+            List<SeasonDraftCardVO> cards
+    ) {
+        List<String> newBanNames = new ArrayList<>(newBans.size());
+        for (SeasonDraftReportVO.BanChangeVO newBan : newBans) {
+            newBanNames.add(newBan.getName());
+        }
+
+        List<String> unbanNames = new ArrayList<>(unbans.size());
+        for (SeasonDraftReportVO.BanChangeVO unban : unbans) {
+            // A card that is still banned in paper or too expensive to play stays out of the unban deck
+            if (unban.getBannedIn() != null || unban.isVintageRestricted()) continue;
+            if (unban.getBudgetPoints() > MAX_BUDGET_POINTS) continue;
+
+            unbanNames.add(unban.getName());
+        }
+
+        List<String> currentBanNames = new ArrayList<>();
+        for (SeasonDraftCardVO card : cards) {
+            if (card.getSkipReason() != null || card.getLegality() != Legality.BANNED) continue;
+            if (card.getBudgetPoints() > MAX_BUDGET_POINTS) continue;
+
+            currentBanNames.add(card.getName());
+        }
+        currentBanNames.sort(Comparator.naturalOrder());
+
+        return new SeasonDraftReportVO.ScryfallDecksVO(
+                String.join("\n", newBanNames),
+                String.join("\n", unbanNames),
+                String.join("\n", currentBanNames));
     }
 
     private static String findSkipReason(

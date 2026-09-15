@@ -38,8 +38,8 @@ public class CasualChallengeService {
     private final CardRepository cardRepository;
     private final CardSeasonDataRepository cardSeasonDataRepository;
 
-    private final Map<String, CardVO> cardCacheByNormalizedName = new HashMap<>();
-    private final Map<UUID, CardVO> cardCacheByOracleId = new HashMap<>();
+    private volatile Map<String, CardVO> cardCacheByNormalizedName = new HashMap<>();
+    private volatile Map<UUID, CardVO> cardCacheByOracleId = new HashMap<>();
 
     public CasualChallengeService(
             SeasonRepository seasonRepository,
@@ -54,15 +54,16 @@ public class CasualChallengeService {
     @PostConstruct
     public void preloadCards() {
         log.info("Start Preloading Cache.");
-        cardCacheByNormalizedName.clear();
-        cardCacheByOracleId.clear();
         List<Card> allCards = cardRepository.findAll();
         List<CardVO> cardVOs = allCards.stream()
                 .map(CardMapper.INSTANCE::toVO).toList();
-        cardCacheByNormalizedName.putAll(cardVOs.stream()
-                .collect(Collectors.toMap(CardVO::getNormalizedName, cardVO -> cardVO)));
-        cardCacheByOracleId.putAll(cardVOs.stream()
-                .collect(Collectors.toMap(CardVO::getOracleId, cardVO -> cardVO)));
+        Map<String, CardVO> cardsByNormalizedName = cardVOs.stream()
+                .collect(Collectors.toMap(CardVO::getNormalizedName, cardVO -> cardVO));
+        Map<UUID, CardVO> cardsByOracleId = cardVOs.stream()
+                .collect(Collectors.toMap(CardVO::getOracleId, cardVO -> cardVO));
+        // Swapped in instead of refilled, a season commit reloads the cache while requests are running
+        cardCacheByNormalizedName = cardsByNormalizedName;
+        cardCacheByOracleId = cardsByOracleId;
         log.info("Preloading Cache done. Loaded {} cards into memory.", cardCacheByNormalizedName.size());
     }
 

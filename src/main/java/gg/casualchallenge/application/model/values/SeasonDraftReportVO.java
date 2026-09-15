@@ -40,7 +40,8 @@ public class SeasonDraftReportVO {
     List<LeftOutCardVO> skippedCards;
     List<OracleIdChangeVO> oracleIdChanges;
     List<RenamedCardVO> renamedCards;
-    List<SetReleasedVO> setsReleased;
+    List<MtgSetVO> setsReleased;
+    ScryfallDecksVO scryfallDecks;
 
     @Value
     public static class CountsVO {
@@ -93,14 +94,15 @@ public class SeasonDraftReportVO {
         UUID oracleId;
         String previousName;
         String name;
+        String normalizedName;
     }
 
+    /** The three lists that get pasted into Scryfall to build the season decks */
     @Value
-    public static class SetReleasedVO {
-        String name;
-        String code;
-        LocalDate releaseDate;
-        List<String> commanderDecks;
+    public static class ScryfallDecksVO {
+        String newBans;
+        String unbans;
+        String currentBans;
     }
 
 }

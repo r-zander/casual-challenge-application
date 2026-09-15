@@ -40,9 +40,11 @@ class SeasonPreparationServiceTest {
 
     private static final UUID ABRADE = UUID.fromString("9d3b1e75-4c62-4a08-b5f7-1e6d2c4a8093");
     private static final UUID ANCESTORS_CHOSEN = UUID.fromString("fc2ccab7-cab1-4463-b73d-898070136d74");
+    private static final UUID ANCESTRAL_RECALL = UUID.fromString("550c74d4-1fcb-406a-b02a-639a760a4380");
     private static final UUID ANCIENT_STIRRINGS = UUID.fromString("0b5e7a92-6d14-4f38-a7c0-3e9f1b5d6284");
     private static final UUID BEE_BEE_GUN = UUID.fromString("8d4a1c07-3f52-4b6e-91a8-5c0e7d2b4396");
     private static final UUID BEE_BEE_GUN_AGAIN = UUID.fromString("1c6f8b30-7e94-4d25-83a1-6b0d5e2f7c48");
+    private static final UUID BLACK_LOTUS = UUID.fromString("5f8287b2-5b4c-4b31-8c59-3e2a1d7f9c6b");
     private static final UUID BRAINSTORM = UUID.fromString("4b2c9e08-1d56-4a37-bf10-7c8e3d5a6209");
     private static final UUID CHAOS_ORB = UUID.fromString("edb455f4-8dc9-4b7c-b25c-cb51b7dfbb41");
     private static final UUID DELVER_OF_SECRETS = UUID.fromString("6e0a4c18-9b73-4f52-a8d6-2c5b1e7f3094");
@@ -51,6 +53,7 @@ class SeasonPreparationServiceTest {
     private static final UUID JOVEN_NEW = UUID.fromString("2d8e4f10-3b6c-4d5e-9a7f-8b0c1d2e3f40");
     private static final UUID JOVEN_OLD = UUID.fromString("7a4b1c0e-9f2d-4a3b-8c7d-1e5f6a2b3c4d");
     private static final UUID LAVA_AXE = UUID.fromString("5c1f3a68-2b74-4e09-8d53-7a6c0e9b1f24");
+    private static final UUID LAVA_AXE_AGAIN = UUID.fromString("2a9c4d81-6f03-4e57-b214-7d5a8c1e6b90");
     private static final UUID LIGHTNING_BOLT = UUID.fromString("4457ed35-7c10-48c8-9776-456485fdf070");
     private static final UUID LORIEN_REVEALED = UUID.fromString("0a7c5d31-8e26-4b94-a1f0-5d3b7c2e6094");
     private static final UUID RAGAVAN = UUID.fromString("8e5d0c37-2a91-4b68-9f04-1d7c3b5a6e82");
@@ -120,7 +123,8 @@ class SeasonPreparationServiceTest {
                 card("Bee Bee Gun", BEE_BEE_GUN_AGAIN),
                 card("Sole Performer", null),
                 card("Second Face", FRESH_FACE),
-                card("Trivia Contest", SUPERLATORIUM)
+                card("Trivia Contest", SUPERLATORIUM),
+                card("Lava, Axe", LAVA_AXE_AGAIN)
         );
 
         Map<String, CardPrices> pricesByCardName = new HashMap<>();
@@ -135,7 +139,8 @@ class SeasonPreparationServiceTest {
                 existingCard("Lorien Revealed", "lorien-revealed", LORIEN_REVEALED),
                 existingCard("Bee-Bee Gun", "bee-bee-gun", BEE_BEE_GUN),
                 existingCard("Trivia Contest", "trivia-contest", TRIVIA_CONTEST),
-                existingCard("The Superlatorium", "the-superlatorium", SUPERLATORIUM)
+                existingCard("The Superlatorium", "the-superlatorium", SUPERLATORIUM),
+                existingCard("Lava, Axe", "lava-axe", LAVA_AXE)
         );
         MetaSharesVO metaShares = MetaSharesVO.fromBanFiles(
                 List.of(new BanDTO("Lorien Revealed", Map.of(LegacyMtgFormat.PAUPER, new BigDecimal("0.46")))),
@@ -145,7 +150,7 @@ class SeasonPreparationServiceTest {
         PreparedSeasonVO preparedSeason = SeasonPreparationService.assemble(printings, pricesByCardName, metaShares, existingCards, List.of(), request(MetaShareSource.FILES), currentSeason());
         List<SeasonDraftCardVO> cards = preparedSeason.getCards();
 
-        assertEquals(8, cards.size());
+        assertEquals(9, cards.size());
 
         assertEquals("Ancestor's Chosen", cards.get(0).getName());
         assertFalse(cards.get(0).isNewCard());
@@ -169,19 +174,23 @@ class SeasonPreparationServiceTest {
         assertEquals("oracle id '" + SUPERLATORIUM + "' already belongs to 'The Superlatorium'", cards.get(7).getSkipReason());
 
         SeasonDraftReportVO report = preparedSeason.getReport();
-        assertEquals(4, report.getCounts().getCards());
+        assertEquals(5, report.getCounts().getCards());
         assertEquals(1, report.getCounts().getNewCards());
         assertEquals(5, report.getSkippedCards().size());
         assertEquals("Sole Performer", report.getSkippedCards().get(4).getName());
         assertEquals("no oracle id", report.getSkippedCards().get(4).getReason());
         assertNull(report.getSkippedCards().get(4).getOracleId());
-        assertEquals(1, report.getOracleIdChanges().size());
+        assertEquals(2, report.getOracleIdChanges().size());
         assertEquals("Joven", report.getOracleIdChanges().get(0).getName());
         assertEquals(JOVEN_OLD, report.getOracleIdChanges().get(0).getPreviousOracleId());
         assertEquals(JOVEN_NEW, report.getOracleIdChanges().get(0).getOracleId());
-        assertEquals(1, report.getRenamedCards().size());
+        assertEquals("Lava, Axe", report.getOracleIdChanges().get(1).getName());
+        assertEquals(2, report.getRenamedCards().size());
         assertEquals("Lorien Revealed", report.getRenamedCards().get(0).getPreviousName());
         assertEquals("Lórien Revealed", report.getRenamedCards().get(0).getName());
+        assertEquals("Lava, Axe", report.getRenamedCards().get(1).getName());
+        assertEquals("lava,-axe", report.getRenamedCards().get(1).getNormalizedName());
+        assertEquals(LAVA_AXE_AGAIN, report.getRenamedCards().get(1).getOracleId());
     }
 
     @Test
@@ -296,7 +305,56 @@ class SeasonPreparationServiceTest {
         assertEquals(1, report.getSetsReleased().size());
         assertEquals("Edge of Eternities", report.getSetsReleased().get(0).getName());
         assertEquals("EOE", report.getSetsReleased().get(0).getCode());
+        assertEquals("expansion", report.getSetsReleased().get(0).getType());
         assertEquals(List.of("Cosmic Conquest"), report.getSetsReleased().get(0).getCommanderDecks());
+    }
+
+    @Test
+    void testAssemble_scryfallDecks() {
+        MtgJsonPrintingsVO printings = printings(
+                List.of(),
+                card("Brainstorm", BRAINSTORM),
+                new MtgJsonCard("Black Lotus", BLACK_LOTUS, true, true, null, "LEA", RELEASE_DATE),
+                new MtgJsonCard("Ancestral Recall", ANCESTRAL_RECALL, true, true, null, "LEA", RELEASE_DATE),
+                new MtgJsonCard("Chaos Orb", CHAOS_ORB, true, false, MtgFormat.LEGACY, "LEA", RELEASE_DATE),
+                card("Ragavan, Nimble Pilferer", RAGAVAN),
+                card("Sol Ring", SOL_RING)
+        );
+
+        Map<String, CardPrices> pricesByCardName = new HashMap<>();
+        pricesByCardName.put("Brainstorm", cardPrices(3.0, 0));
+        pricesByCardName.put("Black Lotus", cardPrices(6000.0, 0));
+        pricesByCardName.put("Ragavan, Nimble Pilferer", cardPrices(100.0, 0));
+        pricesByCardName.put("Sol Ring", cardPrices(0.5, 0));
+
+        List<Card> existingCards = List.of(
+                existingCard("Brainstorm", "brainstorm", BRAINSTORM),
+                existingCard("Black Lotus", "black-lotus", BLACK_LOTUS),
+                existingCard("Ancestral Recall", "ancestral-recall", ANCESTRAL_RECALL),
+                existingCard("Chaos Orb", "chaos-orb", CHAOS_ORB),
+                existingCard("Ragavan, Nimble Pilferer", "ragavan-nimble-pilferer", RAGAVAN),
+                existingCard("Sol Ring", "sol-ring", SOL_RING)
+        );
+        List<CardSeasonData> previousSeasonData = List.of(
+                previousSeasonData(BRAINSTORM, 250, Legality.LEGAL),
+                previousSeasonData(BLACK_LOTUS, 500000, Legality.LEGAL),
+                previousSeasonData(ANCESTRAL_RECALL, 400000, Legality.BANNED),
+                previousSeasonData(CHAOS_ORB, 30000, Legality.BANNED),
+                previousSeasonData(RAGAVAN, 9000, Legality.BANNED),
+                previousSeasonData(SOL_RING, 60, Legality.BANNED)
+        );
+        MetaSharesVO metaShares = MetaSharesVO.fromStaples(
+                MetaShareSource.MTGGOLDFISH,
+                Map.of(MtgFormat.LEGACY, List.of(new Staple("Brainstorm", new BigDecimal("0.400")))),
+                Map.of()
+        );
+
+        PreparedSeasonVO preparedSeason = SeasonPreparationService.assemble(printings, pricesByCardName, metaShares, existingCards, previousSeasonData, request(MetaShareSource.MTGGOLDFISH), currentSeason());
+        SeasonDraftReportVO.ScryfallDecksVO scryfallDecks = preparedSeason.getReport().getScryfallDecks();
+
+        assertEquals("Black Lotus\nBrainstorm", scryfallDecks.getNewBans());
+        assertEquals("Sol Ring", scryfallDecks.getUnbans());
+        assertEquals("Brainstorm", scryfallDecks.getCurrentBans());
     }
 
     private static MtgJsonPrintingsVO printings(List<MtgJsonSet> sets, MtgJsonCard... cards) {

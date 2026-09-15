@@ -37,6 +37,7 @@ class SeasonDraftRepositoryTest {
     private static final UUID JOVEN_NEW = UUID.fromString("2d8e4f10-3b6c-4d5e-9a7f-8b0c1d2e3f40");
     private static final UUID BLACK_LOTUS = UUID.fromString("5f8287b2-5b4c-4b31-8c59-3e2a1d7f9c6b");
     private static final UUID FRESH_FACE = UUID.fromString("bb1c9a77-4e6d-4f2a-9b3c-0a1d2e3f4a5b");
+    private static final UUID JOVEN_AND_CHANDLER = UUID.fromString("0f6a2c85-4d71-4e93-b508-6c3d9a1f7e24");
 
     private static final UUID GONE_CARD = UUID.fromString("e91d3b52-8a7c-4f16-b2d9-0c4e5a6b7d38");
 
@@ -78,6 +79,7 @@ class SeasonDraftRepositoryTest {
         CommittedSeasonCountsVO counts = commitDraft(draftId);
 
         assertEquals(1, counts.getRemappedCards());
+        assertEquals(1, counts.getRenamedCards());
         assertEquals(1, counts.getInsertedCards());
         assertEquals(3, counts.getUpsertedCardSeasonData());
         assertEquals(1, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season WHERE id = 21 AND season_number = 21", Integer.class));
@@ -88,7 +90,9 @@ class SeasonDraftRepositoryTest {
         assertEquals(22L, jdbcTemplate.queryForObject("SELECT nextval('season_id_seq')", Long.class));
         assertEquals(4, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card", Integer.class));
         assertEquals(PREPARED_AT, jdbcTemplate.queryForObject("SELECT added_at FROM public.card WHERE oracle_id = ?", LocalDateTime.class, FRESH_FACE));
-        assertEquals("Joven", jdbcTemplate.queryForObject("SELECT name FROM public.card WHERE oracle_id = ?", String.class, JOVEN_NEW));
+        assertEquals("Joven and Chandler", jdbcTemplate.queryForObject("SELECT name FROM public.card WHERE oracle_id = ?", String.class, JOVEN_NEW));
+        assertEquals("joven-and-chandler", jdbcTemplate.queryForObject("SELECT normalized_name FROM public.card WHERE oracle_id = ?", String.class, JOVEN_NEW));
+        assertEquals("Ancestor's Chosen", jdbcTemplate.queryForObject("SELECT name FROM public.card WHERE oracle_id = ?", String.class, ANCESTORS_CHOSEN));
         assertEquals(SEASON_20_ADDED_AT, jdbcTemplate.queryForObject("SELECT added_at FROM public.card WHERE oracle_id = ?", LocalDateTime.class, JOVEN_NEW)); // the remapped card is flagged as new as well --> the insert has to run into the conflict
         assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card WHERE oracle_id = ?", Integer.class, JOVEN_OLD));
         assertEquals(2, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card_season_data WHERE card_oracle_id = ?", Integer.class, JOVEN_NEW));
@@ -100,6 +104,7 @@ class SeasonDraftRepositoryTest {
         assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card_season_data WHERE season_id = 21 AND card_oracle_id = ?", Integer.class, BLACK_LOTUS));
         assertEquals(3, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card_season_data WHERE season_id = 21", Integer.class));
         assertNotNull(seasonDraftRepository.findDraft().getCommittedAt());
+        assertNull(seasonDraftRepository.findUncommittedDraft());
     }
 
     @Test
@@ -133,11 +138,25 @@ class SeasonDraftRepositoryTest {
         int draftId = replaceDraft();
 
         IllegalStateException exception = assertThrows(IllegalStateException.class, () -> commitDraft(draftId));
-        assertEquals("Card 'Joven' is remapped to oracle id '" + JOVEN_NEW + "', which already belongs to 'Unrelated Card'.", exception.getMessage());
+        assertEquals("Card 'Joven and Chandler' is remapped to oracle id '" + JOVEN_NEW + "', which already belongs to 'Unrelated Card'.", exception.getMessage());
         assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season WHERE season_number = 21", Integer.class));
         assertEquals(LocalDate.of(2026, 6, 7), jdbcTemplate.queryForObject("SELECT end_date FROM public.season WHERE id = 20", LocalDate.class));
         assertEquals(SEASON_20_UPDATED_AT, jdbcTemplate.queryForObject("SELECT updated_at FROM public.season WHERE id = 20", LocalDateTime.class));
         assertEquals(4, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card", Integer.class));
+        assertNull(seasonDraftRepository.findDraft().getCommittedAt());
+    }
+
+    @Test
+    void testCommit_withFailingRename() {
+        seedPreviousSeason();
+        jdbcTemplate.update("INSERT INTO public.card (oracle_id, name, normalized_name, added_at) VALUES (?, 'Joven & Chandler', 'joven-and-chandler', ?)", JOVEN_AND_CHANDLER, SEASON_20_ADDED_AT);
+        int draftId = replaceDraft();
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> commitDraft(draftId));
+        assertEquals("Card 'Joven' would be renamed to 'Joven and Chandler', which already belongs to 'Joven & Chandler'.", exception.getMessage());
+        assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season WHERE season_number = 21", Integer.class));
+        assertEquals(SEASON_20_UPDATED_AT, jdbcTemplate.queryForObject("SELECT updated_at FROM public.season WHERE id = 20", LocalDateTime.class));
+        assertEquals("Joven", jdbcTemplate.queryForObject("SELECT name FROM public.card WHERE oracle_id = ?", String.class, JOVEN_OLD));
         assertNull(seasonDraftRepository.findDraft().getCommittedAt());
     }
 
@@ -173,7 +192,7 @@ class SeasonDraftRepositoryTest {
         List<SeasonDraftCardVO> cards = seasonDraftRepository.findDraftCards(draftId);
         assertEquals(4, cards.size());
         assertEquals("Ancestor's Chosen", cards.get(0).getName());
-        assertEquals("Joven", cards.get(1).getName());
+        assertEquals("Joven and Chandler", cards.get(1).getName());
         assertEquals("Black Lotus", cards.get(2).getName());
         assertEquals("Fresh Face", cards.get(3).getName());
         assertEquals(Legality.EXTENDED, cards.get(0).getLegality());
@@ -182,6 +201,24 @@ class SeasonDraftRepositoryTest {
         assertEquals(JOVEN_OLD, cards.get(1).getPreviousOracleId());
         assertEquals("duplicate normalized name", cards.get(2).getSkipReason());
         assertTrue(cards.get(3).isNewCard());
+    }
+
+    @Test
+    void testReplace_withCommittedDraft() {
+        seedPreviousSeason();
+        int committedDraftId = replaceDraft();
+        commitDraft(committedDraftId);
+        int draftId = replaceDraft();
+
+        assertEquals(2, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season_draft", Integer.class));
+        assertEquals(draftId, seasonDraftRepository.findDraft().getId());
+        assertEquals(draftId, seasonDraftRepository.findUncommittedDraft().getId());
+
+        seasonDraftRepository.discard();
+
+        assertEquals(1, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season_draft", Integer.class));
+        assertEquals(committedDraftId, seasonDraftRepository.findDraft().getId());
+        assertNull(seasonDraftRepository.findUncommittedDraft());
     }
 
     private static void seedPreviousSeason() {
@@ -218,7 +255,7 @@ class SeasonDraftRepositoryTest {
         List<SeasonDraftCardVO> cards = new ArrayList<>(4);
         cards.add(new SeasonDraftCardVO(ANCESTORS_CHOSEN, null, "Ancestor's Chosen", "ancestors-chosen", 12, Legality.EXTENDED,
                 null, null, new BigDecimal("0.120"), null, null, null, null, false, false, null));
-        cards.add(new SeasonDraftCardVO(JOVEN_NEW, JOVEN_OLD, "Joven", "joven", 32, Legality.BANNED,
+        cards.add(new SeasonDraftCardVO(JOVEN_NEW, JOVEN_OLD, "Joven and Chandler", "joven-and-chandler", 32, Legality.BANNED,
                 null, null, null, null, null, null, MtgFormat.LEGACY, false, true, null));
         cards.add(new SeasonDraftCardVO(BLACK_LOTUS, null, "Black Lotus", "black-lotus", 599200, Legality.NOT_LEGAL,
                 null, null, null, null, null, null, null, true, false, "duplicate normalized name"));

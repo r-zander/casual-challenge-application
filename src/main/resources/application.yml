@@ -30,7 +30,9 @@ casual-challenge:
   season:
     mtgjson-base-url: https://mtgjson.com/api/v5
     download-directory: ${java.io.tmpdir}
+    export-directory: "" # empty = don't write the files
     price-window-days: 70
+    migration-author: raoul_zander
 
 
 

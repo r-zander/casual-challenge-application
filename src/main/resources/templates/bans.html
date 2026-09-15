@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en" data-bs-theme="dark" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -35,8 +35,8 @@
 <div class="container py-5 d-flex flex-column min-vh-100" style="max-width: 47em;">
     <header class="text-center mb-5">
         <h1 class="display-4">Ban List</h1>
-        <p class="lead">{{season}}</p>
-        {{note}}
+        <p class="lead" th:text="|Season ${seasonNumber}, ${startDate} until ${endDate}.|"></p>
+        <p th:if="${seasonEnded}" th:text="|Season ${seasonNumber} ended on ${endDate} and the next one hasn't started yet, so this list still applies.|"></p>
     </header>
 
     <main>
@@ -47,7 +47,10 @@
                 when it is banned in one of those formats anyway, or when it is restricted in Vintage.
             </p>
             <ul class="list-unstyled">
-                {{bans}}
+                <li class="mb-2" th:each="bannedCard : ${bans}">
+                    <a th:href="${bannedCard.scryfallUrl}" th:text="${bannedCard.name}"></a>
+                    <span class="text-body-secondary" th:text="${#strings.listJoin(bannedCard.reasons, ', ')}"></span>
+                </li>
             </ul>
         </section>
 
@@ -58,7 +61,10 @@
                 but they are out as well if you play with the extended ban list.
             </p>
             <ul class="list-unstyled">
-                {{extended}}
+                <li class="mb-2" th:each="bannedCard : ${extendedBans}">
+                    <a th:href="${bannedCard.scryfallUrl}" th:text="${bannedCard.name}"></a>
+                    <span class="text-body-secondary" th:text="${#strings.listJoin(bannedCard.reasons, ', ')}"></span>
+                </li>
             </ul>
         </section>
 

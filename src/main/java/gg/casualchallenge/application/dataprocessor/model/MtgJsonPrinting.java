@@ -7,5 +7,5 @@ public class MtgJsonPrinting {
     String uuid;
     String cardName;
     boolean foil;
-    boolean nonfoil;
+    boolean nonFoil;
 }

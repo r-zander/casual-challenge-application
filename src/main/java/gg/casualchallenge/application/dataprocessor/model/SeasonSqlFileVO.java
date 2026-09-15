@@ -1,4 +1,4 @@
-package gg.casualchallenge.application.model.values;
+package gg.casualchallenge.application.dataprocessor.model;
 
 import lombok.Value;
 

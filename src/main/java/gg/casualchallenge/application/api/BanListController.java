@@ -51,27 +51,27 @@ public class BanListController {
 
     @GetMapping(path = "/bans", produces = "text/html;charset=utf-8")
     public String getBanList() {
-        Season currentSeason = seasonRepository.findCurrentSeason();
+        Season currentSeason = this.seasonRepository.findCurrentSeason();
         LocalDate today = LocalDate.now(Constants.TIMEZONE);
-        if (cachedPage != null
-                && cachedSeasonId == currentSeason.getId()
-                && currentSeason.getUpdatedAt().equals(cachedUpdatedAt)
-                && today.equals(cachedDay)) { // the page tells whether the season has ended --> also re-render on a new day
-            return cachedPage;
+        if (this.cachedPage != null
+                && this.cachedSeasonId == currentSeason.getId()
+                && currentSeason.getUpdatedAt().equals(this.cachedUpdatedAt)
+                && today.equals(this.cachedDay)) { // the page tells whether the season has ended --> also re-render on a new day
+            return this.cachedPage;
         }
 
         String page = renderPage(currentSeason, today);
-        cachedPage = page;
-        cachedSeasonId = currentSeason.getId();
-        cachedUpdatedAt = currentSeason.getUpdatedAt();
-        cachedDay = today;
+        this.cachedPage = page;
+        this.cachedSeasonId = currentSeason.getId();
+        this.cachedUpdatedAt = currentSeason.getUpdatedAt();
+        this.cachedDay = today;
 
         return page;
     }
 
     private String renderPage(Season currentSeason, LocalDate today) {
-        List<BanListCardVO> bans = cardSeasonDataRepository.findAllForBanList(currentSeason, Legality.BANNED);
-        List<BanListCardVO> extendedBans = cardSeasonDataRepository.findAllForBanList(currentSeason, Legality.EXTENDED);
+        List<BanListCardVO> bans = this.cardSeasonDataRepository.findAllForBanList(currentSeason, Legality.BANNED);
+        List<BanListCardVO> extendedBans = this.cardSeasonDataRepository.findAllForBanList(currentSeason, Legality.EXTENDED);
 
         String season = "Season " + currentSeason.getSeasonNumber() + ", "
                 + DATE_FORMAT.format(currentSeason.getStartDate()) + " until " + DATE_FORMAT.format(currentSeason.getEndDate()) + ".";
@@ -81,7 +81,7 @@ public class BanListController {
                     + " and the next one hasn't started yet, so this list still applies.</p>";
         }
 
-        return pageTemplate
+        return this.pageTemplate
                 .replace("{{season}}", season)
                 .replace("{{note}}", note)
                 .replace("{{bans}}", renderCards(bans))

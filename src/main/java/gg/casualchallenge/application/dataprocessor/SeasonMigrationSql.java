@@ -15,8 +15,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
-/** The migration files data-preparer.py used to write, so a season start stays reproducible from the repository alone. */
-public final class SeasonMigrationSql {
+public final class SeasonMigrationSql { // the files data-preparer.py used to write, so a season start stays reproducible from the repository alone
 
     private static final int CHUNK_SIZE = 1000;
 
@@ -48,9 +47,11 @@ public final class SeasonMigrationSql {
                 + "    (" + draft.getSeasonNumber() + ", " + draft.getSeasonNumber() + ", '" + draft.getStartDate() + "', '" + draft.getEndDate() + "', now())\n"
                 + "ON CONFLICT (id) DO NOTHING;\n");
 
+        sql.append("SELECT setval('season_id_seq', (SELECT MAX(id) FROM public.season));\n");
+
         if (!oracleIdChanges.isEmpty()) {
             sql.append("\n");
-            sql.append("-- card_season_data references card.oracle_id without ON UPDATE CASCADE --> both updates have to be one statement\n");
+            sql.append("-- card_season_data references card.oracle_id without ON UPDATE CASCADE --> both updates have to be one statement\n"); // keep in sync with SeasonDraftRepository.commit
             for (SeasonDraftReportVO.OracleIdChangeVO oracleIdChange : oracleIdChanges) {
                 sql.append("WITH remapped_card AS (UPDATE public.card SET oracle_id = " + escapeUuid(oracleIdChange.getOracleId())
                         + " WHERE oracle_id = " + escapeUuid(oracleIdChange.getPreviousOracleId()) + ")"
@@ -66,7 +67,7 @@ public final class SeasonMigrationSql {
                 sql.append("UPDATE public.card SET name = " + escapeString(renamedCard.getName())
                         + ", normalized_name = " + escapeString(renamedCard.getNormalizedName())
                         + " WHERE oracle_id = " + escapeUuid(renamedCard.getOracleId())
-                        + "; -- was " + escapeString(renamedCard.getPreviousName()) + "\n");
+                        + "; -- was " + escapeString(renamedCard.getPreviousName()) + " / " + escapeString(renamedCard.getPreviousNormalizedName()) + "\n");
             }
         }
 
@@ -84,15 +85,16 @@ public final class SeasonMigrationSql {
             PRIMARY KEY (id)
         );
      */
-    public static String insertCards(List<SeasonDraftCardVO> cards, LocalDateTime addedAt) {
+    public static String insertCards(List<SeasonDraftCardVO> cards, LocalDateTime addedAt) { // keep in sync with SeasonDraftRepository.commit
         String addedAtValue = "'" + addedAt.format(ADDED_AT_FORMAT) + "'";
 
         StringBuilder sql = new StringBuilder();
         List<String> values = new ArrayList<>(CHUNK_SIZE);
-        // The python counted the skipped cards towards the chunk as well, the migrations in the repository are cut that way
+        // Every card, not just the new ones: a database rebuilt from the migrations alone has to end up complete. The python
+        // counted the skipped cards towards the chunk as well, the migrations in the repository are cut that way.
         for (int index = 0; index < cards.size(); index++) {
             SeasonDraftCardVO card = cards.get(index);
-            if (!card.isNewCard() || card.getSkipReason() != null) continue;
+            if (card.getSkipReason() != null) continue;
 
             values.add("\t(" + escapeUuid(card.getOracleId()) + ", " + escapeString(card.getName()) + ", " + escapeString(card.getNormalizedName()) + ", " + addedAtValue + ")");
             if (index > 0 && index % CHUNK_SIZE == 0) {
@@ -128,7 +130,7 @@ public final class SeasonMigrationSql {
             PRIMARY KEY (id)
         );
      */
-    public static String insertCardSeasonData(int seasonId, List<SeasonDraftCardVO> cards) {
+    public static String insertCardSeasonData(int seasonId, List<SeasonDraftCardVO> cards) { // keep in sync with SeasonDraftRepository.commit
         List<SeasonDraftCardVO> sortedCards = new ArrayList<>(cards);
         sortedCards.sort(Comparator.comparing(SeasonDraftCardVO::getName));
 

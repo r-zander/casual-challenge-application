@@ -11,15 +11,16 @@ import gg.casualchallenge.application.dataprocessor.model.CardPrices;
 import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
 import gg.casualchallenge.application.dataprocessor.model.MetaSharesVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonCard;
+import gg.casualchallenge.application.dataprocessor.model.MtgJsonPricesVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrintingsVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonSet;
+import gg.casualchallenge.application.dataprocessor.model.PreparedSeasonVO;
 import gg.casualchallenge.application.dataprocessor.model.PriceWindowVO;
 import gg.casualchallenge.application.dataprocessor.model.SeasonPreparationState;
 import gg.casualchallenge.application.dataprocessor.model.Staple;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
 import gg.casualchallenge.application.model.values.MtgSetVO;
-import gg.casualchallenge.application.model.values.PreparedSeasonVO;
 import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
 import gg.casualchallenge.application.model.values.SeasonDraftReportVO;
 import gg.casualchallenge.application.model.values.SeasonDraftVO;
@@ -214,10 +215,15 @@ public class SeasonPreparationService {
 
         startStep(1, "Reading AllPrintings.json");
         MtgJsonPrintingsVO printings = mtgJsonClient.fetchPrintings();
+        LocalDate lastPricedDay = printings.getMetaDate();
+        if (lastPricedDay != null && request.getPriceWindow().getEnd().isAfter(lastPricedDay.plusDays(1))) {
+            throw new IllegalStateException("MTGJSON has prices until " + lastPricedDay + ", the price window ends " + request.getPriceWindow().getEnd()
+                    + " --> prepare on the season start date or pass an earlier priceWindowEnd.");
+        }
         if (cancelRequested.get()) return null;
 
         startStep(2, "Reading AllPrices.json");
-        Map<String, CardPrices> pricesByCardName = mtgJsonClient.fetchPrices(printings.getPrintingsByUuid(), request.getPriceWindow());
+        MtgJsonPricesVO prices = mtgJsonClient.fetchPrices(printings.getPrintingsByUuid(), request.getPriceWindow());
         if (cancelRequested.get()) return null;
 
         startStep(3, "Reading meta shares from " + request.getMetaSource());
@@ -227,7 +233,7 @@ public class SeasonPreparationService {
         startStep(4, "Calculating budget points and assembling the draft - the big step");
         PreparedSeasonVO preparedSeason = assemble(
                 printings,
-                pricesByCardName,
+                prices,
                 metaShares,
                 cardRepository.findAll(),
                 cardSeasonDataRepository.findAllBySeason(currentSeason),
@@ -293,14 +299,14 @@ public class SeasonPreparationService {
 
     public static PreparedSeasonVO assemble(
             MtgJsonPrintingsVO printings,
-            Map<String, CardPrices> pricesByCardName,
+            MtgJsonPricesVO prices,
             MetaSharesVO metaShares,
             List<Card> existingCards,
             List<CardSeasonData> previousSeasonData,
             SeasonPreparationRequestVO request,
             Season currentSeason
     ) {
-        BudgetPointsVO budgetPoints = calculateBudgetPoints(printings, pricesByCardName);
+        BudgetPointsVO budgetPoints = calculateBudgetPoints(printings, prices.getPricesByCardName());
 
         Map<String, Card> existingCardsByName = new HashMap<>(existingCards.size());
         Map<String, Card> existingCardsByNormalizedName = new HashMap<>(existingCards.size());
@@ -364,7 +370,35 @@ public class SeasonPreparationService {
             ));
         }
 
-        return new PreparedSeasonVO(cards, buildReport(cards, existingCardsByOracleId, previousSeasonData, printings, metaShares, budgetPoints, request, currentSeason));
+        // The card table also holds cards that have no printing we may price any more (acorn only, playtest only, oversized only).
+        // Dropping their season row would make them vanish from the API instead of answering "not legal" --> keep them.
+        Set<UUID> draftedOracleIds = new HashSet<>(cards.size());
+        for (SeasonDraftCardVO card : cards) {
+            if (card.getSkipReason() != null) continue;
+
+            draftedOracleIds.add(card.getOracleId());
+            if (card.getPreviousOracleId() != null) draftedOracleIds.add(card.getPreviousOracleId());
+        }
+        for (Card existingCard : existingCards) {
+            if (printings.getCardsByName().containsKey(existingCard.getName())) continue;
+            if (draftedOracleIds.contains(existingCard.getOracleId())) continue;
+
+            cards.add(new SeasonDraftCardVO(
+                    existingCard.getOracleId(),
+                    null,
+                    existingCard.getName(),
+                    existingCard.getNormalizedName(),
+                    0,
+                    Legality.NOT_LEGAL,
+                    null, null, null, null, null, null,
+                    null,
+                    false,
+                    false,
+                    null
+            ));
+        }
+
+        return new PreparedSeasonVO(cards, buildReport(cards, existingCardsByOracleId, previousSeasonData, printings, metaShares, budgetPoints, prices, request, currentSeason));
     }
 
     private static BudgetPointsVO calculateBudgetPoints(MtgJsonPrintingsVO printings, Map<String, CardPrices> pricesByCardName) {
@@ -418,6 +452,7 @@ public class SeasonPreparationService {
             MtgJsonPrintingsVO printings,
             MetaSharesVO metaShares,
             BudgetPointsVO budgetPoints,
+            MtgJsonPricesVO prices,
             SeasonPreparationRequestVO request,
             Season currentSeason
     ) {
@@ -439,10 +474,11 @@ public class SeasonPreparationService {
         List<SeasonDraftReportVO.OracleIdChangeVO> oracleIdChanges = new ArrayList<>();
         List<SeasonDraftReportVO.RenamedCardVO> renamedCards = new ArrayList<>();
         List<SeasonDraftReportVO.RenamedCardVO> normalizedNameFixes = new ArrayList<>();
+        List<SeasonDraftReportVO.LeftOutCardVO> keptCards = new ArrayList<>();
         Set<UUID> knownOracleIds = new HashSet<>(cards.size());
         int cardCount = 0;
         int newCardCount = 0;
-        int zeroBudgetPointCardCount = 0;
+        int cardsWithoutPrice = 0;
 
         for (SeasonDraftCardVO card : cards) {
             if (card.getSkipReason() != null) {
@@ -453,7 +489,10 @@ public class SeasonPreparationService {
             cardCount++;
             legalities.merge(card.getLegality(), 1, Integer::sum);
             if (card.isNewCard() && card.getPreviousOracleId() == null) newCardCount++;
-            if (card.getBudgetPoints() == 0) zeroBudgetPointCardCount++;
+            if (card.getBudgetPoints() == 0) cardsWithoutPrice++;
+            if (!printings.getCardsByName().containsKey(card.getName())) {
+                keptCards.add(new SeasonDraftReportVO.LeftOutCardVO(card.getName(), card.getOracleId(), "no eligible printing this season, kept as not legal"));
+            }
 
             Card existingCard = existingCardsByOracleId.get(card.getOracleId());
             if (card.getPreviousOracleId() != null) {
@@ -461,10 +500,10 @@ public class SeasonPreparationService {
                 existingCard = existingCardsByOracleId.get(card.getPreviousOracleId()); // still sitting on its old oracle id --> it can be renamed on top of the remap
             }
             if (existingCard != null && !existingCard.getName().equals(card.getName())) {
-                renamedCards.add(new SeasonDraftReportVO.RenamedCardVO(card.getOracleId(), existingCard.getName(), card.getName(), card.getNormalizedName()));
+                renamedCards.add(toRenamedCard(existingCard, card));
             } else if (existingCard != null && !existingCard.getNormalizedName().equals(card.getNormalizedName())) {
                 // Same name, other normalized name: the old python tool turned apostrophes into a dash --> the commit repairs those rows on the way
-                normalizedNameFixes.add(new SeasonDraftReportVO.RenamedCardVO(card.getOracleId(), existingCard.getName(), card.getName(), card.getNormalizedName()));
+                normalizedNameFixes.add(toRenamedCard(existingCard, card));
             }
 
             UUID previousOracleId = card.getPreviousOracleId() != null ? card.getPreviousOracleId() : card.getOracleId();
@@ -517,6 +556,7 @@ public class SeasonPreparationService {
             String cardName = existingCard != null ? existingCard.getName() : null;
             missingCards.add(new SeasonDraftReportVO.LeftOutCardVO(cardName, cardSeasonData.getCardOracleId(), findMissingReason(cardName, skipReasonsByName)));
         }
+        missingCards.addAll(keptCards);
 
         newBans.sort(Comparator.comparing(SeasonDraftReportVO.BanChangeVO::getName));
         unbans.sort(Comparator.comparing(SeasonDraftReportVO.BanChangeVO::getName));
@@ -529,14 +569,24 @@ public class SeasonPreparationService {
         SeasonDraftReportVO.CountsVO counts = new SeasonDraftReportVO.CountsVO(
                 cardCount,
                 newCardCount,
-                normalizedNameFixes.size(),
-                zeroBudgetPointCardCount,
+                cardsWithoutPrice,
                 legalities,
                 budgetPoints.getExchangeRate(),
                 budgetPoints.getAdjustedExchangeRate(),
                 budgetPoints.getPricesFixedByExchangeRate(),
+                prices.getPricedDays(),
                 metaShares.getTop50Rows(),
-                metaShares.getTop150Rows()
+                metaShares.getTop150Rows(),
+                newBans.size(),
+                unbans.size(),
+                newExtended.size(),
+                noLongerExtended.size(),
+                budgetPointChanges.size(),
+                missingCards.size(),
+                skippedCards.size(),
+                oracleIdChanges.size(),
+                renamedCards.size(),
+                normalizedNameFixes.size()
         );
 
         int seasonNumber = currentSeason.getSeasonNumber() + 1;
@@ -652,6 +702,15 @@ public class SeasonPreparationService {
         }
 
         return null;
+    }
+
+    private static SeasonDraftReportVO.RenamedCardVO toRenamedCard(Card existingCard, SeasonDraftCardVO card) {
+        return new SeasonDraftReportVO.RenamedCardVO(
+                card.getOracleId(),
+                existingCard.getName(),
+                existingCard.getNormalizedName(),
+                card.getName(),
+                card.getNormalizedName());
     }
 
     private static String findMissingReason(String cardName, Map<String, String> skipReasonsByName) {

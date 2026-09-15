@@ -22,8 +22,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class SeasonDraftServiceTest {
 
-    private static final UUID JOVEN_NEW = UUID.fromString("2d8e4f10-3b6c-4d5e-9a7f-8b0c1d2e3f40");
-    private static final UUID JOVEN_OLD = UUID.fromString("7a4b1c0e-9f2d-4a3b-8c7d-1e5f6a2b3c4d");
+    private static final UUID ANCESTORS_CHOSEN = UUID.fromString("fc2ccab7-cab1-4463-b73d-898070136d74");
+    private static final UUID JOVEN_NEW = UUID.fromString("11db8545-eca6-43f5-b9e8-f302acef53a5");
+    private static final UUID JOVEN_OLD = UUID.fromString("86b47725-1764-4716-993d-e4dfcea2346c");
 
     private static final LocalDateTime PREPARED_AT = LocalDateTime.of(2026, 9, 13, 20, 21, 5);
     private static final LocalDateTime COMMITTED_AT = LocalDateTime.of(2026, 9, 15, 9, 5, 42);
@@ -46,10 +47,9 @@ class SeasonDraftServiceTest {
         assertEquals("20260915_0905_02_insert_card_season_data_for_season_21.sql", SeasonDraftService.sqlFileName(draft, SeasonSqlFile.INSERT_CARD_SEASON_DATA));
     }
 
-    /** The report takes the same route through Jackson on its way into the season_draft column and back out. */
     @Test
     void testReport_roundTrip() throws JsonProcessingException {
-        SeasonDraftReportVO report = report();
+        SeasonDraftReportVO report = report(); // the same route through Jackson the report takes into the season_draft column and back out
         ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json().build();
 
         SeasonDraftReportVO readBack = objectMapper.readValue(objectMapper.writeValueAsString(report), SeasonDraftReportVO.class);
@@ -78,14 +78,15 @@ class SeasonDraftServiceTest {
         SeasonDraftReportVO.CountsVO counts = new SeasonDraftReportVO.CountsVO(
                 30206,
                 412,
-                1868,
                 8901,
                 Map.of(Legality.LEGAL, 20000, Legality.BANNED, 2),
                 1.0834,
                 1.0417,
                 63,
+                70,
                 Map.of(MtgFormat.LEGACY, 50),
-                Map.of(MtgFormat.LEGACY, 150));
+                Map.of(MtgFormat.LEGACY, 150),
+                64, 66, 161, 155, 517, 894, 3, 3, 9, 1868);
 
         return new SeasonDraftReportVO(
                 21,
@@ -113,8 +114,8 @@ class SeasonDraftServiceTest {
                 List.of(new SeasonDraftReportVO.LeftOutCardVO("Bee-Bee Gun", null, "no eligible printing")),
                 List.of(new SeasonDraftReportVO.LeftOutCardVO("Lava, Axe", null, "duplicate normalized name")),
                 List.of(new SeasonDraftReportVO.OracleIdChangeVO("Joven and Chandler", JOVEN_OLD, JOVEN_NEW, "ATQ")),
-                List.of(new SeasonDraftReportVO.RenamedCardVO(JOVEN_NEW, "Joven", "Joven and Chandler", "joven-and-chandler")),
-                List.of(new SeasonDraftReportVO.RenamedCardVO(UUID.fromString("fc2ccab7-cab1-4463-b73d-898070136d74"), "Ancestor's Chosen", "Ancestor's Chosen", "ancestors-chosen")),
+                List.of(new SeasonDraftReportVO.RenamedCardVO(JOVEN_NEW, "Joven", "joven", "Joven and Chandler", "joven-and-chandler")),
+                List.of(new SeasonDraftReportVO.RenamedCardVO(ANCESTORS_CHOSEN, "Ancestor's Chosen", "ancestor-s-chosen", "Ancestor's Chosen", "ancestors-chosen")),
                 List.of(new MtgSetVO("Edge of Eternities", "EOE", LocalDate.of(2026, 10, 2), "expansion", List.of("Cosmic Conquest"))),
                 new SeasonDraftReportVO.ScryfallDecksVO("Black Lotus\nBrainstorm", "Sol Ring", "Brainstorm"));
     }

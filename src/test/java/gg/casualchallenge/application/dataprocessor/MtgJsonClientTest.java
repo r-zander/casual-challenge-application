@@ -168,7 +168,7 @@ class MtgJsonClientTest {
         printingsByUuid.put("8f6a9d1c-4b3e-5a7d-9c21-6e0f5a2b7d43", new MtgJsonPrinting("8f6a9d1c-4b3e-5a7d-9c21-6e0f5a2b7d43", "Sol Ring", true, true));
         PriceWindowVO window = PriceWindowVO.of(LocalDate.of(2025, 6, 7), 3);
 
-        Map<String, CardPrices> pricesByCardName = mtgJsonClient.readPrices(toStream(allPrices), printingsByUuid, window);
+        Map<String, CardPrices> pricesByCardName = mtgJsonClient.readPrices(toStream(allPrices), printingsByUuid, window).getPricesByCardName();
 
         assertEquals(Set.of("Sol Ring"), pricesByCardName.keySet());
         CardPrices solRing = pricesByCardName.get("Sol Ring");

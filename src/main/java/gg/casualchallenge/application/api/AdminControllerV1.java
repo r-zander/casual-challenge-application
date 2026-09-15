@@ -8,18 +8,16 @@ import gg.casualchallenge.application.dataprocessor.SeasonPreparationService;
 import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
 import gg.casualchallenge.application.dataprocessor.model.PriceWindowVO;
 import gg.casualchallenge.application.dataprocessor.model.SeasonSqlFile;
+import gg.casualchallenge.application.dataprocessor.model.SeasonSqlFileVO;
 import gg.casualchallenge.application.model.values.CommittedSeasonVO;
 import gg.casualchallenge.application.model.values.SeasonDraftReportVO;
-import gg.casualchallenge.application.model.values.SeasonDraftVO;
 import gg.casualchallenge.application.model.values.SeasonPreparationJobVO;
 import gg.casualchallenge.application.model.values.SeasonPreparationRequestVO;
-import gg.casualchallenge.application.model.values.SeasonSqlFileVO;
 import io.swagger.v3.oas.annotations.Hidden;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -40,8 +38,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/admin/v1")
 public class AdminControllerV1 {
-
-    private static final String HEADER_COMMITTED_AT = "X-Season-Draft-Committed-At";
 
     private final SeasonPreparationService seasonPreparationService;
     private final SeasonDraftService seasonDraftService;
@@ -72,8 +68,13 @@ public class AdminControllerV1 {
             @RequestParam(required = false) MultipartFile extendedBans
     ) {
         SeasonPreparationRequestVO request = toRequest(startDate, endDate, priceWindowStart, priceWindowEnd, metaSource, bans, extendedBans);
-
-        return this.seasonPreparationService.prepare(request);
+        try {
+            return this.seasonPreparationService.prepare(request);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
+        }
     }
 
     @GetMapping(path = "/season/prepare/status")
@@ -88,20 +89,13 @@ public class AdminControllerV1 {
     }
 
     @GetMapping(path = "/season/draft")
-    public ResponseEntity<SeasonDraftReportVO> getSeasonDraft() {
+    public SeasonDraftReportVO getSeasonDraft() {
         SeasonDraftReportVO report = this.seasonDraftService.report(); // the report is the JSON that sits in season_draft --> nothing to map it to
         if (report == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "There is no season draft.");
         }
 
-        SeasonDraftVO draft = this.seasonDraftService.latestDraft();
-        if (draft.getCommittedAt() == null) {
-            return ResponseEntity.ok(report);
-        }
-
-        return ResponseEntity.ok()
-                .header(HEADER_COMMITTED_AT, draft.getCommittedAt().toString())
-                .body(report);
+        return report;
     }
 
     @GetMapping(path = "/season/draft/sql/{part}", produces = "text/plain;charset=utf-8")
@@ -120,13 +114,21 @@ public class AdminControllerV1 {
 
     @PostMapping(path = "/season/commit")
     public CommittedSeasonVO commitSeason() {
-        return this.seasonDraftService.commit();
+        try {
+            return this.seasonDraftService.commit();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
+        }
     }
 
     @DeleteMapping(path = "/season/draft")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void discardSeasonDraft() {
-        this.seasonDraftService.discard();
+        try {
+            this.seasonDraftService.discard();
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
+        }
     }
 
     @PostMapping(path = "/cards/reload")
@@ -135,15 +137,6 @@ public class AdminControllerV1 {
         this.casualChallengeService.preloadCards();
     }
 
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<String> handleRefusedSeasonChange(IllegalStateException e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
-    }
-
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<String> handleImpossibleSeason(IllegalArgumentException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-    }
 
     private SeasonPreparationRequestVO toRequest(
             LocalDate startDate,

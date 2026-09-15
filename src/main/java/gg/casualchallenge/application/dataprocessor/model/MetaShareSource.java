@@ -3,7 +3,8 @@ package gg.casualchallenge.application.dataprocessor.model;
 public enum MetaShareSource {
     MTGGOLDFISH,
     MTGTOP8,
-    FILES;
+    FILES,
+    ;
 
     @Override
     public String toString() {

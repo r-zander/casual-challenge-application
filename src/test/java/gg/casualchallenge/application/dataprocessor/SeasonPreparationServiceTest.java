@@ -6,13 +6,14 @@ import gg.casualchallenge.application.dataprocessor.model.CardPrices;
 import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
 import gg.casualchallenge.application.dataprocessor.model.MetaSharesVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonCard;
+import gg.casualchallenge.application.dataprocessor.model.MtgJsonPricesVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrintingsVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonSet;
 import gg.casualchallenge.application.dataprocessor.model.PriceWindowVO;
 import gg.casualchallenge.application.dataprocessor.model.Staple;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
-import gg.casualchallenge.application.model.values.PreparedSeasonVO;
+import gg.casualchallenge.application.dataprocessor.model.PreparedSeasonVO;
 import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
 import gg.casualchallenge.application.model.values.SeasonDraftReportVO;
 import gg.casualchallenge.application.model.values.SeasonPreparationRequestVO;
@@ -38,28 +39,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SeasonPreparationServiceTest {
 
-    private static final UUID ABRADE = UUID.fromString("9d3b1e75-4c62-4a08-b5f7-1e6d2c4a8093");
+    private static final UUID ABRADE = UUID.fromString("f9db72dc-9a5b-48a4-a86e-7464d9a2166a");
     private static final UUID ANCESTORS_CHOSEN = UUID.fromString("fc2ccab7-cab1-4463-b73d-898070136d74");
     private static final UUID ANCESTRAL_RECALL = UUID.fromString("550c74d4-1fcb-406a-b02a-639a760a4380");
-    private static final UUID ANCIENT_STIRRINGS = UUID.fromString("0b5e7a92-6d14-4f38-a7c0-3e9f1b5d6284");
+    private static final UUID ANCIENT_STIRRINGS = UUID.fromString("82f18e7d-5c42-47c4-8e74-3fccc9b7b1f0");
     private static final UUID BEE_BEE_GUN = UUID.fromString("8d4a1c07-3f52-4b6e-91a8-5c0e7d2b4396");
     private static final UUID BEE_BEE_GUN_AGAIN = UUID.fromString("1c6f8b30-7e94-4d25-83a1-6b0d5e2f7c48");
-    private static final UUID BLACK_LOTUS = UUID.fromString("5f8287b2-5b4c-4b31-8c59-3e2a1d7f9c6b");
-    private static final UUID BRAINSTORM = UUID.fromString("4b2c9e08-1d56-4a37-bf10-7c8e3d5a6209");
+    private static final UUID BLACK_LOTUS = UUID.fromString("5089ec1a-f881-4d55-af14-5d996171203b");
+    private static final UUID BRAINSTORM = UUID.fromString("36cd2364-d113-47d1-b2c4-b088d9eb88dd");
     private static final UUID CHAOS_ORB = UUID.fromString("edb455f4-8dc9-4b7c-b25c-cb51b7dfbb41");
-    private static final UUID DELVER_OF_SECRETS = UUID.fromString("6e0a4c18-9b73-4f52-a8d6-2c5b1e7f3094");
+    private static final UUID DELVER_OF_SECRETS = UUID.fromString("edd531b9-f615-4399-8c8c-1c5e18c4acbf");
     private static final UUID FRESH_FACE = UUID.fromString("bb1c9a77-4e6d-4f2a-9b3c-0a1d2e3f4a5b");
     private static final UUID FRESH_FACE_AGAIN = UUID.fromString("3f7d2b91-5a08-4c64-9e17-8d0b6c4a2f35");
-    private static final UUID JOVEN_NEW = UUID.fromString("2d8e4f10-3b6c-4d5e-9a7f-8b0c1d2e3f40");
-    private static final UUID JOVEN_OLD = UUID.fromString("7a4b1c0e-9f2d-4a3b-8c7d-1e5f6a2b3c4d");
-    private static final UUID LAVA_AXE = UUID.fromString("5c1f3a68-2b74-4e09-8d53-7a6c0e9b1f24");
+    private static final UUID JOVEN_NEW = UUID.fromString("11db8545-eca6-43f5-b9e8-f302acef53a5");
+    private static final UUID JOVEN_OLD = UUID.fromString("86b47725-1764-4716-993d-e4dfcea2346c");
+    private static final UUID LAVA_AXE = UUID.fromString("387b6b07-a283-412d-94c3-f7f1dc76e858");
     private static final UUID LAVA_AXE_AGAIN = UUID.fromString("2a9c4d81-6f03-4e57-b214-7d5a8c1e6b90");
     private static final UUID LIGHTNING_BOLT = UUID.fromString("4457ed35-7c10-48c8-9776-456485fdf070");
-    private static final UUID LORIEN_REVEALED = UUID.fromString("0a7c5d31-8e26-4b94-a1f0-5d3b7c2e6094");
-    private static final UUID RAGAVAN = UUID.fromString("8e5d0c37-2a91-4b68-9f04-1d7c3b5a6e82");
+    private static final UUID LORIEN_REVEALED = UUID.fromString("66f28905-c7fc-4ada-8fa0-199626d9bedb");
+    private static final UUID RAGAVAN = UUID.fromString("37108cd4-bbab-4ce3-9ed6-f60e8422e703");
     private static final UUID SOL_RING = UUID.fromString("6ad8011d-3471-4369-9d68-b264cc027487");
-    private static final UUID SUPERLATORIUM = UUID.fromString("9f1e7b26-0c53-4a8d-b64f-3e2a5d7c1908");
-    private static final UUID TRIVIA_CONTEST = UUID.fromString("5b8d4e92-7a61-4c30-9f28-0d6b3a1e5f74");
+    private static final UUID SUPERLATORIUM = UUID.fromString("8169a0a2-2e2b-4b07-bee5-6ae535458f17");
+    private static final UUID TRIVIA_CONTEST = UUID.fromString("cc68abf0-e826-4457-ad53-c5a068c088dd");
 
     private static final LocalDate START_DATE = LocalDate.of(2026, 9, 13);
     private static final LocalDate END_DATE = LocalDate.of(2026, 11, 21);
@@ -87,7 +88,7 @@ class SeasonPreparationServiceTest {
                 Map.of(MtgFormat.LEGACY, List.of(new Staple("Brainstorm", new BigDecimal("0.350"))))
         );
 
-        PreparedSeasonVO preparedSeason = SeasonPreparationService.assemble(printings, pricesByCardName, metaShares, List.of(), List.of(), request(MetaShareSource.MTGGOLDFISH), currentSeason());
+        PreparedSeasonVO preparedSeason = SeasonPreparationService.assemble(printings, new MtgJsonPricesVO(pricesByCardName, WINDOW_LENGTH), metaShares, List.of(), List.of(), request(MetaShareSource.MTGGOLDFISH), currentSeason());
         List<SeasonDraftCardVO> cards = preparedSeason.getCards();
 
         assertEquals(3, cards.size());
@@ -147,10 +148,10 @@ class SeasonPreparationServiceTest {
                 List.of()
         );
 
-        PreparedSeasonVO preparedSeason = SeasonPreparationService.assemble(printings, pricesByCardName, metaShares, existingCards, List.of(), request(MetaShareSource.FILES), currentSeason());
+        PreparedSeasonVO preparedSeason = SeasonPreparationService.assemble(printings, new MtgJsonPricesVO(pricesByCardName, WINDOW_LENGTH), metaShares, existingCards, List.of(), request(MetaShareSource.FILES), currentSeason());
         List<SeasonDraftCardVO> cards = preparedSeason.getCards();
 
-        assertEquals(9, cards.size());
+        assertEquals(11, cards.size());
 
         assertEquals("Ancestor's Chosen", cards.get(0).getName());
         assertFalse(cards.get(0).isNewCard());
@@ -174,7 +175,7 @@ class SeasonPreparationServiceTest {
         assertEquals("oracle id '" + SUPERLATORIUM + "' already belongs to 'The Superlatorium'", cards.get(7).getSkipReason());
 
         SeasonDraftReportVO report = preparedSeason.getReport();
-        assertEquals(5, report.getCounts().getCards());
+        assertEquals(7, report.getCounts().getCards());
         assertEquals(1, report.getCounts().getNewCards());
         assertEquals(5, report.getSkippedCards().size());
         assertEquals("Sole Performer", report.getSkippedCards().get(4).getName());
@@ -191,8 +192,19 @@ class SeasonPreparationServiceTest {
         assertEquals(1, report.getNormalizedNameFixes().size()); // same name, other normalized name --> not a rename
         assertEquals(1, report.getCounts().getNormalizedNameFixes());
         assertEquals("Lava, Axe", report.getNormalizedNameFixes().get(0).getName());
+        assertEquals("lava-axe", report.getNormalizedNameFixes().get(0).getPreviousNormalizedName());
         assertEquals("lava,-axe", report.getNormalizedNameFixes().get(0).getNormalizedName());
         assertEquals(LAVA_AXE_AGAIN, report.getNormalizedNameFixes().get(0).getOracleId());
+
+        assertEquals("Bee-Bee Gun", cards.get(9).getName()); // no printing left, but the card table still knows it
+        assertEquals(Legality.NOT_LEGAL, cards.get(9).getLegality());
+        assertEquals(0, cards.get(9).getBudgetPoints().intValue());
+        assertFalse(cards.get(9).isNewCard());
+        assertEquals("The Superlatorium", cards.get(10).getName());
+        assertEquals(2, report.getMissingCards().size());
+        assertEquals("Bee-Bee Gun", report.getMissingCards().get(0).getName());
+        assertEquals("no eligible printing this season, kept as not legal", report.getMissingCards().get(0).getReason());
+        assertEquals("The Superlatorium", report.getMissingCards().get(1).getName());
     }
 
     @Test
@@ -254,7 +266,7 @@ class SeasonPreparationServiceTest {
                 Map.of(MtgFormat.MODERN, List.of(new Staple("Ancient Stirrings", new BigDecimal("0.080"))))
         );
 
-        PreparedSeasonVO preparedSeason = SeasonPreparationService.assemble(printings, pricesByCardName, metaShares, existingCards, previousSeasonData, request(MetaShareSource.MTGGOLDFISH), currentSeason());
+        PreparedSeasonVO preparedSeason = SeasonPreparationService.assemble(printings, new MtgJsonPricesVO(pricesByCardName, WINDOW_LENGTH), metaShares, existingCards, previousSeasonData, request(MetaShareSource.MTGGOLDFISH), currentSeason());
         SeasonDraftReportVO report = preparedSeason.getReport();
 
         assertEquals(21, report.getSeasonNumber());
@@ -263,9 +275,10 @@ class SeasonPreparationServiceTest {
         assertEquals(MTGJSON_DATE, report.getMtgJsonDate());
         assertEquals("5.2.2+20260913", report.getMtgJsonVersion());
         assertEquals("mtggoldfish", report.getMetaSource());
-        assertEquals(7, report.getCounts().getCards());
+        assertEquals(8, report.getCounts().getCards());
         assertEquals(0, report.getCounts().getNewCards());
-        assertEquals(1, report.getCounts().getZeroBudgetPointCards());
+        assertEquals(2, report.getCounts().getCardsWithoutPrice());
+        assertEquals(2, report.getCounts().getPricedDays());
 
         assertEquals(1, report.getNewBans().size());
         assertEquals("Brainstorm", report.getNewBans().get(0).getName());
@@ -290,19 +303,21 @@ class SeasonPreparationServiceTest {
         assertEquals("Lightning Bolt", report.getTopIncreases().get(1).getName());
         assertEquals("Ancestor's Chosen", report.getTopIncreases().get(2).getName());
         assertEquals(99, report.getTopIncreases().get(2).getChange());
-        assertEquals(2, report.getTopDecreases().size());
+        assertEquals(3, report.getTopDecreases().size());
         assertEquals("Ragavan, Nimble Pilferer", report.getTopDecreases().get(0).getName());
         assertEquals("Chaos Orb", report.getTopDecreases().get(1).getName());
+        assertEquals("Bee-Bee Gun", report.getTopDecreases().get(2).getName());
 
-        assertEquals(1, report.getZeroBudgetPointCards().size());
+        assertEquals(2, report.getZeroBudgetPointCards().size());
         assertEquals("Chaos Orb", report.getZeroBudgetPointCards().get(0).getName());
         assertEquals(500, report.getZeroBudgetPointCards().get(0).getPreviousBudgetPoints().intValue());
+        assertEquals("Bee-Bee Gun", report.getZeroBudgetPointCards().get(1).getName());
 
         assertEquals(2, report.getMissingCards().size());
         assertEquals("Delver of Secrets // Delver of Secrets", report.getMissingCards().get(0).getName());
         assertEquals("flip style", report.getMissingCards().get(0).getReason());
         assertEquals("Bee-Bee Gun", report.getMissingCards().get(1).getName());
-        assertEquals("no eligible printing", report.getMissingCards().get(1).getReason());
+        assertEquals("no eligible printing this season, kept as not legal", report.getMissingCards().get(1).getReason());
 
         assertEquals(1, report.getSetsReleased().size());
         assertEquals("Edge of Eternities", report.getSetsReleased().get(0).getName());
@@ -351,7 +366,7 @@ class SeasonPreparationServiceTest {
                 Map.of()
         );
 
-        PreparedSeasonVO preparedSeason = SeasonPreparationService.assemble(printings, pricesByCardName, metaShares, existingCards, previousSeasonData, request(MetaShareSource.MTGGOLDFISH), currentSeason());
+        PreparedSeasonVO preparedSeason = SeasonPreparationService.assemble(printings, new MtgJsonPricesVO(pricesByCardName, WINDOW_LENGTH), metaShares, existingCards, previousSeasonData, request(MetaShareSource.MTGGOLDFISH), currentSeason());
         SeasonDraftReportVO.ScryfallDecksVO scryfallDecks = preparedSeason.getReport().getScryfallDecks();
 
         assertEquals("Black Lotus\nBrainstorm", scryfallDecks.getNewBans());

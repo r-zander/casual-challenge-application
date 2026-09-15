@@ -9,9 +9,10 @@ import gg.casualchallenge.application.dataprocessor.model.CardPrices;
 import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
 import gg.casualchallenge.application.dataprocessor.model.MetaSharesVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrinting;
+import gg.casualchallenge.application.dataprocessor.model.MtgJsonPricesVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrintingsVO;
 import gg.casualchallenge.application.dataprocessor.model.PriceWindowVO;
-import gg.casualchallenge.application.model.values.PreparedSeasonVO;
+import gg.casualchallenge.application.dataprocessor.model.PreparedSeasonVO;
 import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
 import gg.casualchallenge.application.model.values.SeasonPreparationRequestVO;
 import gg.casualchallenge.application.persistence.entity.Season;
@@ -79,7 +80,7 @@ class SeasonReplayTest {
         MtgJsonPrintingsVO printings = readPrintings(budgetPointDirectory.resolve("AllPrintings.json"));
         Map<String, CardPrices> pricesByCardName;
         try (InputStream allPrices = new BufferedInputStream(Files.newInputStream(budgetPointDirectory.resolve("AllPrices.json")))) {
-            pricesByCardName = mtgJsonClient.readPrices(allPrices, printings.getPrintingsByUuid(), priceWindow);
+            pricesByCardName = mtgJsonClient.readPrices(allPrices, printings.getPrintingsByUuid(), priceWindow).getPricesByCardName();
         }
 
         List<SeasonDraftCardVO> cards = assemble(printings, pricesByCardName, MetaSharesVO.fromBanFiles(List.of(), List.of()), startDate, 17);
@@ -182,6 +183,8 @@ class SeasonReplayTest {
         assertTrue(seasonDataDiff.newOracleIds.size() <= 15);
         assertTrue(cardDiff.ourOnly.size() <= 10);
         assertTrue(seasonDataDiff.ourOnly.size() <= 10);
+        assertTrue(cardDiff.theirOnly.size() <= 1000); // the cards the identity rule drops
+        assertTrue(seasonDataDiff.theirOnly.size() <= 1000);
     }
 
     @Test
@@ -222,6 +225,8 @@ class SeasonReplayTest {
         assertTrue(seasonDataDiff.newOracleIds.size() <= 15);
         assertTrue(cardDiff.ourOnly.size() <= 10);
         assertTrue(seasonDataDiff.ourOnly.size() <= 10);
+        assertTrue(cardDiff.theirOnly.size() <= 3500); // the identity drops plus everything printed after the season 21 snapshot
+        assertTrue(seasonDataDiff.theirOnly.size() <= 3500);
     }
 
     private MtgJsonPrintingsVO readPrintings(Path allPrintingsJson) throws IOException {
@@ -280,7 +285,7 @@ class SeasonReplayTest {
                 List.of()
         );
 
-        PreparedSeasonVO preparedSeason = SeasonPreparationService.assemble(printings, pricesByCardName, metaShares, List.of(), List.of(), request, previousSeason);
+        PreparedSeasonVO preparedSeason = SeasonPreparationService.assemble(printings, new MtgJsonPricesVO(pricesByCardName, PRICE_WINDOW_DAYS), metaShares, List.of(), List.of(), request, previousSeason);
         return preparedSeason.getCards();
     }
 

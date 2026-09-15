@@ -3,14 +3,15 @@ package gg.casualchallenge.application.dataprocessor;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import gg.casualchallenge.application.api.CasualChallengeService;
+import gg.casualchallenge.application.common.Constants;
 import gg.casualchallenge.application.common.RomanNumeral;
 import gg.casualchallenge.application.common.SeasonDates;
 import gg.casualchallenge.application.dataprocessor.model.SeasonSqlFile;
+import gg.casualchallenge.application.dataprocessor.model.SeasonSqlFileVO;
 import gg.casualchallenge.application.model.values.CommittedSeasonCountsVO;
 import gg.casualchallenge.application.model.values.CommittedSeasonVO;
 import gg.casualchallenge.application.model.values.SeasonDraftReportVO;
 import gg.casualchallenge.application.model.values.SeasonDraftVO;
-import gg.casualchallenge.application.model.values.SeasonSqlFileVO;
 import gg.casualchallenge.application.persistence.SeasonDraftRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -52,13 +53,8 @@ public class SeasonDraftService {
         this.migrationAuthor = migrationAuthor;
     }
 
-    /** @return null when no season was ever prepared */
-    public SeasonDraftVO latestDraft() {
-        return seasonDraftRepository.findDraft();
-    }
-
     public SeasonDraftReportVO report() {
-        SeasonDraftVO draft = latestDraft();
+        SeasonDraftVO draft = seasonDraftRepository.findDraft();
         if (draft == null) return null;
 
         return toReport(draft);
@@ -68,7 +64,7 @@ public class SeasonDraftService {
         SeasonDraftVO draft = uncommittedDraft("commit");
 
         // prepared_at is what the exported migration writes into card.added_at, so the database gets the very same value
-        CommittedSeasonCountsVO counts = seasonDraftRepository.commit(draft.getId(), draft.getPreparedAt());
+        CommittedSeasonCountsVO counts = seasonDraftRepository.commit(draft.getId(), draft.getPreparedAt(), LocalDateTime.now(Constants.TIMEZONE));
         log.info("Committed season {}. {} cards added, {} names or normalized names updated, {} remapped, {} season data rows written.",
                 draft.getSeasonNumber(), counts.getInsertedCards(), counts.getUpdatedCardNames(), counts.getRemappedCards(), counts.getUpsertedCardSeasonData());
 
@@ -108,7 +104,7 @@ public class SeasonDraftService {
     }
 
     public SeasonSqlFileVO exportSql(SeasonSqlFile part) {
-        SeasonDraftVO draft = latestDraft();
+        SeasonDraftVO draft = seasonDraftRepository.findDraft();
         if (draft == null) return null;
 
         return new SeasonSqlFileVO(sqlFileName(draft, part), sqlContent(draft, part));
@@ -166,11 +162,14 @@ public class SeasonDraftService {
 
     private SeasonDraftVO uncommittedDraft(String action) {
         SeasonDraftVO draft = seasonDraftRepository.findUncommittedDraft();
-        if (draft == null) {
-            throw new IllegalStateException("There is no uncommitted season draft to " + action + " (a newer prepare may have replaced it).");
+        if (draft != null) return draft;
+
+        SeasonDraftVO latestDraft = seasonDraftRepository.findDraft();
+        if (latestDraft != null) {
+            throw new IllegalStateException("Draft for season " + latestDraft.getSeasonNumber() + " was already committed.");
         }
 
-        return draft;
+        throw new IllegalStateException("There is no season draft to " + action + ".");
     }
 
     private SeasonDraftReportVO toReport(SeasonDraftVO draft) {

@@ -5,17 +5,16 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import gg.casualchallenge.application.dataprocessor.model.CardIdentityOverride;
 import gg.casualchallenge.application.dataprocessor.model.CardPrices;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonCard;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrinting;
+import gg.casualchallenge.application.dataprocessor.model.MtgJsonPricesVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrintingsVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonSet;
 import gg.casualchallenge.application.dataprocessor.model.PriceSeries;
 import gg.casualchallenge.application.dataprocessor.model.PriceWindowVO;
 import gg.casualchallenge.application.model.type.MtgFormat;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
@@ -55,7 +54,6 @@ public class MtgJsonClient {
     private static final String PRICES_FILE = "AllPrices.json";
     private static final String PRICES_ZIP = "AllPrices.json.zip";
     private static final String IGNORED_PRICES_FILE = "IgnoredPrices.json";
-    private static final String CARD_IDENTITY_OVERRIDES_FILE = "CardIdentityOverrides.json";
 
     private static final long REQUIRED_DISK_SPACE = 2L * 1024 * 1024 * 1024;
 
@@ -76,8 +74,6 @@ public class MtgJsonClient {
     private final String mtgJsonBaseUrl;
     private final Path downloadDirectory;
     private final Map<String, List<String>> ignoredPriceSetsByCardName;
-    private final Map<String, List<String>> excludedSetsByCardName = new HashMap<>();
-    private final Map<String, UUID> pinnedOracleIdsByCardName = new HashMap<>();
 
     public MtgJsonClient(
             @Value("${casual-challenge.season.mtgjson-base-url}") String mtgJsonBaseUrl,
@@ -91,24 +87,6 @@ public class MtgJsonClient {
             this.ignoredPriceSetsByCardName = objectMapper.readValue(ignoredPrices, new TypeReference<Map<String, List<String>>>() {});
         } catch (IOException e) {
             throw new RuntimeException("Couldn't read '" + IGNORED_PRICES_FILE + "'.", e);
-        }
-
-        Map<String, CardIdentityOverride> identityOverrides;
-        try (InputStream overrides = new ClassPathResource(CARD_IDENTITY_OVERRIDES_FILE).getInputStream()) {
-            identityOverrides = objectMapper.readValue(overrides, new TypeReference<Map<String, CardIdentityOverride>>() {});
-        } catch (IOException e) {
-            throw new RuntimeException("Couldn't read '" + CARD_IDENTITY_OVERRIDES_FILE + "'.", e);
-        }
-        for (Map.Entry<String, CardIdentityOverride> override : identityOverrides.entrySet()) {
-            if (override.getValue().getExcludedSets() != null) {
-                this.excludedSetsByCardName.put(override.getKey(), override.getValue().getExcludedSets());
-            }
-            if (override.getValue().getOracleId() == null) continue;
-            try {
-                this.pinnedOracleIdsByCardName.put(override.getKey(), UUID.fromString(override.getValue().getOracleId()));
-            } catch (IllegalArgumentException e) {
-                throw new RuntimeException("Couldn't read the oracle id for '" + override.getKey() + "' in " + CARD_IDENTITY_OVERRIDES_FILE + ".", e);
-            }
         }
     }
 
@@ -124,7 +102,7 @@ public class MtgJsonClient {
         }
     }
 
-    public Map<String, CardPrices> fetchPrices(Map<String, MtgJsonPrinting> printingsByUuid, PriceWindowVO window) {
+    public MtgJsonPricesVO fetchPrices(Map<String, MtgJsonPrinting> printingsByUuid, PriceWindowVO window) {
         Path directory = createDownloadDirectory();
         try (ZipInputStream zipStream = new ZipInputStream(new BufferedInputStream(Files.newInputStream(download(PRICES_ZIP, directory))))) {
             positionOnEntry(zipStream, PRICES_FILE);
@@ -186,8 +164,9 @@ public class MtgJsonClient {
         return new MtgJsonPrintingsVO(cardsByName, printingsByUuid, sets, metaDate, metaVersion);
     }
 
-    public Map<String, CardPrices> readPrices(InputStream allPricesJson, Map<String, MtgJsonPrinting> printingsByUuid, PriceWindowVO window) {
+    public MtgJsonPricesVO readPrices(InputStream allPricesJson, Map<String, MtgJsonPrinting> printingsByUuid, PriceWindowVO window) {
         Map<String, CardPrices> pricesByCardName = new HashMap<>();
+        boolean[] pricedDays = new boolean[window.length()];
 
         try (JsonParser parser = new JsonFactory().createParser(allPricesJson)) {
             parser.nextToken();
@@ -205,15 +184,20 @@ public class MtgJsonClient {
                         parser.skipChildren();
                         continue;
                     }
-                    readPricesOfPrinting(parser, printing, window, pricesByCardName);
+                    readPricesOfPrinting(parser, printing, window, pricesByCardName, pricedDays);
                 }
             }
         } catch (IOException e) {
             throw new RuntimeException("Couldn't read " + PRICES_FILE + ".", e);
         }
 
-        log.info("Read prices for {} cards.", pricesByCardName.size());
-        return pricesByCardName;
+        int pricedDayCount = 0;
+        for (boolean pricedDay : pricedDays) {
+            if (pricedDay) pricedDayCount++;
+        }
+
+        log.info("Read prices for {} cards on {} of the {} days in the window.", pricesByCardName.size(), pricedDayCount, pricedDays.length);
+        return new MtgJsonPricesVO(pricesByCardName, pricedDayCount);
     }
 
     private Path createDownloadDirectory() {
@@ -355,8 +339,8 @@ public class MtgJsonClient {
         boolean isOversized = false;
         boolean isFunny = false;
         boolean isRebalanced = false;
-        boolean hasFoil = false;
-        boolean hasNonFoil = false;
+        boolean foil = false;
+        boolean nonFoil = false;
 
         while (parser.nextToken() != JsonToken.END_OBJECT) {
             String fieldName = parser.currentName();
@@ -391,8 +375,8 @@ public class MtgJsonClient {
                 case "finishes":
                     while (parser.nextToken() != JsonToken.END_ARRAY) {
                         String finish = parser.getValueAsString();
-                        if ("foil".equals(finish)) hasFoil = true;
-                        if ("nonfoil".equals(finish)) hasNonFoil = true;
+                        if ("foil".equals(finish)) foil = true;
+                        if ("nonfoil".equals(finish)) nonFoil = true;
                     }
                     break;
                 case "identifiers":
@@ -421,9 +405,9 @@ public class MtgJsonClient {
         if (!isPaper || isOversized || "silver".equals(borderColor) || "gold".equals(borderColor)) return;
 
         if (!isIgnoredForPrices(cardName, setCode)) {
-            printingsByUuid.put(uuid, new MtgJsonPrinting(uuid, cardName, hasFoil, hasNonFoil));
+            printingsByUuid.put(uuid, new MtgJsonPrinting(uuid, cardName, foil, nonFoil));
         }
-        if (isRebalanced || isExcludedForIdentity(cardName, setCode)) return;
+        if (isRebalanced) return;
         if (isFunny && !legalities.containsKey(MtgFormat.VINTAGE)) return; // MTGJSON flags every Unfinity card as funny, but the eternal legal ones are real cards
 
         String vintage = legalities.get(MtgFormat.VINTAGE);
@@ -469,7 +453,7 @@ public class MtgJsonClient {
         return new MtgJsonSet.MtgJsonDeck(deckName, deckType, releaseDate);
     }
 
-    private static void readPricesOfPrinting(JsonParser parser, MtgJsonPrinting printing, PriceWindowVO window, Map<String, CardPrices> pricesByCardName) throws IOException {
+    private static void readPricesOfPrinting(JsonParser parser, MtgJsonPrinting printing, PriceWindowVO window, Map<String, CardPrices> pricesByCardName, boolean[] pricedDays) throws IOException {
         while (parser.nextToken() != JsonToken.END_OBJECT) {
             String fieldName = parser.currentName();
             parser.nextToken();
@@ -486,12 +470,12 @@ public class MtgJsonClient {
                 }
                 CardPrices cardPrices = pricesByCardName.computeIfAbsent(printing.getCardName(), cardName -> new CardPrices(window.length()));
                 PriceSeries series = "cardmarket".equals(marketIdentifier) ? cardPrices.getEur() : cardPrices.getUsd();
-                readRetailPrices(parser, printing, window, series);
+                readRetailPrices(parser, printing, window, series, pricedDays);
             }
         }
     }
 
-    private static void readRetailPrices(JsonParser parser, MtgJsonPrinting printing, PriceWindowVO window, PriceSeries series) throws IOException {
+    private static void readRetailPrices(JsonParser parser, MtgJsonPrinting printing, PriceWindowVO window, PriceSeries series, boolean[] pricedDays) throws IOException {
         while (parser.nextToken() != JsonToken.END_OBJECT) {
             String fieldName = parser.currentName();
             parser.nextToken();
@@ -503,8 +487,8 @@ public class MtgJsonClient {
                 String finish = parser.currentName();
                 parser.nextToken();
                 // Foil and non-foil are two separate "printings" for the price calculation
-                if ("normal".equals(finish) && printing.isNonfoil() || "foil".equals(finish) && printing.isFoil()) {
-                    series.addPrinting(readPricesPerDay(parser, window));
+                if ("normal".equals(finish) && printing.isNonFoil() || "foil".equals(finish) && printing.isFoil()) {
+                    series.addPrinting(readPricesPerDay(parser, window, pricedDays));
                 } else {
                     parser.skipChildren();
                 }
@@ -512,7 +496,7 @@ public class MtgJsonClient {
         }
     }
 
-    private static double[] readPricesPerDay(JsonParser parser, PriceWindowVO window) throws IOException {
+    private static double[] readPricesPerDay(JsonParser parser, PriceWindowVO window, boolean[] pricedDays) throws IOException {
         double[] pricesPerDay = new double[window.length()];
         Arrays.fill(pricesPerDay, Double.NaN);
 
@@ -524,17 +508,17 @@ public class MtgJsonClient {
                 continue;
             }
             int dayIndex = window.dayIndex(date);
-            if (dayIndex >= 0) pricesPerDay[dayIndex] = parser.getDoubleValue();
+            if (dayIndex < 0) continue;
+
+            pricesPerDay[dayIndex] = parser.getDoubleValue();
+            pricedDays[dayIndex] = true;
         }
 
         return pricesPerDay;
     }
 
-    private MtgJsonCard toCard(IdentityCandidate identity) {
-        UUID oracleId = pinnedOracleIdsByCardName.get(identity.getCardName());
-        if (oracleId == null && identity.getOracleId() != null) {
-            oracleId = UUID.fromString(identity.getOracleId());
-        }
+    private static MtgJsonCard toCard(IdentityCandidate identity) {
+        UUID oracleId = identity.getOracleId() != null ? UUID.fromString(identity.getOracleId()) : null;
         return new MtgJsonCard(
                 identity.getCardName(),
                 oracleId,
@@ -551,10 +535,6 @@ public class MtgJsonClient {
         return ignoredSets != null && ignoredSets.contains(setCode);
     }
 
-    private boolean isExcludedForIdentity(String cardName, String setCode) {
-        List<String> excludedSets = excludedSetsByCardName.get(cardName);
-        return excludedSets != null && excludedSets.contains(setCode);
-    }
 
     private static boolean isOlderPrinting(IdentityCandidate candidate, IdentityCandidate identity) {
         if (candidate.getReleaseDate() == null) return false;
@@ -588,8 +568,7 @@ public class MtgJsonClient {
     }
 
     // One printing of one card while we are reading the file
-    @Setter
-    @Getter
+    @Data
     private static class IdentityCandidate {
         private String cardName;
         private String oracleId;

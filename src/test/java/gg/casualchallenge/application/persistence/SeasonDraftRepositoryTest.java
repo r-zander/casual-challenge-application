@@ -33,17 +33,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SeasonDraftRepositoryTest {
 
     private static final UUID ANCESTORS_CHOSEN = UUID.fromString("fc2ccab7-cab1-4463-b73d-898070136d74");
-    private static final UUID JOVEN_OLD = UUID.fromString("7a4b1c0e-9f2d-4a3b-8c7d-1e5f6a2b3c4d");
-    private static final UUID JOVEN_NEW = UUID.fromString("2d8e4f10-3b6c-4d5e-9a7f-8b0c1d2e3f40");
-    private static final UUID BLACK_LOTUS = UUID.fromString("5f8287b2-5b4c-4b31-8c59-3e2a1d7f9c6b");
+    private static final UUID JOVEN_OLD = UUID.fromString("86b47725-1764-4716-993d-e4dfcea2346c");
+    private static final UUID JOVEN_NEW = UUID.fromString("11db8545-eca6-43f5-b9e8-f302acef53a5");
+    private static final UUID BLACK_LOTUS = UUID.fromString("5089ec1a-f881-4d55-af14-5d996171203b");
     private static final UUID FRESH_FACE = UUID.fromString("bb1c9a77-4e6d-4f2a-9b3c-0a1d2e3f4a5b");
-    private static final UUID JOVEN_AND_CHANDLER = UUID.fromString("0f6a2c85-4d71-4e93-b508-6c3d9a1f7e24");
+    private static final UUID OTHER_JOVEN = UUID.fromString("0f6a2c85-4d71-4e93-b508-6c3d9a1f7e24");
 
     private static final UUID GONE_CARD = UUID.fromString("e91d3b52-8a7c-4f16-b2d9-0c4e5a6b7d38");
 
     private static final LocalDateTime SEASON_20_UPDATED_AT = LocalDateTime.of(2026, 4, 6, 10, 59, 0);
     private static final LocalDateTime SEASON_20_ADDED_AT = LocalDateTime.of(2026, 4, 6, 8, 59, 1);
     private static final LocalDateTime PREPARED_AT = LocalDateTime.of(2026, 6, 7, 18, 30, 0);
+    private static final LocalDateTime COMMITTED_AT = LocalDateTime.of(2026, 6, 8, 9, 15, 0);
 
     private static EmbeddedPostgres embeddedPostgres;
     private static JdbcTemplate jdbcTemplate;
@@ -76,7 +77,7 @@ class SeasonDraftRepositoryTest {
         seedPreviousSeason();
         int draftId = replaceDraft();
 
-        CommittedSeasonCountsVO counts = commitDraft(draftId);
+        CommittedSeasonCountsVO counts = commitDraftInTransaction(draftId);
 
         assertEquals(1, counts.getRemappedCards());
         assertEquals(1, counts.getUpdatedCardNames());
@@ -111,9 +112,9 @@ class SeasonDraftRepositoryTest {
     void testCommit_withCommittedDraft() {
         seedPreviousSeason();
         int draftId = replaceDraft();
-        commitDraft(draftId);
+        commitDraftInTransaction(draftId);
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> commitDraft(draftId));
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> commitDraftInTransaction(draftId));
         assertEquals("Draft for season 21 was already committed.", exception.getMessage());
     }
 
@@ -123,7 +124,7 @@ class SeasonDraftRepositoryTest {
         int draftId = replaceDraft();
         jdbcTemplate.update("UPDATE public.season SET updated_at = now() WHERE id = 20");
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> commitDraft(draftId));
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> commitDraftInTransaction(draftId));
         assertEquals("Draft for season 21 is stale, season 20 changed since the draft was prepared.", exception.getMessage());
         assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season WHERE season_number = 21", Integer.class));
         assertEquals(3, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card", Integer.class));
@@ -137,7 +138,7 @@ class SeasonDraftRepositoryTest {
         jdbcTemplate.update("INSERT INTO public.card (oracle_id, name, normalized_name, added_at) VALUES (?, 'Unrelated Card', 'unrelated-card', ?)", JOVEN_NEW, SEASON_20_ADDED_AT);
         int draftId = replaceDraft();
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> commitDraft(draftId));
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> commitDraftInTransaction(draftId));
         assertEquals("Card 'Joven and Chandler' is remapped to oracle id '" + JOVEN_NEW + "', which already belongs to 'Unrelated Card'.", exception.getMessage());
         assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season WHERE season_number = 21", Integer.class));
         assertEquals(LocalDate.of(2026, 6, 7), jdbcTemplate.queryForObject("SELECT end_date FROM public.season WHERE id = 20", LocalDate.class));
@@ -149,10 +150,10 @@ class SeasonDraftRepositoryTest {
     @Test
     void testCommit_withFailingRename() {
         seedPreviousSeason();
-        jdbcTemplate.update("INSERT INTO public.card (oracle_id, name, normalized_name, added_at) VALUES (?, 'Joven & Chandler', 'joven-and-chandler', ?)", JOVEN_AND_CHANDLER, SEASON_20_ADDED_AT);
+        jdbcTemplate.update("INSERT INTO public.card (oracle_id, name, normalized_name, added_at) VALUES (?, 'Joven & Chandler', 'joven-and-chandler', ?)", OTHER_JOVEN, SEASON_20_ADDED_AT);
         int draftId = replaceDraft();
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> commitDraft(draftId));
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> commitDraftInTransaction(draftId));
         assertEquals("Card 'Joven' would be renamed to 'Joven and Chandler', which already belongs to 'Joven & Chandler'.", exception.getMessage());
         assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season WHERE season_number = 21", Integer.class));
         assertEquals(SEASON_20_UPDATED_AT, jdbcTemplate.queryForObject("SELECT updated_at FROM public.season WHERE id = 20", LocalDateTime.class));
@@ -167,7 +168,7 @@ class SeasonDraftRepositoryTest {
         jdbcTemplate.update("INSERT INTO public.season_draft_card (season_draft_id, oracle_id, name, normalized_name, budget_points, legality, vintage_restricted, is_new_card)" +
                 " VALUES (?, ?, 'Gone Card', 'gone-card', 4, 'legal'::legality, FALSE, FALSE)", draftId, GONE_CARD);
 
-        assertThrows(DataIntegrityViolationException.class, () -> commitDraft(draftId));
+        assertThrows(DataIntegrityViolationException.class, () -> commitDraftInTransaction(draftId));
         assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season WHERE season_number = 21", Integer.class));
         assertEquals(LocalDate.of(2026, 6, 7), jdbcTemplate.queryForObject("SELECT end_date FROM public.season WHERE id = 20", LocalDate.class));
         assertEquals(SEASON_20_UPDATED_AT, jdbcTemplate.queryForObject("SELECT updated_at FROM public.season WHERE id = 20", LocalDateTime.class));
@@ -207,18 +208,35 @@ class SeasonDraftRepositoryTest {
     void testReplace_withCommittedDraft() {
         seedPreviousSeason();
         int committedDraftId = replaceDraft();
-        commitDraft(committedDraftId);
+        commitDraftInTransaction(committedDraftId);
         int draftId = replaceDraft();
 
         assertEquals(2, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season_draft", Integer.class));
         assertEquals(draftId, seasonDraftRepository.findDraft().getId());
         assertEquals(draftId, seasonDraftRepository.findUncommittedDraft().getId());
+        assertEquals(4, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season_draft_card WHERE season_draft_id = ?", Integer.class, committedDraftId)); // newest committed --> its files can still be downloaded
 
         seasonDraftRepository.discard();
 
         assertEquals(1, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season_draft", Integer.class));
         assertEquals(committedDraftId, seasonDraftRepository.findDraft().getId());
         assertNull(seasonDraftRepository.findUncommittedDraft());
+    }
+
+    @Test
+    void testReplace_withOlderCommittedDrafts() {
+        seedPreviousSeason();
+        int olderDraftId = replaceDraft();
+        commitDraftInTransaction(olderDraftId);
+        jdbcTemplate.update("UPDATE public.season_draft SET season_number = 22 WHERE id = ?", olderDraftId); // a second committed draft on top of the first
+        jdbcTemplate.update("INSERT INTO public.season (id, season_number, start_date, end_date, updated_at) VALUES (22, 22, '2026-08-17', '2026-10-25', ?)", SEASON_20_UPDATED_AT);
+        int committedDraftId = replaceDraft();
+        jdbcTemplate.update("UPDATE public.season_draft SET committed_at = ? WHERE id = ?", COMMITTED_AT, committedDraftId);
+        replaceDraft();
+
+        assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season_draft_card WHERE season_draft_id = ?", Integer.class, olderDraftId));
+        assertEquals(4, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season_draft_card WHERE season_draft_id = ?", Integer.class, committedDraftId));
+        assertEquals(3, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season_draft", Integer.class)); // the reports stay, they are the record of a season start
     }
 
     private static void seedPreviousSeason() {
@@ -266,8 +284,7 @@ class SeasonDraftRepositoryTest {
         return seasonDraftRepository.findDraft().getId();
     }
 
-    /** In the application the transaction comes from the @Transactional proxy, here it has to be spelled out. */
-    private static CommittedSeasonCountsVO commitDraft(int draftId) {
-        return transactionTemplate.execute(transactionStatus -> seasonDraftRepository.commit(draftId, PREPARED_AT));
+    private static CommittedSeasonCountsVO commitDraftInTransaction(int draftId) { // in the application the @Transactional proxy opens it
+        return transactionTemplate.execute(transactionStatus -> seasonDraftRepository.commit(draftId, PREPARED_AT, COMMITTED_AT));
     }
 }

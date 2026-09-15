@@ -46,6 +46,9 @@ public class SeasonDraftRepository {
     @Transactional
     public void replace(SeasonDraftVO draft, List<SeasonDraftCardVO> cards) {
         jdbcTemplate.update("DELETE FROM public.season_draft WHERE committed_at IS NULL"); // season_draft_card is cascaded
+        // 32k card rows per season start add up. The newest committed draft keeps them so its migration files can still be downloaded, the older ones only keep their report.
+        jdbcTemplate.update("DELETE FROM public.season_draft_card WHERE season_draft_id IN"
+                + " (SELECT id FROM public.season_draft WHERE committed_at IS NOT NULL AND id <> (SELECT MAX(id) FROM public.season_draft WHERE committed_at IS NOT NULL))");
 
         Integer draftId = jdbcTemplate.queryForObject(
                 "INSERT INTO public.season_draft (season_number, start_date, end_date, price_window_start, price_window_end, previous_season_id, previous_season_updated_at, mtgjson_date, meta_source, prepared_at, report)" +
@@ -115,7 +118,7 @@ public class SeasonDraftRepository {
     }
 
     @Transactional
-    public CommittedSeasonCountsVO commit(int draftId, LocalDateTime addedAt) {
+    public CommittedSeasonCountsVO commit(int draftId, LocalDateTime addedAt, LocalDateTime committedAt) {
         List<SeasonDraftVO> drafts = jdbcTemplate.query(SELECT_DRAFT + " WHERE id = ? FOR UPDATE", SeasonDraftRepository::toDraftVO, draftId);
         if (drafts.isEmpty()) {
             throw new IllegalStateException("There is no season draft with id '" + draftId + "'.");
@@ -195,6 +198,7 @@ public class SeasonDraftRepository {
         }
 
         // Step: MTGJSON renames cards from time to time, the card table has to follow or the API stops finding them
+        // keep in sync with SeasonMigrationSql.addSeason
         int updatedCardNames = jdbcTemplate.update(
                 "UPDATE public.card SET name = draft_card.name, normalized_name = draft_card.normalized_name" +
                         " FROM public.season_draft_card draft_card" +
@@ -202,14 +206,14 @@ public class SeasonDraftRepository {
                         " AND (card.name <> draft_card.name OR card.normalized_name <> draft_card.normalized_name)",
                 draftId);
 
-        int insertedCards = jdbcTemplate.update(
+        int insertedCards = jdbcTemplate.update( // keep in sync with SeasonMigrationSql.insertCards
                 "INSERT INTO public.card (oracle_id, name, normalized_name, added_at)" +
                         " SELECT oracle_id, name, normalized_name, ? FROM public.season_draft_card WHERE season_draft_id = ? AND is_new_card AND skip_reason IS NULL" +
                         " ON CONFLICT (oracle_id) DO NOTHING",
                 addedAt,
                 draftId);
 
-        int upsertedCardSeasonData = jdbcTemplate.update(
+        int upsertedCardSeasonData = jdbcTemplate.update( // keep in sync with SeasonMigrationSql.insertCardSeasonData
                 "INSERT INTO public.card_season_data (season_id, card_oracle_id, budget_points, legality, meta_share_standard, meta_share_pioneer, meta_share_modern, meta_share_legacy, meta_share_vintage, meta_share_pauper, banned_in, vintage_restricted)" +
                         " SELECT ?, oracle_id, budget_points, legality, meta_share_standard, meta_share_pioneer, meta_share_modern, meta_share_legacy, meta_share_vintage, meta_share_pauper, banned_in, vintage_restricted" +
                         " FROM public.season_draft_card WHERE season_draft_id = ? AND skip_reason IS NULL" +
@@ -227,7 +231,8 @@ public class SeasonDraftRepository {
                 seasonNumber,
                 draftId);
 
-        jdbcTemplate.update("UPDATE public.season_draft SET committed_at = now() WHERE id = ?", draftId);
+        // Not now(): the database runs in local time while prepared_at is UTC, and the two of them name the migration files
+        jdbcTemplate.update("UPDATE public.season_draft SET committed_at = ? WHERE id = ?", committedAt, draftId);
 
         return new CommittedSeasonCountsVO(remaps.size(), updatedCardNames, insertedCards, upsertedCardSeasonData);
     }

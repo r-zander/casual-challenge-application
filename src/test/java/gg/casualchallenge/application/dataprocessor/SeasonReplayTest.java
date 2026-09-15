@@ -84,75 +84,20 @@ class SeasonReplayTest {
         PriceWindowVO priceWindow = PriceWindowVO.of(startDate, PRICE_WINDOW_DAYS);
 
         MtgJsonPrintingsVO printings = readPrintings(budgetPointDirectory.resolve("AllPrintings.json"));
-        Map<String, CardPrices> pricesByCardName;
-        try (InputStream allPrices = new BufferedInputStream(Files.newInputStream(budgetPointDirectory.resolve("AllPrices.json")))) {
-            pricesByCardName = mtgJsonClient.readPrices(allPrices, printings.getPrintingsByUuid(), priceWindow).getPricesByCardName();
-        }
+        Map<String, CardPrices> pricesByCardName = readPrices(budgetPointDirectory.resolve("AllPrices.json"), printings, priceWindow);
 
         List<SeasonDraftCardVO> cards = assemble(printings, pricesByCardName, MetaSharesVO.fromBanFiles(List.of(), List.of()), startDate, 17);
-        Map<String, Integer> ourBudgetPoints = new HashMap<>(cards.size());
-        for (SeasonDraftCardVO card : cards) {
-            ourBudgetPoints.put(card.getName(), card.getBudgetPoints());
-        }
+        BudgetPointDiff diff = compareBudgetPoints(cards, printings, pricesByCardName, readBudgetPoints(REPLAY_DIRECTORY.resolve("data-prep-api/season-18/card-prices.json")));
 
-        Set<String> printedNames = new HashSet<>(printings.getPrintingsByUuid().size());
-        for (MtgJsonPrinting printing : printings.getPrintingsByUuid().values()) {
-            printedNames.add(printing.getCardName());
-        }
-
-        List<String> offByOne = new ArrayList<>();
-        List<String> halfCentTies = new ArrayList<>();
-        List<String> different = new ArrayList<>();
-        List<String> exchangeRateDrift = new ArrayList<>();
-        List<String> droppedByIdentityRule = new ArrayList<>();
-        List<String> unknownToUs = new ArrayList<>();
-        double worstDrift = 0;
-        int equal = 0;
-        for (Map.Entry<String, Integer> entry : readBudgetPoints(REPLAY_DIRECTORY.resolve("data-prep-api/season-18/card-prices.json")).entrySet()) {
-            String cardName = entry.getKey();
-            if (CasualChallengeRules.isFlipStyleName(cardName)) continue; // the python leaves those out of the season data as well
-
-            Integer budgetPoints = ourBudgetPoints.remove(cardName);
-            if (budgetPoints == null) {
-                if (printedNames.contains(cardName)) droppedByIdentityRule.add(cardName);
-                else unknownToUs.add(cardName);
-                continue;
-            }
-
-            int difference = budgetPoints - entry.getValue();
-            if (difference == 0) {
-                equal++;
-            } else if (isExchangeRatePrice(cardName, pricesByCardName.get(cardName)) && Math.abs(difference) <= 1 + entry.getValue() / 100) {
-                double drift = Math.abs((double) difference) / entry.getValue();
-                if (drift > worstDrift) worstDrift = drift;
-                exchangeRateDrift.add(cardName + ": " + entry.getValue() + " --> " + budgetPoints);
-            } else if ((difference == 1 || difference == -1) && isHalfCentTie(pricesByCardName.get(cardName))) {
-                halfCentTies.add(cardName + ": " + entry.getValue() + " --> " + budgetPoints);
-            } else if (difference == 1 || difference == -1) {
-                offByOne.add(cardName + ": " + entry.getValue() + " --> " + budgetPoints);
-            } else {
-                different.add(cardName + ": " + entry.getValue() + " --> " + budgetPoints);
-            }
-        }
-
-        System.out.println("Season 18 budget points: " + equal + " equal, " + halfCentTies.size() + " half cent ties, " + offByOne.size() + " off by one, " + different.size() + " different, "
-                + exchangeRateDrift.size() + " off by the exchange rate (worst " + Math.round(worstDrift * 1000) / 10.0 + " %), "
-                + droppedByIdentityRule.size() + " dropped by the identity rule, " + unknownToUs.size() + " unknown to us, " + ourBudgetPoints.size() + " priced by us only.");
-        printSome("  half cent ties", halfCentTies);
-        printSome("  off by one", offByOne);
-        printSome("  different", different);
-        printSome("  off by the exchange rate", exchangeRateDrift);
-        printSome("  dropped by the identity rule", droppedByIdentityRule);
-        printSome("  unknown to us", unknownToUs);
-        printSome("  priced by us only", new ArrayList<>(ourBudgetPoints.keySet()));
+        print("Season 18 budget points", diff);
         printHeap();
 
-        assertTrue(equal > 29000);
-        assertEquals(0, different.size());
-        assertEquals(0, offByOne.size());
-        assertTrue(halfCentTies.size() <= 10);
-        assertTrue(unknownToUs.size() + ourBudgetPoints.size() <= 10);
-        assertTrue(droppedByIdentityRule.size() <= 1000);
+        assertTrue(diff.equal > 29000);
+        assertEquals(0, diff.different.size());
+        assertEquals(0, diff.offByOne.size());
+        assertTrue(diff.halfCentTies.size() <= 10);
+        assertTrue(diff.unknownToUs.size() + diff.pricedByUsOnly.size() <= 10);
+        assertTrue(diff.droppedByIdentityRule.size() <= 1000);
     }
 
     @Test
@@ -172,13 +117,14 @@ class SeasonReplayTest {
         Map<String, String[]> theirCards = rowsByOracleId(Files.readString(outputDirectory.resolve("20251119_0103_01_insert_cards.sql")), 0);
         Map<String, String> ourNames = namesByOracleId(ourCards);
         Map<String, String> theirNames = namesByOracleId(theirCards);
-        ReplayDiff cardDiff = compare(ourCards, theirCards, ourNames, theirNames, CARD_COLUMNS, Set.of());
+        ReplayDiff cardDiff = compare(ourCards, theirCards, ourNames, theirNames, CARD_COLUMNS, FIXED_BY_US, Set.of());
         ReplayDiff seasonDataDiff = compare(
                 rowsByOracleId(SeasonMigrationSql.insertCardSeasonData(19, cards), 1),
                 rowsByOracleId(Files.readString(outputDirectory.resolve("20251119_0103_02_insert_card_season_data_for_season_19.sql")), 1),
                 ourNames,
                 theirNames,
                 CARD_SEASON_DATA_COLUMNS,
+                FIXED_BY_US,
                 Set.of()
         );
 
@@ -208,29 +154,61 @@ class SeasonReplayTest {
         Path allPrintingsJson = printingsOf(seasonDirectory);
         boolean isSeasonSnapshot = allPrintingsJson.startsWith(seasonDirectory);
         System.out.println("Season 21 using " + REPLAY_DIRECTORY.relativize(allPrintingsJson) + ".");
+        LocalDate startDate = LocalDate.of(2026, 9, 13);
         MtgJsonPrintingsVO printings = readPrintings(allPrintingsJson);
         MetaSharesVO metaShares = MetaSharesVO.fromBanFiles(readBans(seasonDirectory.resolve("bans.json")), readBans(seasonDirectory.resolve("extended-bans.json")));
-        Map<String, CardPrices> pricesByCardName = toCardPrices(readBudgetPoints(seasonDirectory.resolve("card-prices.json")));
+        Map<String, Integer> theirBudgetPoints = readBudgetPoints(seasonDirectory.resolve("card-prices.json"));
 
-        List<SeasonDraftCardVO> cards = assemble(printings, pricesByCardName, metaShares, LocalDate.of(2026, 9, 13), 20);
+        // The season's own AllPrices.json covers exactly the window the python ran on (20260705 to 20260913) --> we can price the cards ourselves instead of believing its output
+        Path allPricesJson = seasonDirectory.resolve("AllPrices.json");
+        boolean arePricesOurs = Files.exists(allPricesJson);
+        Map<String, CardPrices> pricesByCardName = arePricesOurs ? readPrices(allPricesJson, printings, PriceWindowVO.of(startDate, PRICE_WINDOW_DAYS)) : toCardPrices(theirBudgetPoints);
+
+        List<SeasonDraftCardVO> cards = assemble(printings, pricesByCardName, metaShares, startDate, 20);
+
+        Set<String> pricedDifferently = Set.of();
+        Set<String> toleratedSeasonData = FIXED_BY_US;
+        if (arePricesOurs) {
+            BudgetPointDiff budgetPointDiff = compareBudgetPoints(cards, printings, pricesByCardName, theirBudgetPoints);
+            print("Season 21 budget points", budgetPointDiff);
+            pricedDifferently = budgetPointDiff.pricedDifferently;
+            toleratedSeasonData = new HashSet<>(FIXED_BY_US); // the budget points we price differently are explained above --> the rows don't need to list them a second time
+            toleratedSeasonData.addAll(pricedDifferently);
+
+            assertTrue(budgetPointDiff.equal > 30000);
+            assertEquals(0, budgetPointDiff.different.size());
+            assertEquals(0, budgetPointDiff.offByOne.size());
+            assertTrue(budgetPointDiff.halfCentTies.size() <= 10);
+            assertTrue(budgetPointDiff.unknownToUs.size() + budgetPointDiff.pricedByUsOnly.size() <= 10);
+            assertTrue(budgetPointDiff.droppedByIdentityRule.size() <= 1000);
+        }
 
         Map<String, String[]> ourCards = rowsByOracleId(SeasonMigrationSql.insertCards(cards, ADDED_AT), 0);
         Map<String, String[]> theirCards = rowsByOracleId(Files.readString(SEASON_21_DIRECTORY.resolve("20260913_2021_01_insert_cards.sql")), 0);
         Map<String, String> ourNames = namesByOracleId(ourCards);
         Map<String, String> theirNames = namesByOracleId(theirCards);
-        ReplayDiff cardDiff = compare(ourCards, theirCards, ourNames, theirNames, CARD_COLUMNS, DRIFTING_COLUMNS);
+        ReplayDiff cardDiff = compare(ourCards, theirCards, ourNames, theirNames, CARD_COLUMNS, FIXED_BY_US, DRIFTING_COLUMNS);
         ReplayDiff seasonDataDiff = compare(
                 rowsByOracleId(SeasonMigrationSql.insertCardSeasonData(21, cards), 1),
                 rowsByOracleId(Files.readString(SEASON_21_DIRECTORY.resolve("20260913_2021_02_insert_card_season_data_for_season_21.sql")), 1),
                 ourNames,
                 theirNames,
                 CARD_SEASON_DATA_COLUMNS,
+                toleratedSeasonData,
                 DRIFTING_COLUMNS
         );
 
         print("Season 21 card", cardDiff);
         print("Season 21 card_season_data", seasonDataDiff);
         printHeap();
+
+        // Tolerating a card by name would swallow a second difference on the same row --> the repriced ones may only differ in their budget points
+        for (String cardName : pricedDifferently) {
+            for (String toleratedLine : seasonDataDiff.tolerated) {
+                if (!toleratedLine.startsWith(cardName + ": ")) continue;
+                assertTrue(toleratedLine.startsWith(cardName + ": budget_points ") && toleratedLine.indexOf(", ", cardName.length()) < 0, toleratedLine);
+            }
+        }
 
         assertTrue(cardDiff.equal > 30000);
         assertTrue(seasonDataDiff.equal > 30000);
@@ -263,6 +241,12 @@ class SeasonReplayTest {
     private MtgJsonPrintingsVO readPrintings(Path allPrintingsJson) throws IOException {
         try (InputStream printings = new BufferedInputStream(Files.newInputStream(allPrintingsJson))) {
             return mtgJsonClient.readPrintings(printings);
+        }
+    }
+
+    private Map<String, CardPrices> readPrices(Path allPricesJson, MtgJsonPrintingsVO printings, PriceWindowVO window) throws IOException {
+        try (InputStream prices = new BufferedInputStream(Files.newInputStream(allPricesJson))) {
+            return mtgJsonClient.readPrices(prices, printings.getPrintingsByUuid(), window).getPricesByCardName();
         }
     }
 
@@ -331,12 +315,63 @@ class SeasonReplayTest {
         return assembledDraft.getCards();
     }
 
+    private static BudgetPointDiff compareBudgetPoints(
+            List<SeasonDraftCardVO> cards,
+            MtgJsonPrintingsVO printings,
+            Map<String, CardPrices> pricesByCardName,
+            Map<String, Integer> theirBudgetPoints
+    ) {
+        Map<String, Integer> ourBudgetPoints = new HashMap<>(cards.size());
+        for (SeasonDraftCardVO card : cards) {
+            ourBudgetPoints.put(card.getName(), card.getBudgetPoints());
+        }
+
+        Set<String> printedNames = new HashSet<>(printings.getPrintingsByUuid().size());
+        for (MtgJsonPrinting printing : printings.getPrintingsByUuid().values()) {
+            printedNames.add(printing.getCardName());
+        }
+
+        BudgetPointDiff diff = new BudgetPointDiff();
+        for (Map.Entry<String, Integer> entry : theirBudgetPoints.entrySet()) {
+            String cardName = entry.getKey();
+            if (CasualChallengeRules.isFlipStyleName(cardName)) continue; // the python leaves those out of the season data as well
+
+            Integer budgetPoints = ourBudgetPoints.remove(cardName);
+            if (budgetPoints == null) {
+                if (printedNames.contains(cardName)) diff.droppedByIdentityRule.add(cardName);
+                else diff.unknownToUs.add(cardName);
+                continue;
+            }
+
+            int difference = budgetPoints - entry.getValue();
+            if (difference == 0) {
+                diff.equal++;
+            } else if (isExchangeRatePrice(cardName, pricesByCardName.get(cardName)) && Math.abs(difference) <= 1 + entry.getValue() / 100) {
+                double drift = Math.abs((double) difference) / entry.getValue();
+                if (drift > diff.worstDrift) diff.worstDrift = drift;
+                diff.exchangeRateDrift.add(cardName + ": " + entry.getValue() + " --> " + budgetPoints);
+                diff.pricedDifferently.add(cardName);
+            } else if ((difference == 1 || difference == -1) && isHalfCentTie(pricesByCardName.get(cardName))) {
+                diff.halfCentTies.add(cardName + ": " + entry.getValue() + " --> " + budgetPoints);
+                diff.pricedDifferently.add(cardName);
+            } else if (difference == 1 || difference == -1) {
+                diff.offByOne.add(cardName + ": " + entry.getValue() + " --> " + budgetPoints);
+            } else {
+                diff.different.add(cardName + ": " + entry.getValue() + " --> " + budgetPoints);
+            }
+        }
+        diff.pricedByUsOnly.addAll(ourBudgetPoints.keySet());
+
+        return diff;
+    }
+
     private static ReplayDiff compare(
             Map<String, String[]> ourRows,
             Map<String, String[]> theirRows,
             Map<String, String> ourNamesByOracleId,
             Map<String, String> theirNamesByOracleId,
             String[] columnNames,
+            Set<String> toleratedNames,
             Set<String> driftingColumns
     ) {
         ReplayDiff diff = new ReplayDiff();
@@ -352,7 +387,7 @@ class SeasonReplayTest {
             boolean wasRenamed = !driftingColumns.isEmpty() && !cardName.equals(ourNamesByOracleId.get(entry.getKey()));
             String differences = differencesOf(ourRow, entry.getValue(), columnNames);
             if (differences == null) diff.equal++;
-            else if (FIXED_BY_US.contains(cardName)) diff.tolerated.add(cardName + ": " + differences);
+            else if (toleratedNames.contains(cardName)) diff.tolerated.add(cardName + ": " + differences);
             else if (wasRenamed || isOnlyDrift(ourRow, entry.getValue(), columnNames, driftingColumns)) diff.drifted.add(cardName + ": " + differences);
             else diff.differences.add(cardName + ": " + differences);
         }
@@ -465,6 +500,19 @@ class SeasonReplayTest {
         printSome("  only the python's", diff.theirOnly);
     }
 
+    private static void print(String title, BudgetPointDiff diff) {
+        System.out.println(title + ": " + diff.equal + " equal, " + diff.halfCentTies.size() + " half cent ties, " + diff.offByOne.size() + " off by one, " + diff.different.size() + " different, "
+                + diff.exchangeRateDrift.size() + " off by the exchange rate (worst " + Math.round(diff.worstDrift * 1000) / 10.0 + " %), "
+                + diff.droppedByIdentityRule.size() + " dropped by the identity rule, " + diff.unknownToUs.size() + " unknown to us, " + diff.pricedByUsOnly.size() + " priced by us only.");
+        printSome("  half cent ties", diff.halfCentTies);
+        printSome("  off by one", diff.offByOne);
+        printSome("  different", diff.different);
+        printSome("  off by the exchange rate", diff.exchangeRateDrift);
+        printSome("  dropped by the identity rule", diff.droppedByIdentityRule);
+        printSome("  unknown to us", diff.unknownToUs);
+        printSome("  priced by us only", diff.pricedByUsOnly);
+    }
+
     private static void printSome(String title, List<String> lines) {
         if (lines.isEmpty()) return;
 
@@ -478,6 +526,20 @@ class SeasonReplayTest {
         Runtime runtime = Runtime.getRuntime();
         long usedMegaBytes = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024);
         System.out.println("  Heap in use: " + usedMegaBytes + " MB of " + runtime.maxMemory() / (1024 * 1024) + " MB.");
+    }
+
+    // What one comparison of two sets of budget points found, split by the reason they differ
+    private static class BudgetPointDiff {
+        private final List<String> halfCentTies = new ArrayList<>();
+        private final List<String> offByOne = new ArrayList<>();
+        private final List<String> different = new ArrayList<>();
+        private final List<String> exchangeRateDrift = new ArrayList<>();
+        private final List<String> droppedByIdentityRule = new ArrayList<>();
+        private final List<String> unknownToUs = new ArrayList<>();
+        private final List<String> pricedByUsOnly = new ArrayList<>();
+        private final Set<String> pricedDifferently = new HashSet<>(); // the names behind the two explained lists, without the prices around them
+        private double worstDrift;
+        private int equal;
     }
 
     // What one comparison of two row sets found, split by the reason the rows differ

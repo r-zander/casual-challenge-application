@@ -5,7 +5,7 @@ import lombok.Value;
 @Value
 public class CommittedSeasonCountsVO {
     int remappedCards;
-    int renamedCards;
+    int updatedCardNames;
     int insertedCards;
     int upsertedCardSeasonData;
 }

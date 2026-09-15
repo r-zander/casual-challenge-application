@@ -107,6 +107,7 @@ public class CasualChallengeService {
         List<CardWithDataVO> cardWithDataVOs = new ArrayList<>(cardDataList.size());
         for (CardSeasonData cardSeasonData : cardDataList) {
             CardVO cardVO = cardCacheByOracleId.get(cardSeasonData.getCardOracleId());
+            if (cardVO == null) continue; // a season commit writes the rows before it reloads the cache --> the card shows up a moment later
             cardWithDataVOs.add(new CardWithDataVO(
                     cardVO.getId(),
                     cardVO.getOracleId(),

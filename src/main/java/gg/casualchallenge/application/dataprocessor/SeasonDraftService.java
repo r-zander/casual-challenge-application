@@ -70,7 +70,7 @@ public class SeasonDraftService {
         // prepared_at is what the exported migration writes into card.added_at, so the database gets the very same value
         CommittedSeasonCountsVO counts = seasonDraftRepository.commit(draft.getId(), draft.getPreparedAt());
         log.info("Committed season {}. {} cards added, {} names or normalized names updated, {} remapped, {} season data rows written.",
-                draft.getSeasonNumber(), counts.getInsertedCards(), counts.getRenamedCards(), counts.getRemappedCards(), counts.getUpsertedCardSeasonData());
+                draft.getSeasonNumber(), counts.getInsertedCards(), counts.getUpdatedCardNames(), counts.getRemappedCards(), counts.getUpsertedCardSeasonData());
 
         SeasonDraftVO committedDraft = seasonDraftRepository.findDraft(); // committed_at decides the migration file names
         if (!exportDirectory.isEmpty()) {
@@ -84,7 +84,7 @@ public class SeasonDraftService {
         try {
             casualChallengeService.preloadCards();
         } catch (RuntimeException e) {
-            throw new RuntimeException("Season " + committedDraft.getSeasonNumber() + " is committed, but reloading the card cache failed: " + e.getMessage(), e);
+            throw new RuntimeException("Season " + committedDraft.getSeasonNumber() + " is committed, but reloading the card cache failed: " + e.getMessage() + " Call POST /admin/v1/cards/reload once the database is reachable again.", e);
         }
 
         SeasonDraftReportVO report = toReport(committedDraft);

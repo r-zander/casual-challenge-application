@@ -79,7 +79,7 @@ class SeasonDraftRepositoryTest {
         CommittedSeasonCountsVO counts = commitDraft(draftId);
 
         assertEquals(1, counts.getRemappedCards());
-        assertEquals(1, counts.getRenamedCards());
+        assertEquals(1, counts.getUpdatedCardNames());
         assertEquals(1, counts.getInsertedCards());
         assertEquals(3, counts.getUpsertedCardSeasonData());
         assertEquals(1, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season WHERE id = 21 AND season_number = 21", Integer.class));

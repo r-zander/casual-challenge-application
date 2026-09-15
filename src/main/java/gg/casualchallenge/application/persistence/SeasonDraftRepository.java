@@ -195,7 +195,7 @@ public class SeasonDraftRepository {
         }
 
         // Step: MTGJSON renames cards from time to time, the card table has to follow or the API stops finding them
-        int renamedCards = jdbcTemplate.update(
+        int updatedCardNames = jdbcTemplate.update(
                 "UPDATE public.card SET name = draft_card.name, normalized_name = draft_card.normalized_name" +
                         " FROM public.season_draft_card draft_card" +
                         " WHERE card.oracle_id = draft_card.oracle_id AND draft_card.season_draft_id = ? AND draft_card.skip_reason IS NULL" +
@@ -229,7 +229,7 @@ public class SeasonDraftRepository {
 
         jdbcTemplate.update("UPDATE public.season_draft SET committed_at = now() WHERE id = ?", draftId);
 
-        return new CommittedSeasonCountsVO(remaps.size(), renamedCards, insertedCards, upsertedCardSeasonData);
+        return new CommittedSeasonCountsVO(remaps.size(), updatedCardNames, insertedCards, upsertedCardSeasonData);
     }
 
     @Transactional

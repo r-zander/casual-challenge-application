@@ -45,15 +45,18 @@ public class AdminControllerV1 {
 
     private final SeasonPreparationService seasonPreparationService;
     private final SeasonDraftService seasonDraftService;
+    private final CasualChallengeService casualChallengeService;
     private final ObjectMapper objectMapper;
 
     public AdminControllerV1(
             SeasonPreparationService seasonPreparationService,
             SeasonDraftService seasonDraftService,
+            CasualChallengeService casualChallengeService,
             ObjectMapper objectMapper
     ) {
         this.seasonPreparationService = seasonPreparationService;
         this.seasonDraftService = seasonDraftService;
+        this.casualChallengeService = casualChallengeService;
         this.objectMapper = objectMapper;
     }
 
@@ -124,6 +127,12 @@ public class AdminControllerV1 {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void discardSeasonDraft() {
         this.seasonDraftService.discard();
+    }
+
+    @PostMapping(path = "/cards/reload")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void reloadCards() {
+        this.casualChallengeService.preloadCards();
     }
 
     @ExceptionHandler(IllegalStateException.class)

@@ -53,6 +53,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
@@ -62,6 +63,8 @@ public class SeasonPreparationService {
     private static final int TOTAL_STEPS = 5;
 
     private static final int MAX_SKIP_REASON_LENGTH = 255;
+
+    private static final int SHUTDOWN_TIMEOUT_IN_SECONDS = 30;
 
     // A budget point change is only worth reading when it is big relatively and absolutely
     private static final int RELEVANT_CHANGE_IN_PERCENT = 50;
@@ -143,7 +146,13 @@ public class SeasonPreparationService {
 
     @PreDestroy
     public void shutdown() {
+        cancelRequested.set(true); // the job only gives up between steps, interrupting it alone doesn't help
         jobExecutor.shutdownNow(); // the executor thread is not a daemon --> the JVM would wait for it on every deploy
+        try {
+            jobExecutor.awaitTermination(SHUTDOWN_TIMEOUT_IN_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     public SeasonPreparationRequestVO defaultRequest(LocalDate startDate) {

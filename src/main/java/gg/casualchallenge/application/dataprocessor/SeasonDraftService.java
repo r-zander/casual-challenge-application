@@ -69,7 +69,7 @@ public class SeasonDraftService {
 
         // prepared_at is what the exported migration writes into card.added_at, so the database gets the very same value
         CommittedSeasonCountsVO counts = seasonDraftRepository.commit(draft.getId(), draft.getPreparedAt());
-        log.info("Committed season {}. {} cards added, {} renamed, {} remapped, {} season data rows written.",
+        log.info("Committed season {}. {} cards added, {} names or normalized names updated, {} remapped, {} season data rows written.",
                 draft.getSeasonNumber(), counts.getInsertedCards(), counts.getRenamedCards(), counts.getRemappedCards(), counts.getUpsertedCardSeasonData());
 
         SeasonDraftVO committedDraft = seasonDraftRepository.findDraft(); // committed_at decides the migration file names

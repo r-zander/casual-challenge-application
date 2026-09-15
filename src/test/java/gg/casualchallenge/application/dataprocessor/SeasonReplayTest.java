@@ -6,6 +6,7 @@ import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import gg.casualchallenge.application.api.legacy.datamodel.BanDTO;
 import gg.casualchallenge.application.common.SeasonDates;
 import gg.casualchallenge.application.dataprocessor.model.CardPrices;
+import gg.casualchallenge.application.dataprocessor.model.Cents;
 import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
 import gg.casualchallenge.application.dataprocessor.model.MetaSharesVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrinting;
@@ -47,6 +48,8 @@ class SeasonReplayTest {
 
     private static final Path REPLAY_DIRECTORY = Paths.get(System.getProperty("replay.dir", ""));
     private static final Path SEASON_21_DIRECTORY = Paths.get("temp", "season-21-expected");
+
+    private static final String PRINTINGS_FILE = "AllPrintings.json";
 
     private static final int PRICE_WINDOW_DAYS = 70;
     private static final int MAX_PRINTED_LINES = 20;
@@ -95,6 +98,7 @@ class SeasonReplayTest {
         }
 
         List<String> offByOne = new ArrayList<>();
+        List<String> halfCentTies = new ArrayList<>();
         List<String> different = new ArrayList<>();
         List<String> exchangeRateDrift = new ArrayList<>();
         List<String> droppedByIdentityRule = new ArrayList<>();
@@ -119,6 +123,8 @@ class SeasonReplayTest {
                 double drift = Math.abs((double) difference) / entry.getValue();
                 if (drift > worstDrift) worstDrift = drift;
                 exchangeRateDrift.add(cardName + ": " + entry.getValue() + " --> " + budgetPoints);
+            } else if ((difference == 1 || difference == -1) && isHalfCentTie(pricesByCardName.get(cardName))) {
+                halfCentTies.add(cardName + ": " + entry.getValue() + " --> " + budgetPoints);
             } else if (difference == 1 || difference == -1) {
                 offByOne.add(cardName + ": " + entry.getValue() + " --> " + budgetPoints);
             } else {
@@ -126,9 +132,10 @@ class SeasonReplayTest {
             }
         }
 
-        System.out.println("Season 18 budget points: " + equal + " equal, " + offByOne.size() + " off by one, " + different.size() + " different, "
+        System.out.println("Season 18 budget points: " + equal + " equal, " + halfCentTies.size() + " half cent ties, " + offByOne.size() + " off by one, " + different.size() + " different, "
                 + exchangeRateDrift.size() + " off by the exchange rate (worst " + Math.round(worstDrift * 1000) / 10.0 + " %), "
                 + droppedByIdentityRule.size() + " dropped by the identity rule, " + unknownToUs.size() + " unknown to us, " + ourBudgetPoints.size() + " priced by us only.");
+        printSome("  half cent ties", halfCentTies);
         printSome("  off by one", offByOne);
         printSome("  different", different);
         printSome("  off by the exchange rate", exchangeRateDrift);
@@ -139,7 +146,8 @@ class SeasonReplayTest {
 
         assertTrue(equal > 29000);
         assertEquals(0, different.size());
-        assertTrue(offByOne.size() <= 5);
+        assertEquals(0, offByOne.size());
+        assertTrue(halfCentTies.size() <= 10);
         assertTrue(unknownToUs.size() + ourBudgetPoints.size() <= 10);
         assertTrue(droppedByIdentityRule.size() <= 1000);
     }
@@ -149,7 +157,9 @@ class SeasonReplayTest {
         Path seasonDirectory = REPLAY_DIRECTORY.resolve("data-prep-api/season-19");
         Path outputDirectory = REPLAY_DIRECTORY.resolve("data-prep-api/output/season-19");
 
-        MtgJsonPrintingsVO printings = readPrintings(REPLAY_DIRECTORY.resolve("data-prep-api/AllPrintings.json"));
+        Path allPrintingsJson = printingsOf(seasonDirectory);
+        System.out.println("Season 19 using " + REPLAY_DIRECTORY.relativize(allPrintingsJson) + ".");
+        MtgJsonPrintingsVO printings = readPrintings(allPrintingsJson);
         MetaSharesVO metaShares = MetaSharesVO.fromBanFiles(readBans(seasonDirectory.resolve("bans.json")), readBans(seasonDirectory.resolve("extended-bans.json")));
         Map<String, CardPrices> pricesByCardName = toCardPrices(readBudgetPoints(seasonDirectory.resolve("card-prices.json")));
 
@@ -191,8 +201,11 @@ class SeasonReplayTest {
     void testSeasonData_season21() throws Exception {
         Path seasonDirectory = REPLAY_DIRECTORY.resolve("data-prep-api/season-21");
 
-        // The newest AllPrintings.json we have is from November 2025, the season 21 files were built in September 2026 --> everything printed in between is missing here
-        MtgJsonPrintingsVO printings = readPrintings(REPLAY_DIRECTORY.resolve("data-prep-api/AllPrintings.json"));
+        // Without the season's own dump the newest AllPrintings.json we have is from November 2025, while the season 21 files were built in September 2026
+        Path allPrintingsJson = printingsOf(seasonDirectory);
+        boolean isSeasonSnapshot = allPrintingsJson.startsWith(seasonDirectory);
+        System.out.println("Season 21 using " + REPLAY_DIRECTORY.relativize(allPrintingsJson) + ".");
+        MtgJsonPrintingsVO printings = readPrintings(allPrintingsJson);
         MetaSharesVO metaShares = MetaSharesVO.fromBanFiles(readBans(seasonDirectory.resolve("bans.json")), readBans(seasonDirectory.resolve("extended-bans.json")));
         Map<String, CardPrices> pricesByCardName = toCardPrices(readBudgetPoints(seasonDirectory.resolve("card-prices.json")));
 
@@ -220,13 +233,28 @@ class SeasonReplayTest {
         assertTrue(seasonDataDiff.equal > 30000);
         assertEquals(0, cardDiff.differences.size());
         assertEquals(0, seasonDataDiff.differences.size());
-        assertTrue(seasonDataDiff.drifted.size() <= 200);
         assertTrue(cardDiff.newOracleIds.size() <= 15);
         assertTrue(seasonDataDiff.newOracleIds.size() <= 15);
         assertTrue(cardDiff.ourOnly.size() <= 10);
         assertTrue(seasonDataDiff.ourOnly.size() <= 10);
-        assertTrue(cardDiff.theirOnly.size() <= 3500); // the identity drops plus everything printed after the season 21 snapshot
-        assertTrue(seasonDataDiff.theirOnly.size() <= 3500);
+        if (isSeasonSnapshot) {
+            assertEquals(0, cardDiff.drifted.size());
+            assertEquals(0, seasonDataDiff.drifted.size());
+            assertTrue(cardDiff.theirOnly.size() <= 1000); // only the cards the identity rule drops
+            assertTrue(seasonDataDiff.theirOnly.size() <= 1000);
+        } else {
+            assertTrue(seasonDataDiff.drifted.size() <= 200);
+            assertTrue(cardDiff.theirOnly.size() <= 3500); // the identity drops plus everything printed after November 2025
+            assertTrue(seasonDataDiff.theirOnly.size() <= 3500);
+        }
+    }
+
+    // The seasons come with their own MTGJSON dump once somebody put one next to their json files
+    private static Path printingsOf(Path seasonDirectory) {
+        Path seasonPrintings = seasonDirectory.resolve(PRINTINGS_FILE);
+        if (Files.exists(seasonPrintings)) return seasonPrintings;
+
+        return REPLAY_DIRECTORY.resolve("data-prep-api").resolve(PRINTINGS_FILE);
     }
 
     private MtgJsonPrintingsVO readPrintings(Path allPrintingsJson) throws IOException {
@@ -247,7 +275,18 @@ class SeasonReplayTest {
     private static boolean isExchangeRatePrice(String cardName, CardPrices cardPrices) {
         if (cardPrices == null || CasualChallengeRules.isBasicLand(cardName)) return false;
 
-        return BudgetPoints.fromAverage(cardPrices.getEur().average()) == 0 && BudgetPoints.fromAverage(cardPrices.getUsd().average()) != 0;
+        return cardPrices.getEur().sumOfCheapest().getAmount() == 0 && cardPrices.getUsd().sumOfCheapest().getAmount() > 0;
+    }
+
+    // Half a cent sits exactly between two budget points: we round it to the even one, the python's floats went whichever way
+    private static boolean isHalfCentTie(CardPrices cardPrices) {
+        if (cardPrices == null) return false;
+
+        int days = cardPrices.getEur().pricedDays();
+        if (days == 0) return false;
+
+        long sumOfCents = cardPrices.getEur().sumOfCheapest().getAmount();
+        return 2 * sumOfCents % days == 0 && sumOfCents % days != 0;
     }
 
     // The budget points of seasons 19 and 21 are a given, so every card gets a one day price window holding exactly its known price
@@ -255,7 +294,7 @@ class SeasonReplayTest {
         Map<String, CardPrices> pricesByCardName = new HashMap<>(budgetPointsByCardName.size());
         for (Map.Entry<String, Integer> entry : budgetPointsByCardName.entrySet()) {
             CardPrices cardPrices = new CardPrices(1);
-            cardPrices.getEur().addPrinting(new double[]{entry.getValue() / 100.0});
+            cardPrices.getEur().addPrinting(new Cents[]{Cents.of(entry.getValue())});
             pricesByCardName.put(entry.getKey(), cardPrices);
         }
 

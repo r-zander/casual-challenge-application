@@ -6,7 +6,7 @@ import java.util.Map;
 
 @Value
 public class BudgetPointsVO {
-    Map<String, Integer> budgetPointsByCardName;
+    Map<String, Cents> pricesByCardName;
     double exchangeRate;
     double adjustedExchangeRate;
     int pricesFixedByExchangeRate;

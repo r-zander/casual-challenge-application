@@ -3,6 +3,7 @@ package gg.casualchallenge.application.dataprocessor;
 import gg.casualchallenge.application.api.legacy.datamodel.BanDTO;
 import gg.casualchallenge.application.api.legacy.datamodel.LegacyMtgFormat;
 import gg.casualchallenge.application.dataprocessor.model.CardPrices;
+import gg.casualchallenge.application.dataprocessor.model.Cents;
 import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
 import gg.casualchallenge.application.dataprocessor.model.MetaSharesVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonCard;
@@ -22,7 +23,10 @@ import gg.casualchallenge.application.persistence.entity.CardSeasonData;
 import gg.casualchallenge.application.persistence.entity.Season;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -79,8 +83,8 @@ class SeasonPreparationServiceTest {
         );
 
         Map<String, CardPrices> pricesByCardName = new HashMap<>();
-        pricesByCardName.put("Brainstorm", cardPrices(0.5, 0.75));
-        pricesByCardName.put("Sol Ring", cardPrices(0, 4.0));
+        pricesByCardName.put("Brainstorm", cardPrices(50, 75));
+        pricesByCardName.put("Sol Ring", cardPrices(0, 400));
 
         MetaSharesVO metaShares = MetaSharesVO.fromStaples(
                 MetaShareSource.MTGGOLDFISH,
@@ -129,10 +133,10 @@ class SeasonPreparationServiceTest {
         );
 
         Map<String, CardPrices> pricesByCardName = new HashMap<>();
-        pricesByCardName.put("Ancestor's Chosen", cardPrices(0.06, 0.09));
-        pricesByCardName.put("Joven", cardPrices(0.32, 0.48));
-        pricesByCardName.put("Lórien Revealed", cardPrices(0.4, 0.6));
-        pricesByCardName.put("Fresh Face", cardPrices(0.04, 0.06));
+        pricesByCardName.put("Ancestor's Chosen", cardPrices(6, 9));
+        pricesByCardName.put("Joven", cardPrices(32, 48));
+        pricesByCardName.put("Lórien Revealed", cardPrices(40, 60));
+        pricesByCardName.put("Fresh Face", cardPrices(4, 6));
 
         List<Card> existingCards = List.of(
                 existingCard("Ancestor's Chosen", "ancestors-chosen", ANCESTORS_CHOSEN),
@@ -231,12 +235,12 @@ class SeasonPreparationServiceTest {
         );
 
         Map<String, CardPrices> pricesByCardName = new HashMap<>();
-        pricesByCardName.put("Brainstorm", cardPrices(3.0, 4.5));
-        pricesByCardName.put("Ragavan, Nimble Pilferer", cardPrices(10.0, 15.0));
-        pricesByCardName.put("Abrade", cardPrices(0.5, 0.75));
-        pricesByCardName.put("Ancient Stirrings", cardPrices(1.0, 1.5));
-        pricesByCardName.put("Lightning Bolt", cardPrices(3.0, 0));
-        pricesByCardName.put("Ancestor's Chosen", cardPrices(2.97, 0));
+        pricesByCardName.put("Brainstorm", cardPrices(300, 450));
+        pricesByCardName.put("Ragavan, Nimble Pilferer", cardPrices(1000, 1500));
+        pricesByCardName.put("Abrade", cardPrices(50, 75));
+        pricesByCardName.put("Ancient Stirrings", cardPrices(100, 150));
+        pricesByCardName.put("Lightning Bolt", cardPrices(300, 0));
+        pricesByCardName.put("Ancestor's Chosen", cardPrices(297, 0));
 
         List<Card> existingCards = List.of(
                 existingCard("Brainstorm", "brainstorm", BRAINSTORM),
@@ -339,10 +343,10 @@ class SeasonPreparationServiceTest {
         );
 
         Map<String, CardPrices> pricesByCardName = new HashMap<>();
-        pricesByCardName.put("Brainstorm", cardPrices(3.0, 0));
-        pricesByCardName.put("Black Lotus", cardPrices(6000.0, 0));
-        pricesByCardName.put("Ragavan, Nimble Pilferer", cardPrices(100.0, 0));
-        pricesByCardName.put("Sol Ring", cardPrices(0.5, 0));
+        pricesByCardName.put("Brainstorm", cardPrices(300, 0));
+        pricesByCardName.put("Black Lotus", cardPrices(600000, 0));
+        pricesByCardName.put("Ragavan, Nimble Pilferer", cardPrices(10000, 0));
+        pricesByCardName.put("Sol Ring", cardPrices(50, 0));
 
         List<Card> existingCards = List.of(
                 existingCard("Brainstorm", "brainstorm", BRAINSTORM),
@@ -374,6 +378,33 @@ class SeasonPreparationServiceTest {
         assertEquals("Brainstorm", scryfallDecks.getCurrentBans());
     }
 
+    @Test
+    void testPruneArchive() throws IOException {
+        Path archive = Files.createTempDirectory("season-archive");
+        for (int seasonNumber = 17; seasonNumber <= 22; seasonNumber++) {
+            Files.createDirectory(archive.resolve("season-" + seasonNumber));
+        }
+        Files.writeString(archive.resolve("season-17").resolve("request.json"), "{}");
+
+        SeasonPreparationService.pruneArchive(archive, 5);
+
+        assertFalse(Files.exists(archive.resolve("season-17")));
+        assertTrue(Files.exists(archive.resolve("season-18")));
+        assertTrue(Files.exists(archive.resolve("season-22")));
+    }
+
+    @Test
+    void testPruneArchive_withArchivingOff() throws IOException {
+        Path archive = Files.createTempDirectory("season-archive");
+        Files.createDirectory(archive.resolve("season-17"));
+        Files.createDirectory(archive.resolve("season-18"));
+
+        SeasonPreparationService.pruneArchive(archive, 0);
+
+        assertTrue(Files.exists(archive.resolve("season-17")));
+        assertTrue(Files.exists(archive.resolve("season-18")));
+    }
+
     private static MtgJsonPrintingsVO printings(List<MtgJsonSet> sets, MtgJsonCard... cards) {
         Map<String, MtgJsonCard> cardsByName = new LinkedHashMap<>();
         for (MtgJsonCard card : cards) {
@@ -387,10 +418,10 @@ class SeasonPreparationServiceTest {
         return new MtgJsonCard(cardName, oracleId, true, false, null, "LEA", RELEASE_DATE);
     }
 
-    private static CardPrices cardPrices(double eurPrice, double usdPrice) {
+    private static CardPrices cardPrices(long eurCents, long usdCents) {
         CardPrices cardPrices = new CardPrices(WINDOW_LENGTH);
-        if (eurPrice > 0) cardPrices.getEur().addPrinting(new double[]{eurPrice, eurPrice});
-        if (usdPrice > 0) cardPrices.getUsd().addPrinting(new double[]{usdPrice, usdPrice});
+        if (eurCents > 0) cardPrices.getEur().addPrinting(new Cents[]{Cents.of(eurCents), Cents.of(eurCents)});
+        if (usdCents > 0) cardPrices.getUsd().addPrinting(new Cents[]{Cents.of(usdCents), Cents.of(usdCents)});
 
         return cardPrices;
     }

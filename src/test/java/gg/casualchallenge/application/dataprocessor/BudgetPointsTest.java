@@ -1,5 +1,7 @@
 package gg.casualchallenge.application.dataprocessor;
 
+import gg.casualchallenge.application.dataprocessor.model.Cents;
+import gg.casualchallenge.application.dataprocessor.model.PriceSeries;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -7,13 +9,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class BudgetPointsTest {
 
     @Test
-    void testFromAverage() {
-        assertEquals(0, BudgetPoints.fromAverage(0));
-        assertEquals(121, BudgetPoints.fromAverage(1.2149));
-        assertEquals(12, BudgetPoints.fromAverage(0.125));
-        assertEquals(14, BudgetPoints.fromAverage(0.135));
-        assertEquals(34, BudgetPoints.fromAverage(0.345));
-        assertEquals(100, BudgetPoints.fromAverage(1.005));
+    void testFromSeries() {
+        PriceSeries priceSeries = new PriceSeries(3);
+        priceSeries.addPrinting(new Cents[]{Cents.of(100), Cents.of(150), null});
+        priceSeries.addPrinting(new Cents[]{Cents.of(120), Cents.of(300), Cents.of(90)});
+
+        assertEquals(Cents.of(113), BudgetPoints.fromSeries(priceSeries));
+        assertEquals(Cents.of(0), BudgetPoints.fromSeries(new PriceSeries(3)));
     }
 
     @Test
@@ -25,10 +27,9 @@ class BudgetPointsTest {
 
     @Test
     void testFromUsd() {
-        assertEquals(100, BudgetPoints.fromUsd(110, 1.1));
-        assertEquals(0, BudgetPoints.fromUsd(0, 1.1));
-        assertEquals(12, BudgetPoints.fromUsd(25, 2.0));
-        assertEquals(2273, BudgetPoints.fromUsd(2500, 1.1));
+        assertEquals(Cents.of(100), BudgetPoints.fromUsd(Cents.of(110), 1.1));
+        assertEquals(Cents.of(0), BudgetPoints.fromUsd(Cents.of(0), 1.1));
+        assertEquals(Cents.of(2273), BudgetPoints.fromUsd(Cents.of(2500), 1.1));
     }
 
 }

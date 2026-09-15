@@ -1,6 +1,7 @@
 package gg.casualchallenge.application.dataprocessor;
 
 import gg.casualchallenge.application.dataprocessor.model.CardPrices;
+import gg.casualchallenge.application.dataprocessor.model.Cents;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonCard;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrinting;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrintingsVO;
@@ -174,9 +175,11 @@ class MtgJsonClientTest {
         CardPrices solRing = pricesByCardName.get("Sol Ring");
         assertEquals(3, solRing.getEur().getPrintingCount());
         assertEquals(2, solRing.getEur().getFlatPrintingCount());
-        assertEquals(2.0, solRing.getEur().average());
+        assertEquals(Cents.of(400), solRing.getEur().sumOfCheapest());
+        assertEquals(2, solRing.getEur().pricedDays());
         assertEquals(2, solRing.getUsd().getPrintingCount());
-        assertEquals(0.0, solRing.getUsd().average());
+        assertEquals(Cents.of(0), solRing.getUsd().sumOfCheapest());
+        assertEquals(0, solRing.getUsd().pricedDays());
     }
 
     private static InputStream toStream(String json) {

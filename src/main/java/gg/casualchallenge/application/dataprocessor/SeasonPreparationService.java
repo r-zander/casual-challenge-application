@@ -8,6 +8,7 @@ import gg.casualchallenge.application.common.RomanNumeral;
 import gg.casualchallenge.application.common.SeasonDates;
 import gg.casualchallenge.application.dataprocessor.model.BudgetPointsVO;
 import gg.casualchallenge.application.dataprocessor.model.CardPrices;
+import gg.casualchallenge.application.dataprocessor.model.Cents;
 import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
 import gg.casualchallenge.application.dataprocessor.model.MetaSharesVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonCard;
@@ -15,6 +16,7 @@ import gg.casualchallenge.application.dataprocessor.model.MtgJsonPricesVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrintingsVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonSet;
 import gg.casualchallenge.application.dataprocessor.model.PreparedSeasonVO;
+import gg.casualchallenge.application.dataprocessor.model.PriceSeries;
 import gg.casualchallenge.application.dataprocessor.model.PriceWindowVO;
 import gg.casualchallenge.application.dataprocessor.model.SeasonPreparationState;
 import gg.casualchallenge.application.dataprocessor.model.Staple;
@@ -38,8 +40,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -75,6 +82,12 @@ public class SeasonPreparationService {
     // Cards above this are out of reach anyway, so the Scryfall decks don't bother listing them
     private static final int MAX_BUDGET_POINTS = 2500;
 
+    private static final int EXCHANGE_RATE_SCALE = 6;
+
+    private static final String SEASON_DIRECTORY_PREFIX = "season-";
+    private static final String REQUEST_FILE = "request.json";
+    private static final String STAPLES_FILE = "staples.json";
+
     private static final Set<String> PLAYABLE_SET_TYPES = Set.of("expansion", "core", "masters", "draft_innovation", "commander");
 
     private final MtgJsonClient mtgJsonClient;
@@ -86,6 +99,8 @@ public class SeasonPreparationService {
     private final SeasonDraftRepository seasonDraftRepository;
     private final ObjectMapper objectMapper;
     private final int priceWindowDays;
+    private final Path archiveDirectory;
+    private final int archivedSeasons;
 
     private final ExecutorService jobExecutor = Executors.newSingleThreadExecutor(new ThreadFactory() {
         @Override
@@ -106,7 +121,9 @@ public class SeasonPreparationService {
             CardSeasonDataRepository cardSeasonDataRepository,
             SeasonDraftRepository seasonDraftRepository,
             ObjectMapper objectMapper,
-            @Value("${casual-challenge.season.price-window-days}") int priceWindowDays
+            @Value("${casual-challenge.season.price-window-days}") int priceWindowDays,
+            @Value("${casual-challenge.season.archive-directory}") String archiveDirectory,
+            @Value("${casual-challenge.season.archived-seasons}") int archivedSeasons
     ) {
         this.mtgJsonClient = mtgJsonClient;
         this.mtgGoldfishClient = mtgGoldfishClient;
@@ -117,6 +134,8 @@ public class SeasonPreparationService {
         this.seasonDraftRepository = seasonDraftRepository;
         this.objectMapper = objectMapper;
         this.priceWindowDays = priceWindowDays;
+        this.archiveDirectory = Paths.get(archiveDirectory);
+        this.archivedSeasons = archivedSeasons;
     }
 
     public synchronized SeasonPreparationJobVO prepare(SeasonPreparationRequestVO request) {
@@ -213,8 +232,10 @@ public class SeasonPreparationService {
             throw new IllegalStateException("There is no current season to continue.");
         }
 
+        Path seasonArchive = createArchive(currentSeason.getSeasonNumber() + 1, request);
+
         startStep(1, "Reading AllPrintings.json");
-        MtgJsonPrintingsVO printings = mtgJsonClient.fetchPrintings();
+        MtgJsonPrintingsVO printings = mtgJsonClient.fetchPrintings(seasonArchive);
         LocalDate lastPricedDay = printings.getMetaDate();
         if (lastPricedDay != null && request.getPriceWindow().getEnd().isAfter(lastPricedDay.plusDays(1))) {
             throw new IllegalStateException("MTGJSON has prices until " + lastPricedDay + ", the price window ends " + request.getPriceWindow().getEnd()
@@ -223,11 +244,12 @@ public class SeasonPreparationService {
         if (cancelRequested.get()) return null;
 
         startStep(2, "Reading AllPrices.json");
-        MtgJsonPricesVO prices = mtgJsonClient.fetchPrices(printings.getPrintingsByUuid(), request.getPriceWindow());
+        MtgJsonPricesVO prices = mtgJsonClient.fetchPrices(printings.getPrintingsByUuid(), request.getPriceWindow(), seasonArchive);
         if (cancelRequested.get()) return null;
 
         startStep(3, "Reading meta shares from " + request.getMetaSource());
         MetaSharesVO metaShares = fetchMetaShares(request);
+        writeArchiveFile(seasonArchive, STAPLES_FILE, metaShares);
         if (cancelRequested.get()) return null;
 
         startStep(4, "Calculating budget points and assembling the draft - the big step");
@@ -245,6 +267,7 @@ public class SeasonPreparationService {
         startStep(5, "Storing the season draft");
         SeasonDraftVO draft = toDraft(preparedSeason.getReport(), printings, request, currentSeason);
         seasonDraftRepository.replace(draft, preparedSeason.getCards());
+        pruneArchive(archiveDirectory, archivedSeasons);
         log.info("{} / {} | All done. Season {} is ready for review with {} cards.", TOTAL_STEPS, TOTAL_STEPS, draft.getSeasonNumber(), preparedSeason.getCards().size());
 
         return draft;
@@ -295,6 +318,69 @@ public class SeasonPreparationService {
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Couldn't write the report for season " + report.getSeasonNumber() + ".", e);
         }
+    }
+
+    private Path createArchive(int seasonNumber, SeasonPreparationRequestVO request) {
+        if (archivedSeasons <= 0) return null;
+
+        Path seasonDirectory = archiveDirectory.resolve(SEASON_DIRECTORY_PREFIX + seasonNumber);
+        try {
+            Files.createDirectories(seasonDirectory);
+        } catch (IOException e) {
+            throw new RuntimeException("Couldn't create the season archive '" + seasonDirectory + "'.", e);
+        }
+
+        log.info("Keeping the raw input of this run in '{}'.", seasonDirectory);
+        writeArchiveFile(seasonDirectory, REQUEST_FILE, request);
+
+        return seasonDirectory;
+    }
+
+    private void writeArchiveFile(Path seasonDirectory, String fileName, Object content) {
+        if (seasonDirectory == null) return;
+
+        try {
+            objectMapper.writeValue(seasonDirectory.resolve(fileName).toFile(), content);
+        } catch (IOException e) {
+            throw new RuntimeException("Couldn't write '" + fileName + "' to '" + seasonDirectory + "'.", e);
+        }
+    }
+
+    // The season we just wrote is the newest one, so it always survives
+    public static void pruneArchive(Path archiveDirectory, int archivedSeasons) {
+        if (archivedSeasons <= 0) return;
+
+        try {
+            List<Path> seasonDirectories = new ArrayList<>();
+            try (DirectoryStream<Path> directories = Files.newDirectoryStream(archiveDirectory, SEASON_DIRECTORY_PREFIX + "*")) {
+                for (Path directory : directories) {
+                    if (Files.isDirectory(directory)) seasonDirectories.add(directory);
+                }
+            }
+
+            seasonDirectories.sort(Comparator.comparingInt(SeasonPreparationService::seasonNumberOf).reversed());
+            for (int index = archivedSeasons; index < seasonDirectories.size(); index++) {
+                deleteArchive(seasonDirectories.get(index));
+            }
+        } catch (IOException e) {
+            log.warn("Couldn't clean up the season archive '{}'.", archiveDirectory, e);
+        }
+    }
+
+    private static int seasonNumberOf(Path seasonDirectory) {
+        String seasonNumber = seasonDirectory.getFileName().toString().substring(SEASON_DIRECTORY_PREFIX.length());
+        if (!seasonNumber.matches("[0-9]+")) return 0; // whatever that is, it is the first to go
+
+        return Integer.parseInt(seasonNumber);
+    }
+
+    private static void deleteArchive(Path seasonDirectory) throws IOException {
+        try (DirectoryStream<Path> files = Files.newDirectoryStream(seasonDirectory)) {
+            for (Path file : files) {
+                Files.delete(file);
+            }
+        }
+        Files.delete(seasonDirectory);
     }
 
     public static PreparedSeasonVO assemble(
@@ -349,7 +435,8 @@ public class SeasonPreparationService {
 
             Map<MtgFormat, BigDecimal> ban = metaShares.findBan(cardName);
             Map<MtgFormat, BigDecimal> extendedBan = metaShares.findExtendedBan(cardName);
-            Integer cardBudgetPoints = budgetPoints.getBudgetPointsByCardName().get(cardName);
+            Cents cardPrice = budgetPoints.getPricesByCardName().get(cardName);
+            Integer cardBudgetPoints = cardPrice != null ? cardPrice.toBudgetPoints() : null;
             cards.add(new SeasonDraftCardVO(
                     card.getOracleId(),
                     previousOracleId,
@@ -402,8 +489,8 @@ public class SeasonPreparationService {
     }
 
     private static BudgetPointsVO calculateBudgetPoints(MtgJsonPrintingsVO printings, Map<String, CardPrices> pricesByCardName) {
-        Map<String, Integer> eurCentsByCardName = new HashMap<>(printings.getCardsByName().size());
-        Map<String, Integer> usdCentsByCardName = new HashMap<>(printings.getCardsByName().size());
+        Map<String, Cents> eurPricesByCardName = new HashMap<>(printings.getCardsByName().size());
+        Map<String, Cents> usdPricesByCardName = new HashMap<>(printings.getCardsByName().size());
         double totalExchangeRate = 0;
         int exchangeRateCount = 0;
 
@@ -411,17 +498,16 @@ public class SeasonPreparationService {
             CardPrices cardPrices = pricesByCardName.get(cardName);
             // Basics are free and their prices would only spoil the exchange rate
             if (CasualChallengeRules.isBasicLand(cardName) || cardPrices == null) {
-                eurCentsByCardName.put(cardName, 0);
-                usdCentsByCardName.put(cardName, 0);
+                eurPricesByCardName.put(cardName, Cents.of(0));
+                usdPricesByCardName.put(cardName, Cents.of(0));
                 continue;
             }
 
-            double eurAverage = cardPrices.getEur().average();
-            double usdAverage = cardPrices.getUsd().average();
-            eurCentsByCardName.put(cardName, BudgetPoints.fromAverage(eurAverage));
-            usdCentsByCardName.put(cardName, BudgetPoints.fromAverage(usdAverage));
+            eurPricesByCardName.put(cardName, BudgetPoints.fromSeries(cardPrices.getEur()));
+            usdPricesByCardName.put(cardName, BudgetPoints.fromSeries(cardPrices.getUsd()));
+            double eurAverage = averageCents(cardPrices.getEur());
             if (eurAverage > 0) {
-                totalExchangeRate += usdAverage / eurAverage;
+                totalExchangeRate += averageCents(cardPrices.getUsd()) / eurAverage;
                 exchangeRateCount++;
             }
         }
@@ -431,18 +517,25 @@ public class SeasonPreparationService {
         log.info("Average exchange rate is {}, adjusted to {}.", exchangeRate, adjustedExchangeRate);
 
         int pricesFixedByExchangeRate = 0;
-        for (Map.Entry<String, Integer> entry : eurCentsByCardName.entrySet()) {
-            if (entry.getValue() != 0) continue;
+        for (Map.Entry<String, Cents> entry : eurPricesByCardName.entrySet()) {
+            if (entry.getValue().getAmount() != 0) continue;
 
-            int usdCents = usdCentsByCardName.get(entry.getKey());
-            if (usdCents == 0) continue;
+            Cents usdPrice = usdPricesByCardName.get(entry.getKey());
+            if (usdPrice.getAmount() == 0) continue;
 
-            entry.setValue(BudgetPoints.fromUsd(usdCents, adjustedExchangeRate));
+            entry.setValue(BudgetPoints.fromUsd(usdPrice, adjustedExchangeRate));
             pricesFixedByExchangeRate++;
         }
         log.info("Fixed {} card prices with the exchange rate.", pricesFixedByExchangeRate);
 
-        return new BudgetPointsVO(eurCentsByCardName, exchangeRate, adjustedExchangeRate, pricesFixedByExchangeRate);
+        return new BudgetPointsVO(eurPricesByCardName, exchangeRate, adjustedExchangeRate, pricesFixedByExchangeRate);
+    }
+
+    // The exchange rate is a ratio and stays a double, but the two averages it divides are still counted to the cent
+    private static double averageCents(PriceSeries series) {
+        if (series.pricedDays() == 0) return 0;
+
+        return BigDecimal.valueOf(series.sumOfCheapest().getAmount()).divide(BigDecimal.valueOf(series.pricedDays()), EXCHANGE_RATE_SCALE, RoundingMode.HALF_EVEN).doubleValue();
     }
 
     private static SeasonDraftReportVO buildReport(

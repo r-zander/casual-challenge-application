@@ -7,46 +7,50 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class PriceSeriesTest {
 
     @Test
-    void testAverage() {
+    void testSumOfCheapest() {
         PriceSeries priceSeries = new PriceSeries(4);
-        priceSeries.addPrinting(new double[]{1.0, 4.0, Double.NaN, Double.NaN});
-        priceSeries.addPrinting(new double[]{2.0, 3.0, 5.0, Double.NaN});
+        priceSeries.addPrinting(new Cents[]{Cents.of(100), Cents.of(400), null, null});
+        priceSeries.addPrinting(new Cents[]{Cents.of(200), Cents.of(300), Cents.of(500), null});
 
         assertEquals(2, priceSeries.getPrintingCount());
         assertEquals(0, priceSeries.getFlatPrintingCount());
-        assertEquals(3.0, priceSeries.average());
+        assertEquals(Cents.of(900), priceSeries.sumOfCheapest());
+        assertEquals(3, priceSeries.pricedDays());
     }
 
     @Test
-    void testAverage_withFlatPrinting() {
+    void testSumOfCheapest_withFlatPrinting() {
         PriceSeries priceSeries = new PriceSeries(3);
-        priceSeries.addPrinting(new double[]{1.0, 2.0, Double.NaN});
-        priceSeries.addPrinting(new double[]{0.5, 0.5, 0.5});
+        priceSeries.addPrinting(new Cents[]{Cents.of(100), Cents.of(200), null});
+        priceSeries.addPrinting(new Cents[]{Cents.of(50), Cents.of(50), Cents.of(50)});
 
         assertEquals(2, priceSeries.getPrintingCount());
         assertEquals(1, priceSeries.getFlatPrintingCount());
-        assertEquals(1.5, priceSeries.average());
+        assertEquals(Cents.of(300), priceSeries.sumOfCheapest());
+        assertEquals(2, priceSeries.pricedDays());
     }
 
     @Test
-    void testAverage_withOnlyFlatPrintings() {
+    void testSumOfCheapest_withOnlyFlatPrintings() {
         PriceSeries priceSeries = new PriceSeries(3);
-        priceSeries.addPrinting(new double[]{2.0, 2.0, Double.NaN});
-        priceSeries.addPrinting(new double[]{Double.NaN, 1.0, 1.0});
+        priceSeries.addPrinting(new Cents[]{Cents.of(200), Cents.of(200), null});
+        priceSeries.addPrinting(new Cents[]{null, Cents.of(100), Cents.of(100)});
 
         assertEquals(2, priceSeries.getFlatPrintingCount());
-        assertEquals(4.0 / 3, priceSeries.average());
+        assertEquals(Cents.of(400), priceSeries.sumOfCheapest());
+        assertEquals(3, priceSeries.pricedDays());
     }
 
     @Test
-    void testAverage_withEmptyPrinting() {
+    void testSumOfCheapest_withEmptyPrinting() {
         PriceSeries priceSeries = new PriceSeries(3);
-        priceSeries.addPrinting(new double[]{1.0, 1.0, 1.0});
-        priceSeries.addPrinting(new double[]{Double.NaN, Double.NaN, Double.NaN});
+        priceSeries.addPrinting(new Cents[]{Cents.of(100), Cents.of(100), Cents.of(100)});
+        priceSeries.addPrinting(new Cents[]{null, null, null});
 
         assertEquals(2, priceSeries.getPrintingCount());
         assertEquals(1, priceSeries.getFlatPrintingCount());
-        assertEquals(0.0, priceSeries.average());
+        assertEquals(Cents.of(0), priceSeries.sumOfCheapest());
+        assertEquals(0, priceSeries.pricedDays());
     }
 
 }

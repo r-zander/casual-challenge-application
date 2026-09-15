@@ -6,6 +6,7 @@ import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import gg.casualchallenge.application.dataprocessor.model.CardPrices;
+import gg.casualchallenge.application.dataprocessor.model.Cents;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonCard;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrinting;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPricesVO;
@@ -34,7 +35,6 @@ import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -90,27 +90,29 @@ public class MtgJsonClient {
         }
     }
 
-    public MtgJsonPrintingsVO fetchPrintings() {
-        Path directory = createDownloadDirectory();
+    /** @param archiveDirectory null = download into a temp directory and throw the file away afterwards */
+    public MtgJsonPrintingsVO fetchPrintings(Path archiveDirectory) {
+        Path directory = archiveDirectory != null ? archiveDirectory : createDownloadDirectory();
         try (ZipInputStream zipStream = new ZipInputStream(new BufferedInputStream(Files.newInputStream(download(PRINTINGS_ZIP, directory))))) {
             positionOnEntry(zipStream, PRINTINGS_FILE);
             return readPrintings(zipStream);
         } catch (IOException e) {
             throw new RuntimeException("Couldn't read '" + PRINTINGS_FILE + "'.", e);
         } finally {
-            deleteDownload(directory, PRINTINGS_ZIP);
+            if (archiveDirectory == null) deleteDownload(directory, PRINTINGS_ZIP);
         }
     }
 
-    public MtgJsonPricesVO fetchPrices(Map<String, MtgJsonPrinting> printingsByUuid, PriceWindowVO window) {
-        Path directory = createDownloadDirectory();
+    /** @param archiveDirectory null = download into a temp directory and throw the file away afterwards */
+    public MtgJsonPricesVO fetchPrices(Map<String, MtgJsonPrinting> printingsByUuid, PriceWindowVO window, Path archiveDirectory) {
+        Path directory = archiveDirectory != null ? archiveDirectory : createDownloadDirectory();
         try (ZipInputStream zipStream = new ZipInputStream(new BufferedInputStream(Files.newInputStream(download(PRICES_ZIP, directory))))) {
             positionOnEntry(zipStream, PRICES_FILE);
             return readPrices(zipStream, printingsByUuid, window);
         } catch (IOException e) {
             throw new RuntimeException("Couldn't read '" + PRICES_FILE + "'.", e);
         } finally {
-            deleteDownload(directory, PRICES_ZIP);
+            if (archiveDirectory == null) deleteDownload(directory, PRICES_ZIP);
         }
     }
 
@@ -496,9 +498,8 @@ public class MtgJsonClient {
         }
     }
 
-    private static double[] readPricesPerDay(JsonParser parser, PriceWindowVO window, boolean[] pricedDays) throws IOException {
-        double[] pricesPerDay = new double[window.length()];
-        Arrays.fill(pricesPerDay, Double.NaN);
+    private static Cents[] readPricesPerDay(JsonParser parser, PriceWindowVO window, boolean[] pricedDays) throws IOException {
+        Cents[] centsPerDay = new Cents[window.length()];
 
         while (parser.nextToken() != JsonToken.END_OBJECT) {
             LocalDate date = LocalDate.parse(parser.currentName());
@@ -510,11 +511,11 @@ public class MtgJsonClient {
             int dayIndex = window.dayIndex(date);
             if (dayIndex < 0) continue;
 
-            pricesPerDay[dayIndex] = parser.getDoubleValue();
+            centsPerDay[dayIndex] = Cents.fromPrice(parser.getDecimalValue());
             pricedDays[dayIndex] = true;
         }
 
-        return pricesPerDay;
+        return centsPerDay;
     }
 
     private static MtgJsonCard toCard(IdentityCandidate identity) {

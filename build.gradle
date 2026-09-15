@@ -54,6 +54,8 @@ dependencies {
 
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'io.zonky.test:embedded-postgres:2.2.2'
+    testImplementation platform('io.zonky.test.postgres:embedded-postgres-binaries-bom:16.15.0') // same major version as the server
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

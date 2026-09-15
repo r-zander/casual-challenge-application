@@ -29,7 +29,8 @@ public class CliTools {
                 System.out.println(Base64.getEncoder().encodeToString(secretKey.getEncoded()));
                 break;
             }
-            case "generate-jwt": {
+            case "generate-jwt":
+            case "generate-admin-jwt": {
                 if (args.length < 2) {
                     System.err.println("Please provide a name that's used as jwt username as 2nd parameter, e.g. 'discord-bot'.");
                     return;
@@ -41,7 +42,7 @@ public class CliTools {
                 String secretKey = Files.readString(secretFile).trim();
 
                 JwtService jwtService = new JwtService(secretKey);
-                String token = jwtService.generateToken(args[1]);
+                String token = jwtService.generateToken(args[1], command.equals("generate-admin-jwt"));
                 System.out.println("Token: " + token);
                 System.out.println(jwtService.extractClaims(token));
                 System.out.println(jwtService.validateToken(token));

@@ -1,6 +1,7 @@
 package gg.casualchallenge.application.api.security.ratelimit;
 
 import gg.casualchallenge.application.api.security.JwtService;
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,8 +33,9 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             String token = authorizationHeader.substring(7);
 
             try {
-                String username = jwtService.extractClaims(token).getSubject(); // Extract username from JWT
-                if (!rateLimiterService.consumeToken(username)) {
+                Claims claims = jwtService.extractClaims(token);
+                String username = claims.getSubject(); // Extract username from JWT
+                if (!jwtService.isAdmin(claims) && !rateLimiterService.consumeToken(username)) { // admins are not rate limited
                     response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
                     response.getWriter().write("Rate limit exceeded for user: " + username);
                     return;

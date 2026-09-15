@@ -37,6 +37,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests((authorize) -> authorize
+                        .requestMatchers("/admin/**").hasRole("ADMIN") // season management needs an admin token
                         .requestMatchers("/v1/**").authenticated() // API itself needs authentication
                         .anyRequest().permitAll() // everything else (documentation, swagger-ui, landing page, error pages etc can be access freely)
                 )

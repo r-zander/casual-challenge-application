@@ -14,6 +14,8 @@ import java.util.Date;
 @Component
 public class JwtService {
 
+    private static final String CLAIM_ADMIN = "admin";
+
     private final byte[] secretKeyBytes;
 
     public JwtService(@Value("${casual-challenge.security.jwt.secret-key}") String secretKey) {
@@ -21,10 +23,19 @@ public class JwtService {
     }
 
     public String generateToken(String username) {
+        return generateToken(username, false);
+    }
+
+    public String generateToken(String username, boolean isAdmin) {
+        LocalDateTime expiration = isAdmin
+                ? LocalDateTime.now().plusYears(1) // an admin token can't be revoked, so don't let it live until 2031
+                : LocalDateTime.now().plusYears(5);
+
         return Jwts.builder()
                 .setSubject(username)
                 .setIssuedAt(new Date())
-                .setExpiration(Date.from(LocalDateTime.now().plusYears(5).toInstant(Constants.TIMEZONE)))
+                .setExpiration(Date.from(expiration.toInstant(Constants.TIMEZONE)))
+                .claim(CLAIM_ADMIN, isAdmin)
                 .signWith(Keys.hmacShaKeyFor(this.secretKeyBytes), SignatureAlgorithm.HS256)
                 .compact();
     }
@@ -35,6 +46,10 @@ public class JwtService {
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
+    }
+
+    public boolean isAdmin(Claims claims) {
+        return Boolean.TRUE.equals(claims.get(CLAIM_ADMIN, Boolean.class)); // no claim --> not an admin, so old tokens keep working
     }
 
     public boolean validateToken(String token) {

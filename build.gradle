@@ -60,7 +60,10 @@ dependencies {
 }
 
 tasks.named('test') {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'replay'
+    }
+    systemProperty 'ot.epg.working-dir', layout.buildDirectory.dir('embedded-pg').get().asFile // the deploy user's /tmp may be mounted noexec
 }
 
 configurations {
@@ -74,5 +77,21 @@ dependencies {
 tasks {
     test {
         jvmArgs += "-javaagent:${configurations.mockitoAgent.asPath}"
+    }
+}
+
+// The golden replays against the old python tooling. They need the local MTGJSON dumps, see SeasonReplayTest.
+tasks.register('replayTest', Test) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'replay'
+    }
+    systemProperty 'replay.dir', System.getProperty('replay.dir', '')
+    maxHeapSize = '1g'
+    timeout = java.time.Duration.ofHours(1)
+    jvmArgs += "-javaagent:${configurations.mockitoAgent.asPath}"
+    testLogging {
+        showStandardStreams = true
     }
 }

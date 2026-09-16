@@ -27,7 +27,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/admin/v1")
-@Tag(name = "Season draft", description = "The stored result of a preparation. Read the report, download the three migrations, then commit the draft or throw it away. There is only ever one open draft, a new preparation replaces it; committed ones stay in the table as the audit trail.")
+@Tag(name = "Season draft", description = "The stored result of a preparation. Read the report, download the three migrations, then commit the draft or throw it away. There is only ever one open draft, a new preparation replaces it. Committed ones stay in the table, they are the only record of a season start.")
 public class SeasonDraftControllerV1 {
 
     private final SeasonDraftService seasonDraftService;
@@ -96,7 +96,7 @@ public class SeasonDraftControllerV1 {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(
             summary = "Throw the draft away",
-            description = "Nothing that is live gets touched, the draft row is simply gone. Refuses with 409 if there is no draft, or if it was committed already - a committed draft stays as the audit trail."
+            description = "Nothing that is live gets touched, the draft row is simply gone. Refuses with 409 if there is no draft, or if it was committed already - a committed draft stays, it is the only record of a season start."
     )
     public void discardSeasonDraft() {
         try {

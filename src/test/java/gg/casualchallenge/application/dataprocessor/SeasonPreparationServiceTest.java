@@ -451,7 +451,7 @@ class SeasonPreparationServiceTest {
                 new SeasonPreparationRequestVO(START_DATE, null, null, null, null, null),
                 LocalDate.of(2025, 1, 1), 70, SEASON_DATES);
 
-        assertEquals(LocalDate.of(2026, 11, 22), request.getEndDate());
+        assertEquals(LocalDate.of(2026, 11, 21), request.getEndDate());
     }
 
     @Test

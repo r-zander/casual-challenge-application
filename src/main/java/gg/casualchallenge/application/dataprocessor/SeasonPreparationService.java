@@ -196,7 +196,7 @@ public class SeasonPreparationService {
         if (endDate == null) {
             endDate = seasonDates.defaultEndDate(previousSeasonEnd);
             if (!endDate.isAfter(startDate)) {
-                endDate = seasonDates.defaultEndDate(startDate); // the previous season ended ages ago --> count the season length from the new start instead
+                endDate = seasonDates.defaultEndDate(startDate.minusDays(1)); // the previous season ended ages ago --> count the season length from the new start instead
             }
         }
 

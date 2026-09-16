@@ -161,7 +161,7 @@ public class SeasonDraftService {
         renamedCards.addAll(report.getRenamedCards());
         renamedCards.addAll(report.getNormalizedNameFixes());
         for (SeasonDraftReportVO.RenamedCardVO renamedCard : renamedCards) {
-            if (renamedCard.getPreviousNormalizedName() == null) { // a report from before that field existed --> the UPDATE would be written with a NULL in it
+            if (renamedCard.getPreviousNormalizedName() == null) { // a report from before that field existed, the UPDATE would be written with a NULL in it
                 throw new IllegalStateException("The draft for season " + draft.getSeasonNumber() + " was prepared by an older build, prepare it again.");
             }
         }

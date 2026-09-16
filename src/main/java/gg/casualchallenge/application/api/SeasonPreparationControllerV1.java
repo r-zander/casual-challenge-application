@@ -39,7 +39,8 @@ import java.util.List;
         + "- GET here until the state is DONE\n"
         + "- GET /admin/v1/season/draft for the report\n"
         + "- download the three sql files\n"
-        + "- POST /admin/v1/season/commit")
+        + "- POST /admin/v1/season/commit\n"
+        + "- DELETE here to give up on a running preparation, DELETE the draft to throw a finished one away")
 public class SeasonPreparationControllerV1 {
 
     private final SeasonPreparationService seasonPreparationService;
@@ -57,16 +58,16 @@ public class SeasonPreparationControllerV1 {
     @ResponseStatus(HttpStatus.ACCEPTED)
     @Operation(
             summary = "Start preparing the next season",
-            description = "Answers right away with the status, the work happens in the background. 409 while another preparation is still running. 400 when the dates don't work out or metaSource=files comes without the two files. Every parameter is optional, the defaults are with the parameters."
+            description = "Answers right away with the status, the work happens in the background. 409 while another preparation is still running. 400 when the dates don't work out, metaSource is none of the three or metaSource=files comes without the two files. Every parameter is optional, the defaults are with the parameters."
     )
     public SeasonPreparationStatusResponse prepareSeason(
-            @Parameter(description = "First day of the new season. Defaults to today (UTC).")
+            @Parameter(description = "First day of the new season, today (UTC) if you leave it out.")
             @RequestParam(required = false) LocalDate startDate,
             @Parameter(description = "Last day of the new season. Defaults to the end of the current season plus casual-challenge.season.length-in-weeks (10 weeks).")
             @RequestParam(required = false) LocalDate endDate,
             @Parameter(description = "First day whose prices count. Defaults to casual-challenge.season.price-window-days (70) before the start date.")
             @RequestParam(required = false) LocalDate priceWindowStart,
-            @Parameter(description = "Exclusive end of the price window. Defaults to the start date.")
+            @Parameter(description = "Exclusive end of the price window, the start date if you leave it out.")
             @RequestParam(required = false) LocalDate priceWindowEnd,
             @Parameter(description = "Where the tournament staples come from - mtggoldfish, mtgtop8 or files. Defaults to mtggoldfish.")
             @RequestParam(required = false) MetaShareSource metaSource,
@@ -105,7 +106,7 @@ public class SeasonPreparationControllerV1 {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(
             summary = "Cancel the running preparation",
-            description = "The preparation only gives up between steps, so this is not instant. Nothing lands in the database --> nothing to clean up, the downloaded MTGJSON files stay in the archive. Answers 204 even when nothing is running."
+            description = "The preparation only gives up between steps, so this is not instant. Nothing lands in the database, so there is nothing to clean up - the downloaded MTGJSON files stay in the archive. Answers 204 even when nothing is running."
     )
     public void cancelSeasonPreparation() {
         this.seasonPreparationService.cancel();

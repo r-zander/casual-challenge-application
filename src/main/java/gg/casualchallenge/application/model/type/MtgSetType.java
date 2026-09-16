@@ -35,7 +35,7 @@ public enum MtgSetType {
         try {
             return valueOf(setType.toUpperCase());
         } catch (IllegalArgumentException e) {
-            // A new set type could be another joke set, and those must not win the card identity --> stop instead of guessing
+            // A new set type could be another joke set, and those must not win the card identity, so stop instead of guessing
             throw new IllegalArgumentException("MTGJSON came up with the set type '" + setType + "'. Add it here and decide whether it belongs into MtgJsonClient.IGNORED_SET_TYPES.", e);
         }
     }

@@ -72,7 +72,7 @@ public class PriceSeries {
         return dayCount;
     }
 
-    // A price that never moves is an anomaly --> the flat printings only count when there is no other printing to fall back on
+    // A price that never moves is an anomaly, so the flat printings only count when there is no other printing to fall back on
     private long[] cheapestOfEveryDay() {
         return flatPrintingCount < printingCount ? cheapestPerDay : cheapestFlatPerDay;
     }

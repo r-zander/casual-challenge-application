@@ -414,6 +414,47 @@ class SeasonPreparationServiceTest {
     }
 
     @Test
+    void testWithDefaults() {
+        SeasonPreparationRequestVO request = SeasonPreparationService.withDefaults(
+                new SeasonPreparationRequestVO(START_DATE, null, null, null, null, null),
+                LocalDate.of(2026, 9, 12), 70, SEASON_DATES);
+
+        assertEquals(START_DATE, request.getStartDate());
+        assertEquals(END_DATE, request.getEndDate());
+        assertEquals(LocalDate.of(2026, 7, 5), request.getPriceWindow().getStart());
+        assertEquals(START_DATE, request.getPriceWindow().getEnd());
+        assertEquals(MetaShareSource.MTGGOLDFISH, request.getMetaSource());
+        assertNull(request.getUploadedBans());
+        assertNull(request.getUploadedExtendedBans());
+    }
+
+    @Test
+    void testWithDefaults_withEverythingSet() {
+        List<BanDTO> uploadedBans = List.of(new BanDTO("Lorien Revealed", Map.of(LegacyMtgFormat.PAUPER, new BigDecimal("0.46"))));
+
+        SeasonPreparationRequestVO request = SeasonPreparationService.withDefaults(
+                new SeasonPreparationRequestVO(START_DATE, END_DATE, new PriceWindowVO(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 9, 1)), MetaShareSource.FILES, uploadedBans, List.of()),
+                LocalDate.of(2026, 9, 12), 70, SEASON_DATES);
+
+        assertEquals(START_DATE, request.getStartDate());
+        assertEquals(END_DATE, request.getEndDate());
+        assertEquals(LocalDate.of(2026, 8, 1), request.getPriceWindow().getStart());
+        assertEquals(LocalDate.of(2026, 9, 1), request.getPriceWindow().getEnd());
+        assertEquals(MetaShareSource.FILES, request.getMetaSource());
+        assertEquals(uploadedBans, request.getUploadedBans());
+        assertEquals(List.of(), request.getUploadedExtendedBans());
+    }
+
+    @Test
+    void testWithDefaults_withAnOldSeasonBefore() {
+        SeasonPreparationRequestVO request = SeasonPreparationService.withDefaults(
+                new SeasonPreparationRequestVO(START_DATE, null, null, null, null, null),
+                LocalDate.of(2025, 1, 1), 70, SEASON_DATES);
+
+        assertEquals(LocalDate.of(2026, 11, 22), request.getEndDate());
+    }
+
+    @Test
     void testPruneArchive() throws IOException {
         Path archive = Files.createTempDirectory("season-archive");
         for (int seasonNumber = 17; seasonNumber <= 22; seasonNumber++) {

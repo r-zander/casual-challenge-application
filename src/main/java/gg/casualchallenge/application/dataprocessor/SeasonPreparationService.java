@@ -26,8 +26,8 @@ import gg.casualchallenge.application.model.values.MtgSetVO;
 import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
 import gg.casualchallenge.application.model.values.SeasonDraftReportVO;
 import gg.casualchallenge.application.model.values.SeasonDraftVO;
-import gg.casualchallenge.application.model.values.SeasonPreparationJobVO;
 import gg.casualchallenge.application.model.values.SeasonPreparationRequestVO;
+import gg.casualchallenge.application.model.values.SeasonPreparationStatusVO;
 import gg.casualchallenge.application.persistence.CardRepository;
 import gg.casualchallenge.application.persistence.CardSeasonDataRepository;
 import gg.casualchallenge.application.persistence.SeasonDraftRepository;
@@ -100,7 +100,7 @@ public class SeasonPreparationService {
     private final Path archiveDirectory;
     private final int archivedSeasons;
 
-    private final ExecutorService jobExecutor = Executors.newSingleThreadExecutor(new ThreadFactory() {
+    private final ExecutorService preparationExecutor = Executors.newSingleThreadExecutor(new ThreadFactory() {
         @Override
         public Thread newThread(Runnable runnable) {
             return new Thread(runnable, "season-preparation");
@@ -108,7 +108,7 @@ public class SeasonPreparationService {
     });
     private final AtomicBoolean cancelRequested = new AtomicBoolean(false);
 
-    private volatile SeasonPreparationJobVO job = new SeasonPreparationJobVO(SeasonPreparationState.IDLE, null, null, null, null);
+    private volatile SeasonPreparationStatusVO preparation = new SeasonPreparationStatusVO(SeasonPreparationState.IDLE, null, null, null, null);
 
     public SeasonPreparationService(
             MtgJsonClient mtgJsonClient,
@@ -138,26 +138,36 @@ public class SeasonPreparationService {
         this.archivedSeasons = archivedSeasons;
     }
 
-    public synchronized SeasonPreparationJobVO prepare(SeasonPreparationRequestVO request) {
-        if (!request.getEndDate().isAfter(request.getStartDate())) {
-            throw new IllegalArgumentException("A season that starts on " + request.getStartDate() + " can't end on " + request.getEndDate() + ".");
+    public synchronized SeasonPreparationStatusVO prepare(SeasonPreparationRequestVO request) {
+        Season currentSeason = seasonRepository.findCurrentSeason();
+        if (currentSeason == null) {
+            throw new IllegalStateException("There is no current season to continue.");
         }
-        if (request.getPriceWindow().getEnd().isAfter(request.getStartDate())) {
-            throw new IllegalArgumentException("The price window has to end at the start of the season at the latest, but it ends on " + request.getPriceWindow().getEnd() + ".");
+
+        SeasonPreparationRequestVO fullRequest = withDefaults(request, currentSeason.getEndDate(), priceWindowDays, seasonDates);
+        if (!fullRequest.getEndDate().isAfter(fullRequest.getStartDate())) {
+            throw new IllegalArgumentException("A season that starts on " + fullRequest.getStartDate() + " can't end on " + fullRequest.getEndDate() + ".");
         }
-        if (job.getState() == SeasonPreparationState.RUNNING) {
-            throw new IllegalStateException("A season is already being prepared since " + job.getStartedAt() + ".");
+        if (fullRequest.getPriceWindow().getEnd().isAfter(fullRequest.getStartDate())) {
+            throw new IllegalArgumentException("The price window has to end at the start of the season at the latest, but it ends on " + fullRequest.getPriceWindow().getEnd() + ".");
+        }
+        if (fullRequest.getMetaSource() == MetaShareSource.FILES) {
+            if (fullRequest.getUploadedBans() == null) throw new IllegalArgumentException("The meta source 'files' needs an uploaded 'bans' file.");
+            if (fullRequest.getUploadedExtendedBans() == null) throw new IllegalArgumentException("The meta source 'files' needs an uploaded 'extendedBans' file.");
+        }
+        if (preparation.getState() == SeasonPreparationState.RUNNING) {
+            throw new IllegalStateException("A season is already being prepared since " + preparation.getStartedAt() + ".");
         }
 
         cancelRequested.set(false);
-        job = new SeasonPreparationJobVO(SeasonPreparationState.RUNNING, "Untap, Upkeep, Draw!", LocalDateTime.now(Constants.TIMEZONE), null, null);
-        jobExecutor.submit(() -> runJob(request));
+        preparation = new SeasonPreparationStatusVO(SeasonPreparationState.RUNNING, "Untap, Upkeep, Draw!", LocalDateTime.now(Constants.TIMEZONE), null, null);
+        preparationExecutor.submit(() -> runPreparation(fullRequest));
 
-        return job;
+        return preparation;
     }
 
-    public SeasonPreparationJobVO getJob() {
-        return job;
+    public SeasonPreparationStatusVO status() {
+        return preparation;
     }
 
     public void cancel() {
@@ -166,59 +176,69 @@ public class SeasonPreparationService {
 
     @PreDestroy
     public void shutdown() {
-        cancelRequested.set(true); // the job only gives up between steps, interrupting it alone doesn't help
-        jobExecutor.shutdownNow(); // the executor thread is not a daemon --> the JVM would wait for it on every deploy
+        cancelRequested.set(true); // the preparation only gives up between steps, interrupting it alone doesn't help
+        preparationExecutor.shutdownNow(); // the executor thread is not a daemon --> the JVM would wait for it on every deploy
         try {
-            jobExecutor.awaitTermination(SHUTDOWN_TIMEOUT_IN_SECONDS, TimeUnit.SECONDS);
+            preparationExecutor.awaitTermination(SHUTDOWN_TIMEOUT_IN_SECONDS, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
     }
 
-    public SeasonPreparationRequestVO defaultRequest(LocalDate startDate) {
-        Season currentSeason = seasonRepository.findCurrentSeason();
-        if (currentSeason == null) {
-            throw new IllegalStateException("There is no current season to continue.");
+    public static SeasonPreparationRequestVO withDefaults(
+            SeasonPreparationRequestVO request,
+            LocalDate previousSeasonEnd,
+            int priceWindowDays,
+            SeasonDates seasonDates
+    ) {
+        LocalDate startDate = request.getStartDate() != null ? request.getStartDate() : LocalDate.now(Constants.TIMEZONE);
+        LocalDate endDate = request.getEndDate();
+        if (endDate == null) {
+            endDate = seasonDates.defaultEndDate(previousSeasonEnd);
+            if (!endDate.isAfter(startDate)) {
+                endDate = seasonDates.defaultEndDate(startDate); // the previous season ended ages ago --> count the season length from the new start instead
+            }
         }
 
-        LocalDate endDate = seasonDates.defaultEndDate(currentSeason.getEndDate());
-        if (!endDate.isAfter(startDate)) {
-            endDate = seasonDates.defaultEndDate(startDate); // the previous season ended ages ago --> count the season length from the new start instead
-        }
+        PriceWindowVO defaultPriceWindow = PriceWindowVO.of(startDate, priceWindowDays);
+        PriceWindowVO priceWindow = request.getPriceWindow();
 
         return new SeasonPreparationRequestVO(
                 startDate,
                 endDate,
-                PriceWindowVO.of(startDate, priceWindowDays),
-                MetaShareSource.MTGGOLDFISH,
-                null,
-                null
+                new PriceWindowVO(
+                        priceWindow != null && priceWindow.getStart() != null ? priceWindow.getStart() : defaultPriceWindow.getStart(),
+                        priceWindow != null && priceWindow.getEnd() != null ? priceWindow.getEnd() : defaultPriceWindow.getEnd()
+                ),
+                request.getMetaSource() != null ? request.getMetaSource() : MetaShareSource.MTGGOLDFISH,
+                request.getUploadedBans(),
+                request.getUploadedExtendedBans()
         );
     }
 
-    private void runJob(SeasonPreparationRequestVO request) {
+    private void runPreparation(SeasonPreparationRequestVO request) {
         try {
             log.info("0 / {} | Untap, Upkeep, Draw!", TOTAL_STEPS);
             SeasonDraftVO draft = prepareSeason(request);
             if (draft == null) {
                 log.info("Preparing a new season was cancelled. Nothing was written.");
-                job = new SeasonPreparationJobVO(SeasonPreparationState.CANCELLED, job.getStep(), job.getStartedAt(), LocalDateTime.now(Constants.TIMEZONE), null);
+                preparation = new SeasonPreparationStatusVO(SeasonPreparationState.CANCELLED, preparation.getStep(), preparation.getStartedAt(), LocalDateTime.now(Constants.TIMEZONE), null);
                 return;
             }
 
-            job = new SeasonPreparationJobVO(
+            preparation = new SeasonPreparationStatusVO(
                     SeasonPreparationState.DONE,
                     "Season " + draft.getSeasonNumber() + " is ready for review.",
-                    job.getStartedAt(),
+                    preparation.getStartedAt(),
                     LocalDateTime.now(Constants.TIMEZONE),
                     null
             );
         } catch (Throwable throwable) {
             log.error("Preparing a new season failed.", throwable);
-            job = new SeasonPreparationJobVO(
+            preparation = new SeasonPreparationStatusVO(
                     SeasonPreparationState.FAILED,
-                    job.getStep(),
-                    job.getStartedAt(),
+                    preparation.getStep(),
+                    preparation.getStartedAt(),
                     LocalDateTime.now(Constants.TIMEZONE),
                     throwable.getMessage() != null ? throwable.getMessage() : throwable.toString()
             );
@@ -276,12 +296,12 @@ public class SeasonPreparationService {
 
     private void startStep(int step, String description) {
         log.info("{} / {} | {}", step, TOTAL_STEPS, description);
-        job = new SeasonPreparationJobVO(SeasonPreparationState.RUNNING, description, job.getStartedAt(), null, null);
+        preparation = new SeasonPreparationStatusVO(SeasonPreparationState.RUNNING, description, preparation.getStartedAt(), null, null);
     }
 
     private MetaSharesVO fetchMetaShares(SeasonPreparationRequestVO request) {
         if (request.getMetaSource() == MetaShareSource.FILES) {
-            return MetaSharesVO.fromBanFiles(request.getBans(), request.getExtendedBans());
+            return MetaSharesVO.fromBanFiles(request.getUploadedBans(), request.getUploadedExtendedBans());
         }
 
         MetaGameSourceClient metaGameSourceClient = request.getMetaSource() == MetaShareSource.MTGTOP8 ? mtgTop8Client : mtgGoldfishClient;

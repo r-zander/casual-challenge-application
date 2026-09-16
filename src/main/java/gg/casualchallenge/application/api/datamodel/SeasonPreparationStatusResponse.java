@@ -1,4 +1,4 @@
-package gg.casualchallenge.application.model.values;
+package gg.casualchallenge.application.api.datamodel;
 
 import gg.casualchallenge.application.dataprocessor.model.SeasonPreparationState;
 import lombok.Value;
@@ -6,7 +6,7 @@ import lombok.Value;
 import java.time.LocalDateTime;
 
 @Value
-public class SeasonPreparationJobVO {
+public class SeasonPreparationStatusResponse {
     SeasonPreparationState state;
     String step;
     LocalDateTime startedAt;

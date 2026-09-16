@@ -9,11 +9,11 @@ import java.time.LocalDate;
 import java.util.List;
 
 @Value
-public class SeasonPreparationRequestVO {
+public class SeasonPreparationRequestVO { // everything the caller sent, every field may be null until SeasonPreparationService fills the defaults
     LocalDate startDate;
     LocalDate endDate;
     PriceWindowVO priceWindow;
     MetaShareSource metaSource;
-    List<BanDTO> bans; // only filled when metaSource is FILES
-    List<BanDTO> extendedBans;
+    List<BanDTO> uploadedBans; // only needed when metaSource is FILES
+    List<BanDTO> uploadedExtendedBans;
 }

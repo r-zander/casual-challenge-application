@@ -160,6 +160,11 @@ public class SeasonDraftService {
         List<SeasonDraftReportVO.RenamedCardVO> renamedCards = new ArrayList<>(report.getRenamedCards().size() + report.getNormalizedNameFixes().size());
         renamedCards.addAll(report.getRenamedCards());
         renamedCards.addAll(report.getNormalizedNameFixes());
+        for (SeasonDraftReportVO.RenamedCardVO renamedCard : renamedCards) {
+            if (renamedCard.getPreviousNormalizedName() == null) { // a report from before that field existed --> the UPDATE would be written with a NULL in it
+                throw new IllegalStateException("The draft for season " + draft.getSeasonNumber() + " was prepared by an older build, prepare it again.");
+            }
+        }
 
         return SeasonMigrationSql.addSeason(
                 migrationAuthor,

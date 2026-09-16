@@ -16,4 +16,12 @@ public enum SeasonSqlFile {
         this.part = part;
         this.seasonSuffix = seasonSuffix;
     }
+
+    public static SeasonSqlFile fromPart(String part) {
+        for (SeasonSqlFile seasonSqlFile : values()) {
+            if (seasonSqlFile.part.equals(part)) return seasonSqlFile;
+        }
+
+        return null;
+    }
 }

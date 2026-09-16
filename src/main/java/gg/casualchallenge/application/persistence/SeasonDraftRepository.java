@@ -8,7 +8,7 @@ import gg.casualchallenge.application.persistence.converters.LegalityConverter;
 import gg.casualchallenge.application.persistence.converters.MtgFormatConverter;
 import jakarta.transaction.Transactional;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.sql.ResultSet;
@@ -23,7 +23,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-@Repository
+@Component // not @Repository: the exception translation turns the IllegalStateExceptions below into data access exceptions, and the 409 becomes a 500
 public class SeasonDraftRepository {
 
     private static final int BATCH_SIZE = 1000;

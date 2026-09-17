@@ -13,4 +13,6 @@ public class MtgSetDTO {
     LocalDate releaseDate;
     MtgSetType type;
     List<String> commanderDecks;
+    List<String> childCodes;
+    int newCardCount;
 }

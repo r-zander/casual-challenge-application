@@ -18,6 +18,8 @@ public class SeasonDraftVO {
     String mtgJsonDate;
     String metaSource;
     LocalDateTime preparedAt;
+    String preparedBy;
     LocalDateTime committedAt;
+    String committedBy;
     String report;
 }

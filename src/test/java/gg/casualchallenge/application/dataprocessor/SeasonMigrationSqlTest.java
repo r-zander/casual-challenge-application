@@ -166,6 +166,8 @@ class SeasonMigrationSqlTest {
                 "2026-09-13",
                 "mtggoldfish",
                 PREPARED_AT,
+                "raoul_zander",
+                null,
                 null,
                 "{}");
     }

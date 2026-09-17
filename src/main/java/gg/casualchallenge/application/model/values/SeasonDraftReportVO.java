@@ -3,6 +3,7 @@ package gg.casualchallenge.application.model.values;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
 import lombok.Value;
+import lombok.With;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -26,6 +27,11 @@ public class SeasonDraftReportVO { // everything you need to decide whether the 
     String metaSource;
     int previousSeasonNumber;
     LocalDateTime preparedAt;
+    String preparedBy;
+    @With
+    LocalDateTime committedAt; // the report is stored before the commit, SeasonDraftService fills these two from season_draft
+    @With
+    String committedBy;
     CountsVO counts;
     List<String> duplicateMetaShareNames;
     List<BanChangeVO> newBans;

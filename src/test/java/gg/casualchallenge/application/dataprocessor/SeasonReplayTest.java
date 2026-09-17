@@ -308,7 +308,8 @@ class SeasonReplayTest {
                 PriceWindowVO.of(startDate, PRICE_WINDOW_DAYS),
                 MetaShareSource.FILES,
                 List.of(),
-                List.of()
+                List.of(),
+                null
         );
 
         AssembledDraftVO assembledDraft = SeasonPreparationService.assemble(printings, new MtgJsonPricesVO(pricesByCardName, PRICE_WINDOW_DAYS), metaShares, List.of(), List.of(), request, previousSeason, SEASON_DATES);

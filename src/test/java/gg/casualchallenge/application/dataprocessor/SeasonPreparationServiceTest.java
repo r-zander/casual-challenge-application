@@ -17,6 +17,7 @@ import gg.casualchallenge.application.dataprocessor.model.Staple;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
 import gg.casualchallenge.application.model.type.MtgSetType;
+import gg.casualchallenge.application.model.values.MtgSetVO;
 import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
 import gg.casualchallenge.application.model.values.SeasonDraftReportVO;
 import gg.casualchallenge.application.model.values.SeasonPreparationRequestVO;
@@ -47,6 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SeasonPreparationServiceTest {
 
     private static final UUID ABRADE = UUID.fromString("f9db72dc-9a5b-48a4-a86e-7464d9a2166a");
+    private static final UUID AGENT_MARIA_HILL = UUID.fromString("a2d90efe-80f2-4069-b135-a8bd00ccd2b0");
     private static final UUID ANCESTORS_CHOSEN = UUID.fromString("fc2ccab7-cab1-4463-b73d-898070136d74");
     private static final UUID ANCESTRAL_RECALL = UUID.fromString("550c74d4-1fcb-406a-b02a-639a760a4380");
     private static final UUID ANCIENT_STIRRINGS = UUID.fromString("82f18e7d-5c42-47c4-8e74-3fccc9b7b1f0");
@@ -55,7 +57,10 @@ class SeasonPreparationServiceTest {
     private static final UUID BLACK_LOTUS = UUID.fromString("5089ec1a-f881-4d55-af14-5d996171203b");
     private static final UUID BRAINSTORM = UUID.fromString("36cd2364-d113-47d1-b2c4-b088d9eb88dd");
     private static final UUID CHAOS_ORB = UUID.fromString("edb455f4-8dc9-4b7c-b25c-cb51b7dfbb41");
+    private static final UUID DAWNING_ARCHAIC = UUID.fromString("a3e10b9b-9349-4b44-a46c-c825293dbd05");
     private static final UUID DELVER_OF_SECRETS = UUID.fromString("edd531b9-f615-4399-8c8c-1c5e18c4acbf");
+    private static final UUID DINA_ESSENCE_BREWER = UUID.fromString("f61c1dc4-2f09-4b50-957f-ee656c659072");
+    private static final UUID EMRAKUL_THE_EXIGENT_DOOM = UUID.fromString("4421ab7d-6d9b-4edd-b5a0-53a8ed84da6f");
     private static final UUID FRESH_FACE = UUID.fromString("bb1c9a77-4e6d-4f2a-9b3c-0a1d2e3f4a5b");
     private static final UUID FRESH_FACE_AGAIN = UUID.fromString("3f7d2b91-5a08-4c64-9e17-8d0b6c4a2f35");
     private static final UUID GLIMPSE_THE_UNTHINKABLE = UUID.fromString("552f0163-a19d-4671-888f-044fc0354875");
@@ -66,9 +71,13 @@ class SeasonPreparationServiceTest {
     private static final UUID LAVA_AXE_AGAIN = UUID.fromString("2a9c4d81-6f03-4e57-b214-7d5a8c1e6b90");
     private static final UUID LIGHTNING_BOLT = UUID.fromString("4457ed35-7c10-48c8-9776-456485fdf070");
     private static final UUID LORIEN_REVEALED = UUID.fromString("66f28905-c7fc-4ada-8fa0-199626d9bedb");
+    private static final UUID MONUMENT_TO_ENDURANCE = UUID.fromString("e69e8de4-b521-4888-8074-17f1efe2f345");
     private static final UUID RAGAVAN = UUID.fromString("37108cd4-bbab-4ce3-9ed6-f60e8422e703");
+    private static final UUID RANCOROUS_ARCHAIC = UUID.fromString("6a68fcaf-b1e8-451d-8e1c-b47db55c83cc");
     private static final UUID SOL_RING = UUID.fromString("6ad8011d-3471-4369-9d68-b264cc027487");
+    private static final UUID SUNDERING_ARCHAIC = UUID.fromString("b095526e-94a4-416b-83de-d6271804ccf3");
     private static final UUID SUPERLATORIUM = UUID.fromString("8169a0a2-2e2b-4b07-bee5-6ae535458f17");
+    private static final UUID TRANSCENDENT_ARCHAIC = UUID.fromString("fdd4b3a9-83ce-41bf-82e2-7808657e2c09");
     private static final UUID TRIVIA_CONTEST = UUID.fromString("cc68abf0-e826-4457-ad53-c5a068c088dd");
 
     private static final LocalDate START_DATE = LocalDate.of(2026, 9, 13);
@@ -248,17 +257,8 @@ class SeasonPreparationServiceTest {
 
     @Test
     void testAssemble_report() {
-        List<MtgJsonSet> sets = List.of(
-                new MtgJsonSet("Aetherdrift", "DFT", LocalDate.of(2026, 2, 14), MtgSetType.EXPANSION, null, false, List.of()),
-                new MtgJsonSet("Edge of Eternities", "EOE", LocalDate.of(2026, 10, 2), MtgSetType.EXPANSION, null, false, List.of(
-                        new MtgJsonSet.MtgJsonDeck("Cosmic Conquest", "Commander Deck", LocalDate.of(2026, 10, 2)),
-                        new MtgJsonSet.MtgJsonDeck("Edge of Eternities", "Draft Deck", LocalDate.of(2026, 10, 2))
-                )),
-                new MtgJsonSet("Secret Lair Drop", "SLD", LocalDate.of(2026, 10, 10), MtgSetType.BOX, null, false, List.of()),
-                new MtgJsonSet("Alchemy: Edge of Eternities", "YEOE", LocalDate.of(2026, 10, 15), MtgSetType.EXPANSION, "EOE", true, List.of())
-        );
         MtgJsonPrintingsVO printings = printings(
-                sets,
+                List.of(),
                 card("Brainstorm", BRAINSTORM),
                 card("Ragavan, Nimble Pilferer", RAGAVAN),
                 card("Abrade", ABRADE),
@@ -314,6 +314,9 @@ class SeasonPreparationServiceTest {
         assertEquals(MTGJSON_DATE, report.getMtgJsonDate());
         assertEquals("5.2.2+20260913", report.getMtgJsonVersion());
         assertEquals("mtggoldfish", report.getMetaSource());
+        assertEquals("raoul_zander", report.getPreparedBy());
+        assertNull(report.getCommittedAt());
+        assertNull(report.getCommittedBy());
         assertEquals(8, report.getCounts().getCards());
         assertEquals(0, report.getCounts().getNewCards());
         assertEquals(2, report.getCounts().getCardsWithoutPrice());
@@ -357,12 +360,77 @@ class SeasonPreparationServiceTest {
         assertEquals("flip style", report.getMissingCards().get(0).getReason());
         assertEquals("Bee-Bee Gun", report.getMissingCards().get(1).getName());
         assertEquals("no eligible printing this season, kept as not legal", report.getMissingCards().get(1).getReason());
+    }
 
-        assertEquals(1, report.getSetsReleased().size());
-        assertEquals("Edge of Eternities", report.getSetsReleased().get(0).getName());
-        assertEquals("EOE", report.getSetsReleased().get(0).getCode());
-        assertEquals(MtgSetType.EXPANSION, report.getSetsReleased().get(0).getType());
-        assertEquals(List.of("Cosmic Conquest"), report.getSetsReleased().get(0).getCommanderDecks());
+    @Test
+    void testAssemble_setsReleased() {
+        LocalDate strixhavenRelease = LocalDate.of(2026, 4, 24);
+        LocalDate marvelRelease = LocalDate.of(2026, 6, 26);
+        List<MtgJsonSet> sets = List.of(
+                new MtgJsonSet("Aetherdrift", "DFT", LocalDate.of(2025, 2, 14), MtgSetType.EXPANSION, null, false, List.of()),
+                new MtgJsonSet("Reality Fracture", "FRA", LocalDate.of(2026, 10, 2), MtgSetType.EXPANSION, null, false, List.of()),
+                new MtgJsonSet("Marvel Super Heroes", "MSH", marvelRelease, MtgSetType.EXPANSION, null, false, List.of()),
+                new MtgJsonSet("Secrets of Strixhaven Promos", "PSOS", strixhavenRelease, MtgSetType.PROMO, "SOS", false, List.of()),
+                new MtgJsonSet("The Zeta Set", "SLZ", LocalDate.of(2026, 9, 2), MtgSetType.BOX, null, false, List.of()),
+                new MtgJsonSet("Secrets of Strixhaven Commander", "SOC", strixhavenRelease, MtgSetType.COMMANDER, "SOS", false, List.of(
+                        new MtgJsonSet.MtgJsonDeck("Lorehold Spirit", "Commander Deck", strixhavenRelease),
+                        new MtgJsonSet.MtgJsonDeck("Prismari Artistry", "Commander Deck", strixhavenRelease)
+                )),
+                new MtgJsonSet("Secrets of Strixhaven", "SOS", strixhavenRelease, MtgSetType.EXPANSION, null, false, List.of(
+                        new MtgJsonSet.MtgJsonDeck("Lifegain", "Theme Deck", strixhavenRelease)
+                ))
+        );
+        MtgJsonPrintingsVO printings = printings(
+                sets,
+                new MtgJsonCard("Monument to Endurance", MONUMENT_TO_ENDURANCE, true, false, null, "DFT", LocalDate.of(2025, 2, 14)),
+                new MtgJsonCard("Emrakul, the Exigent Doom", EMRAKUL_THE_EXIGENT_DOOM, false, false, null, "FRA", LocalDate.of(2026, 10, 2)),
+                new MtgJsonCard("Agent Maria Hill", AGENT_MARIA_HILL, true, false, null, "MSH", marvelRelease),
+                new MtgJsonCard("The Dawning Archaic", DAWNING_ARCHAIC, true, false, null, "PSOS", strixhavenRelease),
+                new MtgJsonCard("Dina, Essence Brewer", DINA_ESSENCE_BREWER, true, false, null, "SOC", strixhavenRelease),
+                new MtgJsonCard("Sundering Archaic", SUNDERING_ARCHAIC, true, false, null, "SOS", strixhavenRelease),
+                new MtgJsonCard("Rancorous Archaic", RANCOROUS_ARCHAIC, true, false, null, "SOS", strixhavenRelease),
+                new MtgJsonCard("Transcendent Archaic", TRANSCENDENT_ARCHAIC, true, false, null, "SOS", strixhavenRelease)
+        );
+
+        Map<String, CardPrices> pricesByCardName = new HashMap<>();
+        pricesByCardName.put("Monument to Endurance", cardPrices(20, 0));
+        pricesByCardName.put("Agent Maria Hill", cardPrices(8, 0));
+        pricesByCardName.put("The Dawning Archaic", cardPrices(114, 0));
+        pricesByCardName.put("Dina, Essence Brewer", cardPrices(153, 0));
+        pricesByCardName.put("Sundering Archaic", cardPrices(5, 0));
+        pricesByCardName.put("Rancorous Archaic", cardPrices(4, 0));
+        pricesByCardName.put("Transcendent Archaic", cardPrices(8, 0));
+
+        List<Card> existingCards = List.of(
+                existingCard("Monument to Endurance", "monument-to-endurance", MONUMENT_TO_ENDURANCE),
+                existingCard("The Dawning Archaic", "the-dawning-archaic", DAWNING_ARCHAIC),
+                existingCard("Dina, Essence Brewer", "dina-essence-brewer", DINA_ESSENCE_BREWER),
+                existingCard("Rancorous Archaic", "rancorous-archaic", RANCOROUS_ARCHAIC),
+                existingCard("Transcendent Archaic", "transcendent-archaic", TRANSCENDENT_ARCHAIC)
+        );
+        List<CardSeasonData> previousSeasonData = List.of(
+                previousSeasonData(MONUMENT_TO_ENDURANCE, 0, Legality.NOT_LEGAL),
+                previousSeasonData(DAWNING_ARCHAIC, 0, Legality.NOT_LEGAL),
+                previousSeasonData(DINA_ESSENCE_BREWER, 0, Legality.NOT_LEGAL),
+                previousSeasonData(RANCOROUS_ARCHAIC, 0, Legality.NOT_LEGAL),
+                previousSeasonData(TRANSCENDENT_ARCHAIC, 8, Legality.LEGAL)
+        );
+
+        AssembledDraftVO assembledDraft = SeasonPreparationService.assemble(printings, new MtgJsonPricesVO(pricesByCardName, WINDOW_LENGTH), MetaSharesVO.fromBanFiles(List.of(), List.of()), existingCards, previousSeasonData, request(MetaShareSource.FILES), currentSeason(), SEASON_DATES);
+        List<MtgSetVO> setsReleased = assembledDraft.getReport().getSetsReleased();
+
+        assertEquals(2, setsReleased.size());
+        assertEquals("SOS", setsReleased.get(0).getCode());
+        assertEquals("Secrets of Strixhaven", setsReleased.get(0).getName());
+        assertEquals(strixhavenRelease, setsReleased.get(0).getReleaseDate());
+        assertEquals(MtgSetType.EXPANSION, setsReleased.get(0).getType());
+        assertEquals(4, setsReleased.get(0).getNewCardCount());
+        assertEquals(List.of("PSOS", "SOC"), setsReleased.get(0).getChildCodes());
+        assertEquals(List.of("Lorehold Spirit", "Prismari Artistry"), setsReleased.get(0).getCommanderDecks());
+        assertEquals("MSH", setsReleased.get(1).getCode());
+        assertEquals(1, setsReleased.get(1).getNewCardCount());
+        assertEquals(List.of(), setsReleased.get(1).getChildCodes());
+        assertEquals(List.of(), setsReleased.get(1).getCommanderDecks());
     }
 
     @Test
@@ -416,7 +484,7 @@ class SeasonPreparationServiceTest {
     @Test
     void testWithDefaults() {
         SeasonPreparationRequestVO request = SeasonPreparationService.withDefaults(
-                new SeasonPreparationRequestVO(START_DATE, null, null, null, null, null),
+                new SeasonPreparationRequestVO(START_DATE, null, null, null, null, null, "raoul_zander"),
                 LocalDate.of(2026, 9, 12), 70, SEASON_DATES);
 
         assertEquals(START_DATE, request.getStartDate());
@@ -426,6 +494,7 @@ class SeasonPreparationServiceTest {
         assertEquals(MetaShareSource.MTGGOLDFISH, request.getMetaSource());
         assertNull(request.getUploadedBans());
         assertNull(request.getUploadedExtendedBans());
+        assertEquals("raoul_zander", request.getPreparedBy());
     }
 
     @Test
@@ -433,7 +502,7 @@ class SeasonPreparationServiceTest {
         List<BanDTO> uploadedBans = List.of(new BanDTO("Lorien Revealed", Map.of(LegacyMtgFormat.PAUPER, new BigDecimal("0.46"))));
 
         SeasonPreparationRequestVO request = SeasonPreparationService.withDefaults(
-                new SeasonPreparationRequestVO(START_DATE, END_DATE, new PriceWindowVO(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 9, 1)), MetaShareSource.FILES, uploadedBans, List.of()),
+                new SeasonPreparationRequestVO(START_DATE, END_DATE, new PriceWindowVO(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 9, 1)), MetaShareSource.FILES, uploadedBans, List.of(), "raoul_zander"),
                 LocalDate.of(2026, 9, 12), 70, SEASON_DATES);
 
         assertEquals(START_DATE, request.getStartDate());
@@ -448,7 +517,7 @@ class SeasonPreparationServiceTest {
     @Test
     void testWithDefaults_withAnOldSeasonBefore() {
         SeasonPreparationRequestVO request = SeasonPreparationService.withDefaults(
-                new SeasonPreparationRequestVO(START_DATE, null, null, null, null, null),
+                new SeasonPreparationRequestVO(START_DATE, null, null, null, null, null, "raoul_zander"),
                 LocalDate.of(2025, 1, 1), 70, SEASON_DATES);
 
         assertEquals(LocalDate.of(2026, 11, 21), request.getEndDate());
@@ -521,7 +590,7 @@ class SeasonPreparationServiceTest {
     }
 
     private static SeasonPreparationRequestVO request(MetaShareSource metaSource) {
-        return new SeasonPreparationRequestVO(START_DATE, END_DATE, PriceWindowVO.of(START_DATE, 70), metaSource, null, null);
+        return new SeasonPreparationRequestVO(START_DATE, END_DATE, PriceWindowVO.of(START_DATE, 70), metaSource, null, null, "raoul_zander");
     }
 
     private static Season currentSeason() {

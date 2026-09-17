@@ -31,7 +31,7 @@ public class SeasonDraftRepository {
     private static final LegalityConverter LEGALITY_CONVERTER = new LegalityConverter();
     private static final MtgFormatConverter MTG_FORMAT_CONVERTER = new MtgFormatConverter();
 
-    private static final String SELECT_DRAFT = "SELECT id, season_number, start_date, end_date, price_window_start, price_window_end, previous_season_id, previous_season_updated_at, mtgjson_date, meta_source, prepared_at, committed_at, report FROM public.season_draft";
+    private static final String SELECT_DRAFT = "SELECT id, season_number, start_date, end_date, price_window_start, price_window_end, previous_season_id, previous_season_updated_at, mtgjson_date, meta_source, prepared_at, prepared_by, committed_at, committed_by, report FROM public.season_draft";
 
     private static final String INSERT_DRAFT_CARD = "INSERT INTO public.season_draft_card (season_draft_id, oracle_id, previous_oracle_id, name, normalized_name, budget_points, legality, meta_share_standard, meta_share_pioneer, meta_share_modern, meta_share_legacy, meta_share_vintage, meta_share_pauper, banned_in, vintage_restricted, is_new_card, skip_reason)" +
             " VALUES (?, ?, ?, ?, ?, ?, ?::legality, ?, ?, ?, ?, ?, ?, ?::mtg_format, ?, ?, ?)";
@@ -51,8 +51,8 @@ public class SeasonDraftRepository {
                 + " (SELECT id FROM public.season_draft WHERE committed_at IS NOT NULL AND id <> (SELECT MAX(id) FROM public.season_draft WHERE committed_at IS NOT NULL))");
 
         Integer draftId = jdbcTemplate.queryForObject(
-                "INSERT INTO public.season_draft (season_number, start_date, end_date, price_window_start, price_window_end, previous_season_id, previous_season_updated_at, mtgjson_date, meta_source, prepared_at, report)" +
-                        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                "INSERT INTO public.season_draft (season_number, start_date, end_date, price_window_start, price_window_end, previous_season_id, previous_season_updated_at, mtgjson_date, meta_source, prepared_at, prepared_by, report)" +
+                        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
                 Integer.class,
                 draft.getSeasonNumber(),
                 draft.getStartDate(),
@@ -64,6 +64,7 @@ public class SeasonDraftRepository {
                 draft.getMtgJsonDate(),
                 draft.getMetaSource(),
                 draft.getPreparedAt(),
+                draft.getPreparedBy(),
                 draft.getReport());
 
         List<Object[]> batch = new ArrayList<>(BATCH_SIZE);
@@ -118,7 +119,7 @@ public class SeasonDraftRepository {
     }
 
     @Transactional
-    public CommittedSeasonCountsVO commit(int draftId, LocalDateTime addedAt, LocalDateTime committedAt) {
+    public CommittedSeasonCountsVO commit(int draftId, LocalDateTime addedAt, LocalDateTime committedAt, String committedBy) {
         List<SeasonDraftVO> drafts = jdbcTemplate.query(SELECT_DRAFT + " WHERE id = ? FOR UPDATE", SeasonDraftRepository::toDraftVO, draftId);
         if (drafts.isEmpty()) {
             throw new IllegalStateException("There is no season draft with id '" + draftId + "'.");
@@ -232,7 +233,7 @@ public class SeasonDraftRepository {
                 draftId);
 
         // Not now(): the database runs in local time while prepared_at is UTC, and the two of them name the migration files
-        jdbcTemplate.update("UPDATE public.season_draft SET committed_at = ? WHERE id = ?", committedAt, draftId);
+        jdbcTemplate.update("UPDATE public.season_draft SET committed_at = ?, committed_by = ? WHERE id = ?", committedAt, committedBy, draftId);
 
         return new CommittedSeasonCountsVO(remaps.size(), updatedCardNames, insertedCards, upsertedCardSeasonData);
     }
@@ -264,7 +265,9 @@ public class SeasonDraftRepository {
                 resultSet.getString("mtgjson_date"),
                 resultSet.getString("meta_source"),
                 resultSet.getObject("prepared_at", LocalDateTime.class),
+                resultSet.getString("prepared_by"),
                 resultSet.getObject("committed_at", LocalDateTime.class),
+                resultSet.getString("committed_by"),
                 resultSet.getString("report"));
     }
 

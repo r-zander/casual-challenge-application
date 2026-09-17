@@ -38,22 +38,19 @@ public class SeasonDraftService {
     private final SeasonDates seasonDates;
     private final ObjectMapper objectMapper;
     private final String exportDirectory;
-    private final String migrationAuthor;
 
     public SeasonDraftService(
             SeasonDraftRepository seasonDraftRepository,
             CasualChallengeService casualChallengeService,
             SeasonDates seasonDates,
             ObjectMapper objectMapper,
-            @Value("${casual-challenge.season.export-directory}") String exportDirectory,
-            @Value("${casual-challenge.season.migration-author}") String migrationAuthor
+            @Value("${casual-challenge.season.export-directory}") String exportDirectory
     ) {
         this.seasonDraftRepository = seasonDraftRepository;
         this.casualChallengeService = casualChallengeService;
         this.seasonDates = seasonDates;
         this.objectMapper = objectMapper;
         this.exportDirectory = exportDirectory;
-        this.migrationAuthor = migrationAuthor;
     }
 
     public SeasonDraftReportVO report() {
@@ -63,14 +60,14 @@ public class SeasonDraftService {
         return toReport(draft);
     }
 
-    public CommittedSeasonVO commit() {
+    public CommittedSeasonVO commit(String committedBy) {
         SeasonDraftVO draft = uncommittedDraft(DraftAction.COMMIT);
 
         CommittedSeasonCountsVO counts;
         casualChallengeService.lockCards();
         try {
             // prepared_at is what the exported migration writes into card.added_at, so the database gets the very same value
-            counts = seasonDraftRepository.commit(draft.getId(), draft.getPreparedAt(), LocalDateTime.now(Constants.TIMEZONE));
+            counts = seasonDraftRepository.commit(draft.getId(), draft.getPreparedAt(), LocalDateTime.now(Constants.TIMEZONE), committedBy);
             try {
                 casualChallengeService.preloadCards();
             } catch (RuntimeException e) {
@@ -130,6 +127,16 @@ public class SeasonDraftService {
         return fileName + ".sql";
     }
 
+    // Same switch as sqlFileName
+    public static String migrationAuthor(SeasonDraftVO draft) {
+        String author = draft.getCommittedAt() != null ? draft.getCommittedBy() : draft.getPreparedBy();
+        if (author == null) {
+            throw new IllegalStateException("The draft for season " + draft.getSeasonNumber() + " was prepared by an older build, prepare it again.");
+        }
+
+        return author;
+    }
+
     private void writeSqlFiles(SeasonDraftVO draft) throws IOException {
         Path directory = Paths.get(exportDirectory);
         Files.createDirectories(directory);
@@ -167,7 +174,7 @@ public class SeasonDraftService {
         }
 
         return SeasonMigrationSql.addSeason(
-                migrationAuthor,
+                migrationAuthor(draft),
                 sqlFileName(draft, SeasonSqlFile.ADD_SEASON),
                 draft,
                 report.getOracleIdChanges(),
@@ -188,7 +195,9 @@ public class SeasonDraftService {
 
     private SeasonDraftReportVO toReport(SeasonDraftVO draft) {
         try {
-            return objectMapper.readValue(draft.getReport(), SeasonDraftReportVO.class);
+            return objectMapper.readValue(draft.getReport(), SeasonDraftReportVO.class)
+                    .withCommittedAt(draft.getCommittedAt())
+                    .withCommittedBy(draft.getCommittedBy());
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Couldn't read the report of the draft for season " + draft.getSeasonNumber() + ".", e);
         }

@@ -16,4 +16,5 @@ public class SeasonPreparationRequestVO { // everything the caller sent, every f
     MetaShareSource metaSource;
     List<BanDTO> uploadedBans; // only needed when metaSource is FILES
     List<BanDTO> uploadedExtendedBans;
+    String preparedBy; // the name in the admin token
 }

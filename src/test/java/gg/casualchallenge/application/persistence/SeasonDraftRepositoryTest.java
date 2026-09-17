@@ -105,6 +105,9 @@ class SeasonDraftRepositoryTest {
         assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card_season_data WHERE season_id = 21 AND card_oracle_id = ?", Integer.class, BLACK_LOTUS));
         assertEquals(3, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card_season_data WHERE season_id = 21", Integer.class));
         assertNotNull(seasonDraftRepository.findDraft().getCommittedAt());
+        assertEquals("janik_nissen", jdbcTemplate.queryForObject("SELECT committed_by FROM public.season_draft WHERE id = ?", String.class, draftId));
+        assertEquals("janik_nissen", seasonDraftRepository.findDraft().getCommittedBy());
+        assertEquals("raoul_zander", seasonDraftRepository.findDraft().getPreparedBy());
         assertNull(seasonDraftRepository.findUncommittedDraft());
     }
 
@@ -267,6 +270,8 @@ class SeasonDraftRepositoryTest {
                 "2026-06-07",
                 "mtggoldfish",
                 PREPARED_AT,
+                "raoul_zander",
+                null,
                 null,
                 "Season 21 (XXI), 2026-06-08 - 2026-08-16");
 
@@ -285,6 +290,6 @@ class SeasonDraftRepositoryTest {
     }
 
     private static CommittedSeasonCountsVO commitDraftInTransaction(int draftId) { // in the application the @Transactional proxy opens it
-        return transactionTemplate.execute(transactionStatus -> seasonDraftRepository.commit(draftId, PREPARED_AT, COMMITTED_AT));
+        return transactionTemplate.execute(transactionStatus -> seasonDraftRepository.commit(draftId, PREPARED_AT, COMMITTED_AT, "janik_nissen"));
     }
 }

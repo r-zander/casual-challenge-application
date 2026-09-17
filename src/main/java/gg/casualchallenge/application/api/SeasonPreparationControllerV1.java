@@ -27,6 +27,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import java.security.Principal;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
@@ -74,7 +75,8 @@ public class SeasonPreparationControllerV1 {
             @Parameter(description = "bans.json, only used with metaSource=files. A JSON array of {name, formats}, the shape /legacy/season/{season}/bans.json answers with.")
             @RequestParam(required = false) MultipartFile bans,
             @Parameter(description = "extended-bans.json, only used with metaSource=files. Same shape as bans.")
-            @RequestParam(required = false) MultipartFile extendedBans
+            @RequestParam(required = false) MultipartFile extendedBans,
+            Principal principal
     ) {
         SeasonPreparationRequestVO request = new SeasonPreparationRequestVO(
                 startDate,
@@ -82,7 +84,8 @@ public class SeasonPreparationControllerV1 {
                 new PriceWindowVO(priceWindowStart, priceWindowEnd),
                 metaSource,
                 metaSource == MetaShareSource.FILES ? readBanFile(bans, "bans") : null,
-                metaSource == MetaShareSource.FILES ? readBanFile(extendedBans, "extendedBans") : null
+                metaSource == MetaShareSource.FILES ? readBanFile(extendedBans, "extendedBans") : null,
+                principal.getName()
         );
         try {
             return SeasonPreparationStatusMapper.INSTANCE.toResponse(this.seasonPreparationService.prepare(request));

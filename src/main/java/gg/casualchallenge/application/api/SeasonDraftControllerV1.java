@@ -24,6 +24,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.security.Principal;
+
 
 @RestController
 @RequestMapping("/admin/v1")
@@ -39,7 +41,7 @@ public class SeasonDraftControllerV1 {
     @GetMapping(path = "/season/draft")
     @Operation(
             summary = "Read the review report of the draft",
-            description = "Everything you need to decide whether the draft is good enough to commit: the dates, the counts, the ban and budget point changes, the cards that got left out and the three Scryfall lists. Without a draft there is nothing to read and you get a 404."
+            description = "Everything you need to decide whether the draft is good enough to commit: the dates, the counts, the ban and budget point changes, the cards that got left out, the sets that made new cards playable since the current season started and the three Scryfall lists. A committed draft stays, with committedAt and committedBy set - after a DELETE of the open draft you get the last committed one again, if there is one. 404 when there is no draft at all."
     )
     public SeasonDraftReportResponse getSeasonDraft() {
         SeasonDraftReportVO report = this.seasonDraftService.report();
@@ -53,7 +55,7 @@ public class SeasonDraftControllerV1 {
     @GetMapping(path = "/season/draft/sql/{part}", produces = "text/plain;charset=utf-8")
     @Operation(
             summary = "Download one of the three season migrations",
-            description = "Comes as an attachment: 20260913_1042_00_add_season_21.sql, _01_insert_cards.sql, _02_insert_card_season_data_for_season_21.sql. All three share the timestamp, so 00_add_season is applied before the data it needs. 404 for a part that doesn't exist or when there is no draft, 409 for a draft an older build prepared."
+            description = "Comes as an attachment: 20260913_1042_00_add_season_21.sql, _01_insert_cards.sql, _02_insert_card_season_data_for_season_21.sql. All three share the timestamp, so 00_add_season is applied before the data it needs. The changeset author is the name in the admin token that prepared the draft - or the one that committed it, once it is committed. 404 for a part that doesn't exist or when there is no draft, 409 for a draft an older build prepared."
     )
     public ResponseEntity<String> getSeasonDraftSql(
             @Parameter(description = "Which of the three migrations to download.", schema = @Schema(allowableValues = {"00_add_season", "01_insert_cards", "02_insert_card_season_data"}))
@@ -84,9 +86,9 @@ public class SeasonDraftControllerV1 {
             summary = "Commit the draft",
             description = "Writes the season, the new cards and their season data in one transaction, remaps the oracle ids that changed and reloads the card cache. Answers with the facts for the season announcement. 409 when there is no draft, when it was committed already or when the current season was touched since the preparation ran - prepare again in that case."
     )
-    public CommittedSeasonResponse commitSeason() {
+    public CommittedSeasonResponse commitSeason(Principal principal) {
         try {
-            return CommittedSeasonMapper.INSTANCE.toResponse(this.seasonDraftService.commit());
+            return CommittedSeasonMapper.INSTANCE.toResponse(this.seasonDraftService.commit(principal.getName()));
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
         }
@@ -96,7 +98,7 @@ public class SeasonDraftControllerV1 {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(
             summary = "Throw the draft away",
-            description = "Nothing that is live gets touched, the draft row is simply gone. Refuses with 409 if there is no draft, or if it was committed already - a committed draft stays, it is the only record of a season start."
+            description = "Nothing that is live gets touched, only the open draft is gone - a GET afterwards shows the last committed draft, if there is one. Refuses with 409 if there is no draft, or if it was committed already - a committed draft stays, it is the only record of a season start."
     )
     public void discardSeasonDraft() {
         try {

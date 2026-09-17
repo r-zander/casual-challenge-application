@@ -21,6 +21,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class SeasonDraftServiceTest {
 
@@ -33,7 +34,7 @@ class SeasonDraftServiceTest {
 
     @Test
     void testSqlFileName() {
-        SeasonDraftVO draft = draft(null);
+        SeasonDraftVO draft = draft("raoul_zander", null, null);
 
         assertEquals("20260913_2021_00_add_season_21.sql", SeasonDraftService.sqlFileName(draft, SeasonSqlFile.ADD_SEASON));
         assertEquals("20260913_2021_01_insert_cards.sql", SeasonDraftService.sqlFileName(draft, SeasonSqlFile.INSERT_CARDS));
@@ -42,11 +43,26 @@ class SeasonDraftServiceTest {
 
     @Test
     void testSqlFileName_withCommittedDraft() {
-        SeasonDraftVO draft = draft(COMMITTED_AT);
+        SeasonDraftVO draft = draft("raoul_zander", COMMITTED_AT, "janik_nissen");
 
         assertEquals("20260915_0905_00_add_season_21.sql", SeasonDraftService.sqlFileName(draft, SeasonSqlFile.ADD_SEASON));
         assertEquals("20260915_0905_01_insert_cards.sql", SeasonDraftService.sqlFileName(draft, SeasonSqlFile.INSERT_CARDS));
         assertEquals("20260915_0905_02_insert_card_season_data_for_season_21.sql", SeasonDraftService.sqlFileName(draft, SeasonSqlFile.INSERT_CARD_SEASON_DATA));
+    }
+
+    @Test
+    void testMigrationAuthor() {
+        assertEquals("raoul_zander", SeasonDraftService.migrationAuthor(draft("raoul_zander", null, null)));
+        assertEquals("janik_nissen", SeasonDraftService.migrationAuthor(draft("raoul_zander", COMMITTED_AT, "janik_nissen")));
+        assertEquals("janik_nissen", SeasonDraftService.migrationAuthor(draft(null, COMMITTED_AT, "janik_nissen")));
+    }
+
+    @Test
+    void testMigrationAuthor_withDraftOfAnOlderBuild() {
+        SeasonDraftVO draft = draft(null, null, null);
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> SeasonDraftService.migrationAuthor(draft));
+        assertEquals("The draft for season 21 was prepared by an older build, prepare it again.", exception.getMessage());
     }
 
     @Test
@@ -64,7 +80,7 @@ class SeasonDraftServiceTest {
         String storedReport = """
                 {"seasonNumber": 20, "romanSeasonNumber": "XX", "metaSource": "mtggoldfish",
                  "counts": {"cards": 30206, "pricesFixedByExchangeRate": 63},
-                 "setsReleased": [{"name": "Edge of Eternities", "code": "EOE", "releaseDate": "2026-10-02", "type": "expansion", "commanderDecks": []}]}""";
+                 "setsReleased": [{"name": "Secrets of Strixhaven", "code": "SOS", "releaseDate": "2026-04-24", "type": "expansion", "commanderDecks": []}]}""";
         ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json().build();
 
         SeasonDraftReportVO report = objectMapper.readValue(storedReport, SeasonDraftReportVO.class);
@@ -74,9 +90,14 @@ class SeasonDraftServiceTest {
         assertEquals(0, report.getCounts().getPricesFixedByExchangeRateCount()); // the old name is gone, nothing to read it into
         assertNull(report.getDuplicateMetaShareNames());
         assertEquals(MtgSetType.EXPANSION, report.getSetsReleased().get(0).getType());
+        assertNull(report.getSetsReleased().get(0).getChildCodes());
+        assertEquals(0, report.getSetsReleased().get(0).getNewCardCount());
+        assertNull(report.getPreparedBy());
+        assertNull(report.getCommittedAt());
+        assertNull(report.getCommittedBy());
     }
 
-    private static SeasonDraftVO draft(LocalDateTime committedAt) {
+    private static SeasonDraftVO draft(String preparedBy, LocalDateTime committedAt, String committedBy) {
         return new SeasonDraftVO(
                 7,
                 21,
@@ -89,7 +110,9 @@ class SeasonDraftServiceTest {
                 "2026-09-13",
                 "mtggoldfish",
                 PREPARED_AT,
+                preparedBy,
                 committedAt,
+                committedBy,
                 "{}");
     }
 
@@ -121,6 +144,9 @@ class SeasonDraftServiceTest {
                 "mtggoldfish",
                 20,
                 PREPARED_AT,
+                "raoul_zander",
+                null,
+                null,
                 counts,
                 List.of("Lórien Revealed"),
                 List.of(new SeasonDraftReportVO.BanChangeVO("Brainstorm", 300, Map.of(MtgFormat.LEGACY, new BigDecimal("0.400")), MtgFormat.LEGACY, false)),
@@ -136,7 +162,7 @@ class SeasonDraftServiceTest {
                 List.of(new SeasonDraftReportVO.OracleIdChangeVO("Joven and Chandler", JOVEN_OLD, JOVEN_NEW, "ATQ")),
                 List.of(new SeasonDraftReportVO.RenamedCardVO(JOVEN_NEW, "Joven", "joven", "Joven and Chandler", "joven-and-chandler")),
                 List.of(new SeasonDraftReportVO.RenamedCardVO(ANCESTORS_CHOSEN, "Ancestor's Chosen", "ancestor-s-chosen", "Ancestor's Chosen", "ancestors-chosen")),
-                List.of(new MtgSetVO("Edge of Eternities", "EOE", LocalDate.of(2026, 10, 2), MtgSetType.EXPANSION, List.of("Cosmic Conquest"))),
+                List.of(new MtgSetVO("Secrets of Strixhaven", "SOS", LocalDate.of(2026, 4, 24), MtgSetType.EXPANSION, List.of("Lorehold Spirit"), List.of("SOC"), 3)),
                 new SeasonDraftReportVO.ScryfallDecksVO("Black Lotus\nBrainstorm", "Sol Ring", "Brainstorm"));
     }
 }

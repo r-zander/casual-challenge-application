@@ -73,15 +73,15 @@ public class MtgJsonClient {
     }
 
     private final String mtgJsonBaseUrl;
-    private final Path downloadDirectory;
+    private final Path archiveDirectory;
     private final Map<String, List<String>> ignoredPriceSetsByCardName;
 
     public MtgJsonClient(
             @Value("${casual-challenge.season.mtgjson-base-url}") String mtgJsonBaseUrl,
-            @Value("${casual-challenge.season.download-directory}") String downloadDirectory
+            @Value("${casual-challenge.season.archive-directory}") String archiveDirectory
     ) {
         this.mtgJsonBaseUrl = mtgJsonBaseUrl;
-        this.downloadDirectory = Paths.get(downloadDirectory);
+        this.archiveDirectory = Paths.get(archiveDirectory);
 
         ObjectMapper objectMapper = new ObjectMapper();
         try (InputStream ignoredPrices = new ClassPathResource(IGNORED_PRICES_FILE).getInputStream()) {
@@ -91,29 +91,29 @@ public class MtgJsonClient {
         }
     }
 
-    /** @param archiveDirectory null = download into a temp directory and throw the file away afterwards */
-    public MtgJsonPrintingsVO fetchPrintings(Path archiveDirectory) {
-        Path directory = archiveDirectory != null ? archiveDirectory : createDownloadDirectory();
+    /** @param seasonDirectory null = download into a temp directory in the archive directory and throw it away afterwards */
+    public MtgJsonPrintingsVO fetchPrintings(Path seasonDirectory) {
+        Path directory = seasonDirectory != null ? seasonDirectory : createDownloadDirectory();
         try (ZipInputStream zipStream = new ZipInputStream(new BufferedInputStream(Files.newInputStream(download(PRINTINGS_ZIP, directory))))) {
             positionOnEntry(zipStream, PRINTINGS_FILE);
             return readPrintings(zipStream);
         } catch (IOException e) {
             throw new RuntimeException("Couldn't read '" + PRINTINGS_FILE + "'.", e);
         } finally {
-            if (archiveDirectory == null) deleteDownload(directory, PRINTINGS_ZIP);
+            if (seasonDirectory == null) deleteDownload(directory, PRINTINGS_ZIP);
         }
     }
 
-    /** @param archiveDirectory null = download into a temp directory and throw the file away afterwards */
-    public MtgJsonPricesVO fetchPrices(Map<UUID, MtgJsonPrinting> printingsByUuid, PriceWindowVO window, Path archiveDirectory) {
-        Path directory = archiveDirectory != null ? archiveDirectory : createDownloadDirectory();
+    /** @param seasonDirectory null = download into a temp directory in the archive directory and throw it away afterwards */
+    public MtgJsonPricesVO fetchPrices(Map<UUID, MtgJsonPrinting> printingsByUuid, PriceWindowVO window, Path seasonDirectory) {
+        Path directory = seasonDirectory != null ? seasonDirectory : createDownloadDirectory();
         try (ZipInputStream zipStream = new ZipInputStream(new BufferedInputStream(Files.newInputStream(download(PRICES_ZIP, directory))))) {
             positionOnEntry(zipStream, PRICES_FILE);
             return readPrices(zipStream, printingsByUuid, window);
         } catch (IOException e) {
             throw new RuntimeException("Couldn't read '" + PRICES_FILE + "'.", e);
         } finally {
-            if (archiveDirectory == null) deleteDownload(directory, PRICES_ZIP);
+            if (seasonDirectory == null) deleteDownload(directory, PRICES_ZIP);
         }
     }
 
@@ -205,9 +205,10 @@ public class MtgJsonClient {
 
     private Path createDownloadDirectory() {
         try {
-            return Files.createTempDirectory(downloadDirectory, "casual-challenge-season");
+            Files.createDirectories(archiveDirectory);
+            return Files.createTempDirectory(archiveDirectory, "download-");
         } catch (IOException e) {
-            throw new RuntimeException("Couldn't create a download directory in '" + downloadDirectory + "'.", e);
+            throw new RuntimeException("Couldn't create a download directory in '" + archiveDirectory + "'.", e);
         }
     }
 

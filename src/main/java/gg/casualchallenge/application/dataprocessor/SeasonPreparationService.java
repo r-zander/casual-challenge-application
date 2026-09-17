@@ -21,7 +21,6 @@ import gg.casualchallenge.application.dataprocessor.model.SeasonPreparationState
 import gg.casualchallenge.application.dataprocessor.model.Staple;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
-import gg.casualchallenge.application.model.type.MtgSetType;
 import gg.casualchallenge.application.model.values.MtgSetVO;
 import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
 import gg.casualchallenge.application.model.values.SeasonDraftReportVO;
@@ -52,7 +51,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -83,9 +81,6 @@ public class SeasonPreparationService {
     private static final String SEASON_DIRECTORY_PREFIX = "season-";
     private static final String REQUEST_FILE = "request.json";
     private static final String STAPLES_FILE = "staples.json";
-
-    // the sets we announce in the report - MtgJsonClient.IGNORED_SET_TYPES is the other list, the one the card identity uses
-    private static final Set<MtgSetType> PLAYABLE_SET_TYPES = EnumSet.of(MtgSetType.EXPANSION, MtgSetType.CORE, MtgSetType.MASTERS, MtgSetType.DRAFT_INNOVATION, MtgSetType.COMMANDER);
 
     private final MtgJsonClient mtgJsonClient;
     private final MtgGoldfishClient mtgGoldfishClient;
@@ -212,7 +207,8 @@ public class SeasonPreparationService {
                 ),
                 request.getMetaSource() != null ? request.getMetaSource() : MetaShareSource.MTGGOLDFISH,
                 request.getUploadedBans(),
-                request.getUploadedExtendedBans()
+                request.getUploadedExtendedBans(),
+                request.getPreparedBy()
         );
     }
 
@@ -328,6 +324,8 @@ public class SeasonPreparationService {
                 printings.getMetaDate() != null ? printings.getMetaDate().toString() : null,
                 request.getMetaSource().toString(),
                 report.getPreparedAt(),
+                request.getPreparedBy(),
+                null,
                 null,
                 toJson(report)
         );
@@ -728,6 +726,9 @@ public class SeasonPreparationService {
                 request.getMetaSource().toString(),
                 currentSeason.getSeasonNumber(),
                 LocalDateTime.now(Constants.TIMEZONE),
+                request.getPreparedBy(),
+                null,
+                null,
                 counts,
                 metaShares.getDuplicateNames(),
                 newBans,
@@ -743,26 +744,86 @@ public class SeasonPreparationService {
                 oracleIdChanges,
                 renamedCards,
                 normalizedNameFixes,
-                findSetsReleased(printings, request),
+                findSetsReleased(cards, printings, previousDataByOracleId, currentSeason),
                 scryfallDecks(newBans, unbans, cards)
         );
     }
 
-    private static List<MtgSetVO> findSetsReleased(MtgJsonPrintingsVO printings, SeasonPreparationRequestVO request) {
-        List<MtgSetVO> setsReleased = new ArrayList<>();
+    // MTGJSON knows the upcoming sets long before they are out --> a set only counts once a card it printed first became playable. Commander sets, promos etc. count toward their main set, that's what the announcement lists.
+    private static List<MtgSetVO> findSetsReleased(
+            List<SeasonDraftCardVO> cards,
+            MtgJsonPrintingsVO printings,
+            Map<UUID, CardSeasonData> previousDataByOracleId,
+            Season currentSeason
+    ) {
+        Map<String, MtgJsonSet> setsByCode = new HashMap<>(printings.getSets().size());
         for (MtgJsonSet mtgSet : printings.getSets()) {
-            if (mtgSet.getReleaseDate() == null || mtgSet.isOnlineOnly()) continue;
-            if (!PLAYABLE_SET_TYPES.contains(mtgSet.getSetType())) continue;
-            if (mtgSet.getReleaseDate().isBefore(request.getStartDate()) || mtgSet.getReleaseDate().isAfter(request.getEndDate())) continue;
+            setsByCode.put(mtgSet.getCode(), mtgSet);
+        }
 
-            List<String> commanderDecks = new ArrayList<>();
+        Map<String, Integer> newCardCountsBySetCode = new HashMap<>();
+        for (SeasonDraftCardVO card : cards) {
+            if (card.getSkipReason() != null || card.getLegality() == Legality.NOT_LEGAL) continue;
+
+            UUID previousOracleId = card.getPreviousOracleId() != null ? card.getPreviousOracleId() : card.getOracleId();
+            CardSeasonData previousData = previousDataByOracleId.get(previousOracleId);
+            Legality previousLegality = previousData != null ? previousData.getLegality() : null;
+            if (previousLegality != null && previousLegality != Legality.NOT_LEGAL) continue;
+
+            MtgJsonCard mtgJsonCard = printings.getCardsByName().get(card.getName());
+            if (mtgJsonCard == null) continue; // kept from the card table, no printing this season
+            // An old card whose price only came back this season is no news
+            if (mtgJsonCard.getFirstReleaseDate() == null || mtgJsonCard.getFirstReleaseDate().isBefore(currentSeason.getStartDate())) continue;
+
+            newCardCountsBySetCode.merge(mtgJsonCard.getFirstSetCode(), 1, Integer::sum);
+        }
+
+        Map<String, Integer> newCardCountsByRootCode = new HashMap<>();
+        Map<String, List<String>> childCodesByRootCode = new HashMap<>();
+        for (Map.Entry<String, Integer> entry : newCardCountsBySetCode.entrySet()) {
+            String rootCode = rootCodeOf(entry.getKey(), setsByCode);
+            newCardCountsByRootCode.merge(rootCode, entry.getValue(), Integer::sum);
+            List<String> childCodes = childCodesByRootCode.computeIfAbsent(rootCode, code -> new ArrayList<>());
+            if (!entry.getKey().equals(rootCode)) childCodes.add(entry.getKey());
+        }
+
+        // The Commander decks sit on the commander set, not on the main set
+        Map<String, List<String>> commanderDecksByRootCode = new HashMap<>();
+        for (MtgJsonSet mtgSet : printings.getSets()) {
+            String rootCode = rootCodeOf(mtgSet.getCode(), setsByCode);
+            if (!newCardCountsByRootCode.containsKey(rootCode)) continue;
+
+            List<String> commanderDecks = commanderDecksByRootCode.computeIfAbsent(rootCode, code -> new ArrayList<>());
             for (MtgJsonSet.MtgJsonDeck deck : mtgSet.getDecks()) {
                 if (deck.getDeckType() != null && deck.getDeckType().contains("Commander")) commanderDecks.add(deck.getName());
             }
-            setsReleased.add(new MtgSetVO(mtgSet.getName(), mtgSet.getCode(), mtgSet.getReleaseDate(), mtgSet.getSetType(), commanderDecks));
         }
 
+        List<MtgSetVO> setsReleased = new ArrayList<>(newCardCountsByRootCode.size());
+        for (MtgJsonSet mtgSet : printings.getSets()) {
+            Integer newCardCount = newCardCountsByRootCode.get(mtgSet.getCode());
+            if (newCardCount == null) continue;
+
+            List<String> childCodes = childCodesByRootCode.get(mtgSet.getCode());
+            childCodes.sort(Comparator.naturalOrder());
+            setsReleased.add(new MtgSetVO(mtgSet.getName(), mtgSet.getCode(), mtgSet.getReleaseDate(), mtgSet.getSetType(), commanderDecksByRootCode.get(mtgSet.getCode()), childCodes, newCardCount));
+        }
+        setsReleased.sort(Comparator.comparing(MtgSetVO::getReleaseDate).thenComparing(MtgSetVO::getCode));
+
         return setsReleased;
+    }
+
+    // A parent that isn't in the dump ends the walk, and so does a loop in the parent codes
+    private static String rootCodeOf(String setCode, Map<String, MtgJsonSet> setsByCode) {
+        Set<String> visitedCodes = new HashSet<>();
+        String rootCode = setCode;
+        MtgJsonSet mtgSet = setsByCode.get(rootCode);
+        while (mtgSet != null && mtgSet.getParentCode() != null && setsByCode.containsKey(mtgSet.getParentCode()) && visitedCodes.add(rootCode)) {
+            rootCode = mtgSet.getParentCode();
+            mtgSet = setsByCode.get(rootCode);
+        }
+
+        return rootCode;
     }
 
     private static SeasonDraftReportVO.ScryfallDecksVO scryfallDecks(

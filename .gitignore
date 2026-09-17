@@ -39,6 +39,7 @@ out/
 
 ### Custom ###
 /data/
+/seasons/
 /jwt_private_key.txt
 /postgres_password.txt
 /key_store_password.txt

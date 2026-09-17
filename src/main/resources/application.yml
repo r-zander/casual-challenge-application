@@ -14,12 +14,15 @@ spring:
 server:
   compression:
     enabled: true # enable compression for requests with Accept-Encoding: gzip
+  error:
+    include-message: always # the messages on 400/404/409 are written to be read by whoever called
 springdoc:
   disable-i18n: true
   show-spring-cloud-functions: false
   swagger-ui:
     disable-swagger-default-url: true
     path: /docs
+    urls-primary-name: public # the /v1 endpoints are what everybody but us reads
 casual-challenge:
   security:
     jwt:
@@ -27,6 +30,14 @@ casual-challenge:
     rate-limit:
       capacity: 8
       refill-per-minute: 2
+  season:
+    mtgjson-base-url: https://mtgjson.com/api/v5
+    archive-directory: ${java.io.tmpdir}/casual-challenge-seasons # the MTGJSON downloads land in here as well, even with archived-seasons 0
+    archived-seasons: 5 # 0 = don't keep the raw input of a run, season folders from before stay where they are
+    export-directory: "" # empty = don't write the files
+    price-window-days: 70
+    length-in-weeks: 10
+    finals-weekday: FRIDAY
 
 
 
@@ -45,3 +56,6 @@ spring:
   datasource:
     url: jdbc:postgresql://postgresql_db:5432/casual_challenge?stringtype=unspecified
     password: ${postgres_password}
+casual-challenge:
+  season:
+    archive-directory: /opt/app/seasons # ./seasons on the server, see docker-compose.yml

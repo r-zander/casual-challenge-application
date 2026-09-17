@@ -2,6 +2,7 @@ package gg.casualchallenge.application.api;
 
 import gg.casualchallenge.application.api.datamodel.CardsResponse;
 import gg.casualchallenge.application.model.mapper.CardsResponseMapper;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -17,6 +18,7 @@ import static gg.casualchallenge.library.api.ParameterUtil.getPresenceBoolean;
 
 @RestController
 @RequestMapping("/v1")
+@Tag(name = "Cards", description = "What the extension asks for - the cards of the current season with their budget points and legality.")
 public class ApiControllerV1 {
 
     private final CasualChallengeService casualChallengeService;

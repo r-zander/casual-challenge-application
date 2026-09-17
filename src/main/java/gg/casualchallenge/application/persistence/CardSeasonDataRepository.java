@@ -1,6 +1,7 @@
 package gg.casualchallenge.application.persistence;
 
 import gg.casualchallenge.application.model.type.Legality;
+import gg.casualchallenge.application.model.values.BanListCardVO;
 import gg.casualchallenge.application.persistence.entity.CardSeasonData;
 import gg.casualchallenge.application.persistence.entity.Season;
 import org.springframework.data.jpa.repository.Query;
@@ -25,4 +26,12 @@ public interface CardSeasonDataRepository  extends ListCrudRepository<CardSeason
             " AND csd.bannedIn IS NULL" +
             " AND csd.vintageRestricted = FALSE"*/)
     List<CardSeasonData> findAllByMetaBan(Season season, Legality legality);
+
+    @Query(value = "SELECT new gg.casualchallenge.application.model.values.BanListCardVO(" +
+            " card.name, csd.metaShareStandard, csd.metaSharePioneer, csd.metaSharePauper," +
+            " csd.metaShareModern, csd.metaShareLegacy, csd.metaShareVintage, csd.bannedIn, csd.vintageRestricted)" +
+            " FROM CardSeasonData csd JOIN Card card ON card.oracleId = csd.cardOracleId" +
+            " WHERE csd.season = :season AND csd.legality = :legality" +
+            " ORDER BY card.name")
+    List<BanListCardVO> findAllForBanList(Season season, Legality legality);
 }

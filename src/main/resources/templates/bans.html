@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Casual Challenge Ban List</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Libre+Baskerville:wght@700&display=swap" rel="stylesheet">
+    <style>
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+
+            font-family: "Fira Code", monospace;
+        }
+
+        h1, h2 {
+            font-family: "Libre Baskerville", serif;
+        }
+
+        main {
+            flex: 1;
+        }
+
+        strong {
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+<div class="container py-5 d-flex flex-column min-vh-100" style="max-width: 47em;">
+    <header class="text-center mb-5">
+        <h1 class="display-4">Ban List</h1>
+        <p class="lead" th:text="|Season ${seasonNumber}, ${startDate} until ${endDate}.|"></p>
+        <p th:if="${seasonEnded}" th:text="|Season ${seasonNumber} ended on ${endDate} and the next one hasn't started yet, so this list still applies.|"></p>
+    </header>
+
+    <main>
+        <section class="mb-5">
+            <h2>Banned</h2>
+            <p>
+                A card is banned when it is one of the 50 most played cards of a competitive format,
+                when it is banned in one of those formats anyway, or when it is restricted in Vintage.
+            </p>
+            <ul class="list-unstyled">
+                <li class="mb-2" th:each="bannedCard : ${bans}">
+                    <a th:href="${bannedCard.scryfallUrl}" th:text="${bannedCard.name}"></a>
+                    <span class="text-body-secondary" th:text="${#strings.listJoin(bannedCard.reasons, ', ')}"></span>
+                </li>
+            </ul>
+        </section>
+
+        <section class="mb-5">
+            <h2>Cards considered Extended</h2>
+            <p>
+                These show up in the top 150 of a competitive format. They are fine in a normal game,
+                but they are out as well if you play with the extended ban list.
+            </p>
+            <ul class="list-unstyled">
+                <li class="mb-2" th:each="bannedCard : ${extendedBans}">
+                    <a th:href="${bannedCard.scryfallUrl}" th:text="${bannedCard.name}"></a>
+                    <span class="text-body-secondary" th:text="${#strings.listJoin(bannedCard.reasons, ', ')}"></span>
+                </li>
+            </ul>
+        </section>
+
+        <p>
+            Every season is calculated from scratch, so the lists look different next time.
+            Back to the <a href="./">API landing page</a>, or over to the <a href="https://www.casualchallenge.gg">format homepage</a>.
+        </p>
+    </main>
+
+    <footer class="text-center mt-5">
+        <hr />
+
+        <p>&copy; 2025 Casual Challenge. All rights reserved.</p>
+        <p>
+            The information presented on this site about <b>Magic: The Gathering</b>, both literal and graphical, is copyrighted by <b>Wizards of the Coast</b>.<br />
+            This website is not produced, endorsed, supported, or affiliated with <b>Wizards of the Coast</b>.
+        </p>
+    </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

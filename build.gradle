@@ -35,6 +35,7 @@ repositories {
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
     compileOnly 'org.projectlombok:lombok'
     runtimeOnly 'org.postgresql:postgresql'
     annotationProcessor 'org.projectlombok:lombok'
@@ -54,11 +55,16 @@ dependencies {
 
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'io.zonky.test:embedded-postgres:2.2.2'
+    testImplementation platform('io.zonky.test.postgres:embedded-postgres-binaries-bom:16.15.0') // same major version as the server
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'replay'
+    }
+    systemProperty 'ot.epg.working-dir', layout.buildDirectory.dir('embedded-pg').get().asFile // the deploy user's /tmp may be mounted noexec
 }
 
 configurations {
@@ -72,5 +78,21 @@ dependencies {
 tasks {
     test {
         jvmArgs += "-javaagent:${configurations.mockitoAgent.asPath}"
+    }
+}
+
+// The golden replays against the old python tooling. They need the local MTGJSON dumps, see SeasonReplayTest.
+tasks.register('replayTest', Test) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'replay'
+    }
+    systemProperty 'replay.dir', System.getProperty('replay.dir', '')
+    maxHeapSize = '1g'
+    timeout = java.time.Duration.ofHours(1)
+    jvmArgs += "-javaagent:${configurations.mockitoAgent.asPath}"
+    testLogging {
+        showStandardStreams = true
     }
 }

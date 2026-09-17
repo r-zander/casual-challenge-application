@@ -9,6 +9,7 @@ services:
       - postgresql_db
     volumes:
       - ./ssl:/etc/ssl/certs/ssl:ro
+      - ./seasons:/opt/app/seasons
     secrets:
       - postgres_password
       - jwt_private_key

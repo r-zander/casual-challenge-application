@@ -1,37 +1,33 @@
+name: casual-challenge-local
 services:
   casual_challenge_application:
-    build: .
-    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile.local
     ports:
-      - "443:8443"
-    container_name: casual-challenge-app
+      - "8080:8080"
+    container_name: casual-challenge-app-local
     depends_on:
-      - postgresql_db
+      postgresql_db:
+        condition: service_healthy
     volumes:
-      - ./ssl:/etc/ssl/certs/ssl:ro
-      - ./seasons:/opt/app/seasons
-    secrets:
-      - postgres_password
-      - jwt_private_key
-      - key_store_password
+      - seasons:/opt/app/seasons
   postgresql_db:
-    image: "postgres:latest"
-    restart: always
+    image: "postgres:17-alpine"
     ports:
-      - "127.0.0.1:5434:5432"
-    container_name: casual-challenge-db
+      - "127.0.0.1:5433:5432"
+    container_name: casual-challenge-db-local
     volumes:
-      - ./data:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql/data
     environment:
       POSTGRES_DB: casual_challenge
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-    secrets:
-      - postgres_password
-secrets:
-  postgres_password:
-    file: ./postgres_password.txt
-  jwt_private_key:
-    file: ./jwt_private_key.txt
-  key_store_password:
-    file: ./key_store_password.txt
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d casual_challenge"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  db_data:
+  seasons:

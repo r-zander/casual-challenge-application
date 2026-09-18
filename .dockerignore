@@ -1,0 +1,11 @@
+.git
+.gradle
+.idea
+data
+seasons
+ssl
+build/*
+!build/libs
+jwt_private_key.txt
+postgres_password.txt
+key_store_password.txt

@@ -58,4 +58,21 @@ spring:
     password: ${postgres_password}
 casual-challenge:
   season:
-    archive-directory: /opt/app/seasons # ./seasons on the server, see docker-compose.yml
+    archive-directory: /opt/app/seasons # ./seasons on the server, see docker-compose.prod.yml
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: jdbc:postgresql://postgresql_db:5432/casual_challenge?stringtype=unspecified
+casual-challenge:
+  security:
+    jwt:
+      secret-key: eq85tLUTVJtjZOumr3IqBxEayN9KBudLam9MwnUs3j78PwLnzg # local only, the server reads its key from /run/secrets
+    rate-limit:
+      capacity: 100
+      refill-per-minute: 100
+  season:
+    archive-directory: /opt/app/seasons

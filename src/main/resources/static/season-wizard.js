@@ -1,4 +1,6 @@
 const TOKEN_STORAGE_KEY = 'casual-challenge-admin-token';
+const DONE_STEPS_STORAGE_KEY = 'casual-challenge-done-steps';
+const OPEN_STEP_STORAGE_KEY = 'casual-challenge-open-step';
 const POLL_INTERVAL = 3 * 1000;
 const EXPECTED_TOP_50_ROWS = 50;
 const EXPECTED_TOP_150_ROWS = 150;
@@ -7,9 +9,17 @@ const PLAUSIBLE_CARD_COUNT_MAXIMUM = 45000;
 const PLAUSIBLE_EXCHANGE_RATE_MINIMUM = 1.0;
 const PLAUSIBLE_EXCHANGE_RATE_MAXIMUM = 2.5;
 const ALLOWED_MISSING_PRICE_DAYS = 3; // MTGJSON drops the odd day, 68 of 70 is a normal window
+// casual-challenge.season.length-in-weeks and price-window-days, only used for the "leave it empty and you get this" lines
+const SEASON_LENGTH_IN_DAYS = 10 * 7;
+const PRICE_WINDOW_DAYS = 70;
 const SQL_PARTS = ['00_add_season', '01_insert_cards', '02_insert_card_season_data'];
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
+// The columns of the Season History table in CC - Organisation, in that order
+const SEASON_HISTORY_COLUMNS = ['Season', 'Start', 'Ende', 'Neu spielbare Sets', 'Set Code', 'Updates'];
+const LAST_STEP = 7;
+// What the header says once a step is ticked off, for the two that had a to-do in there
+const DONE_OUTCOMES = {4: 'pushed and deployed', 7: 'posted'};
 
 // The five steps of SeasonPreparationService, matched by prefix - step 3 carries the meta source in its text
 const PREPARATION_STEPS = [
@@ -22,9 +32,11 @@ const PREPARATION_STEPS = [
 
 let adminToken = null;
 let draftReport = null;
+let currentSeason = null;
 let pollTimer = null;
 let hasBlockingSanityFailure = false;
 let downloadedParts = [];
+let doneSteps = [];
 
 // Step 0 - the token
 
@@ -77,16 +89,22 @@ async function submitToken() {
     document.getElementById('tokenSubject').textContent = payload.sub;
     document.getElementById('tokenExpiry').textContent = 'Good until ' + formatTimestamp(payload.exp * 1000) + '.';
     setOutcome('step0Outcome', payload.sub);
+    setStepDone(0, true);
 
+    await loadCurrentSeason();
     renderPreparationStatus(await response.json());
     await loadDraft();
+    restoreOpenStep();
 }
 
 function forgetToken(reason) {
     stopPolling();
     sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    sessionStorage.removeItem(DONE_STEPS_STORAGE_KEY);
+    sessionStorage.removeItem(OPEN_STEP_STORAGE_KEY);
     adminToken = null;
     draftReport = null;
+    doneSteps = [];
 
     document.getElementById('wizard').classList.add('d-none');
     document.getElementById('tokenGate').classList.remove('d-none');
@@ -122,7 +140,7 @@ async function errorMessageOf(response) {
     }
 }
 
-// Step 2 - preparing
+// Step 1 - preparing
 
 async function startPreparation() {
     hideError('prepareError');
@@ -133,7 +151,7 @@ async function startPreparation() {
     appendDateParameter(parameters, 'priceWindowStart');
     appendDateParameter(parameters, 'priceWindowEnd');
 
-    const metaSource = document.getElementById('metaSource').value;
+    const metaSource = metaSourceValue();
     if (metaSource !== 'mtggoldfish') parameters.set('metaSource', metaSource);
 
     const requestOptions = {method: 'POST'};
@@ -201,7 +219,11 @@ async function pollPreparation() {
     if (status.state !== 'DONE') return;
 
     await loadDraft();
-    openStep('step3Body');
+    openStep('step2Body');
+}
+
+function metaSourceValue() {
+    return document.querySelector('input[name="metaSource"]:checked').value;
 }
 
 function renderPreparationStatus(status) {
@@ -224,7 +246,7 @@ function renderPreparationStatus(status) {
     }
 
     if (isRunning) startPolling();
-    setOutcome('step2Outcome', preparationOutcome(status));
+    setOutcome('step1Outcome', preparationOutcome(status));
 }
 
 function preparationStepIndex(step) {
@@ -270,7 +292,41 @@ function clockText(status) {
     return status.state === 'RUNNING' ? 'Running for ' + elapsed + '.' : 'Took ' + elapsed + '.';
 }
 
-// Step 3 - the draft
+async function loadCurrentSeason() {
+    const response = await fetch('./legacy/season/current');
+    currentSeason = response.ok ? await response.json() : null;
+    renderPreparationDefaults();
+
+    return currentSeason;
+}
+
+// The dates SeasonPreparationService.withDefaults would pick. A date input ignores its placeholder --> below the field
+function renderPreparationDefaults() {
+    const chosenStartDate = document.getElementById('startDate').value;
+    const startDate = chosenStartDate !== '' ? chosenStartDate : todayInUtc();
+
+    document.getElementById('startDateDefault').textContent = 'default: ' + formatDate(todayInUtc()) + ', today in UTC';
+    document.getElementById('endDateDefault').textContent = endDateDefaultText(startDate);
+    document.getElementById('priceWindowStartDefault').textContent = 'default:  '
+        + formatDate(isoDatePlusDays(startDate, -PRICE_WINDOW_DAYS)) + ', ' + PRICE_WINDOW_DAYS + ' days before the start';
+    document.getElementById('priceWindowEndDefault').textContent = 'default:  ' + formatDate(startDate)
+        + ', the start date, end exclusive';
+}
+
+function endDateDefaultText(startDate) {
+    if (currentSeason === null) return 'default: 10 weeks after the current season ends';
+
+    const afterCurrentSeason = isoDatePlusDays(currentSeason.endDate, SEASON_LENGTH_IN_DAYS);
+    if (afterCurrentSeason > startDate) {
+        return 'default: ' + formatDate(afterCurrentSeason) + ', 10 weeks after season ' + currentSeason.seasonNumber + ' ends';
+    }
+
+    // Season ## ended ages ago --> the API counts the ten weeks from the new start instead
+    return 'default: ' + formatDate(isoDatePlusDays(startDate, SEASON_LENGTH_IN_DAYS - 1)) + ', 10 weeks from the start, season '
+        + currentSeason.seasonNumber + ' is long over';
+}
+
+// Step 2 - the draft
 
 async function loadDraft() {
     const response = await request('./admin/v1/season/draft');
@@ -286,6 +342,7 @@ async function loadDraft() {
 
     draftReport = withEmptyLists(await response.json());
     downloadedParts = [];
+    restoreDoneSteps(draftReport);
     renderDraft(draftReport);
 }
 
@@ -305,26 +362,26 @@ function withEmptyLists(report) {
 }
 
 function renderNoDraft() {
-    ['step3', 'step5', 'step6'].forEach(step => {
+    ['step2', 'step4', 'step5', 'step6'].forEach(step => {
         document.getElementById(step + 'Empty').classList.remove('d-none');
         document.getElementById(step + 'Data').classList.add('d-none');
     });
     document.getElementById('step7Empty').classList.remove('d-none');
     document.getElementById('step7Data').classList.add('d-none');
-    document.getElementById('step1Data').innerHTML = 'Prepare a season first.';
     document.getElementById('commitBlocked').classList.add('d-none');
     document.getElementById('commitResult').innerHTML = '';
     document.getElementById('liveChecks').classList.add('d-none');
 
-    ['step1Outcome', 'step3Outcome', 'step4Outcome', 'step5Outcome', 'step6Outcome', 'step7Outcome']
+    ['step2Outcome', 'step3Outcome', 'step4Outcome', 'step5Outcome', 'step6Outcome', 'step7Outcome']
         .forEach(outcome => setOutcome(outcome, ''));
+    forgetDoneSteps();
     hasBlockingSanityFailure = false;
     updateCommitButton();
 }
 
 function renderDraft(report) {
     document.getElementById('commitAnyway').checked = false;
-    ['step3', 'step5', 'step6'].forEach(step => {
+    ['step2', 'step4', 'step5', 'step6'].forEach(step => {
         document.getElementById(step + 'Empty').classList.add('d-none');
         document.getElementById(step + 'Data').classList.remove('d-none');
     });
@@ -337,15 +394,20 @@ function renderDraft(report) {
     renderScryfallDecks(report.scryfallDecks);
     updateCommitButton();
 
-    setOutcome('step3Outcome', 'season ' + report.seasonNumber + ', ' + formatNumber(report.counts.cards) + ' cards, '
+    setStepDone(1, true);
+    setStepDone(3, report.committedAt !== null);
+
+    setOutcome('step2Outcome', 'season ' + report.seasonNumber + ', ' + formatNumber(report.counts.cards) + ' cards, '
         + report.counts.newBans + ' new bans, ' + report.counts.unbans + ' unbans');
 
     if (report.committedAt === null) {
-        setOutcome('step4Outcome', 'not committed');
-        return;
+        setOutcome('step3Outcome', 'not committed');
+    } else {
+        setOutcome('step3Outcome', 'committed ' + formatDateTime(report.committedAt) + byLine(report.committedBy));
+        renderAnnouncement(report, report.setsReleased); // committed before the page was opened --> the facts come out of the report
     }
 
-    setOutcome('step4Outcome', 'committed ' + formatDateTime(report.committedAt) + byLine(report.committedBy));
+    renderDoneSteps(); // after the outcomes above, two of them get overwritten
 }
 
 function renderDraftHeader(report) {
@@ -573,32 +635,7 @@ async function discardDraft() {
     await loadDraft(); // a DELETE hands back the last committed draft, if there is one
 }
 
-// Step 1 - the Season History row
-
-function renderSeasonHistory(report) {
-    const setNames = report.setsReleased.map(mtgSet => mtgSet.name + ' (' + mtgSet.code + ')').join(', ');
-    const setCodes = report.setsReleased
-        .filter(mtgSet => mtgSet.childCodes !== null && mtgSet.childCodes.length > 0)
-        .map(mtgSet => mtgSet.code + ' with ' + mtgSet.childCodes.join(' + '))
-        .join(', ');
-
-    const rows = [
-        ['Season', report.seasonNumber + ' (' + report.romanSeasonNumber + ')'],
-        ['Start', formatDate(report.startDate)],
-        ['Ende', formatDate(report.endDate)],
-        ['Finals Friday', formatDate(report.finalsFriday)],
-        ['Neu spielbare Sets', setNames === '' ? 'none' : setNames],
-        ['Set Code Updates', setCodes === '' ? 'none' : setCodes]
-    ];
-
-    document.getElementById('step1Data').innerHTML = '<table class="table table-sm data-table">'
-        + rows.map(row => '<tr><th class="fw-normal text-body-secondary">' + row[0] + '</th><td style="white-space: normal;">'
-            + escapeHtml(row[1]) + '</td></tr>').join('')
-        + '</table>';
-    setOutcome('step1Outcome', 'season ' + report.seasonNumber + ', ' + formatDate(report.startDate) + ' - ' + formatDate(report.endDate));
-}
-
-// Step 4 - committing
+// Step 3 - committing
 
 function updateCommitButton() {
     const hasDraft = draftReport !== null;
@@ -652,7 +689,7 @@ function renderCommitted(committed) {
         + rows.map(row => '<tr><th class="fw-normal text-body-secondary">' + row[0] + '</th><td>' + escapeHtml(row[1]) + '</td></tr>').join('')
         + '</table>';
 
-    renderAnnouncement(committed);
+    renderAnnouncement(committed, committed.newSets);
     document.getElementById('downloadWarning').classList.add('d-none');
 }
 
@@ -660,9 +697,8 @@ async function runLiveChecks() {
     document.getElementById('liveChecks').classList.remove('d-none');
 
     let seasonLine = 'Could not read /legacy/season/current.';
-    const response = await fetch('./legacy/season/current');
-    if (response.ok) {
-        const seasonInfo = await response.json();
+    const seasonInfo = await loadCurrentSeason(); // the current season is another one now --> so are the defaults in step 1
+    if (seasonInfo !== null) {
         seasonLine = 'Season ' + seasonInfo.seasonNumber + ', updated ' + formatDateTime(seasonInfo.updatedAt)
             + ' UTC - the fresh timestamp is what makes the extension reload.';
     }
@@ -684,13 +720,13 @@ async function reloadCardCache() {
     await runLiveChecks();
 }
 
-// Step 5 - the migrations
+// Step 4 - the migrations
 
 function renderDownloads(report) {
     document.getElementById('downloadWarning').classList.toggle('d-none', report.committedAt !== null);
     document.getElementById('downloadButtons').innerHTML = SQL_PARTS.map(part =>
         '<button type="button" class="btn btn-outline-primary btn-sm" data-sql-part="' + part + '">' + part + '</button>').join('');
-    setOutcome('step5Outcome', '');
+    setOutcome('step4Outcome', '');
 }
 
 async function downloadSql(part) {
@@ -713,7 +749,7 @@ async function downloadSql(part) {
     URL.revokeObjectURL(objectUrl);
 
     if (downloadedParts.indexOf(part) === -1) downloadedParts.push(part);
-    setOutcome('step5Outcome', downloadedParts.length + ' of ' + SQL_PARTS.length + ' downloaded');
+    setOutcome('step4Outcome', downloadedParts.length + ' of ' + SQL_PARTS.length + ' downloaded');
 }
 
 // Same rule as SeasonDraftService.sqlFileName, for when the header doesn't survive the trip
@@ -734,6 +770,53 @@ function fileNameOf(response, part) {
         default:
             return prefix + '_' + part + '.sql';
     }
+}
+
+// Step 5 - the Season History row
+
+function renderSeasonHistory(report) {
+    const setNames = report.setsReleased.map(mtgSet => mtgSet.name
+        + (mtgSet.commanderDecks !== null && mtgSet.commanderDecks.length > 0 ? ' (+ Commander Decks)' : ''));
+    const setCodes = [];
+    report.setsReleased.forEach(mtgSet => {
+        setCodes.push(mtgSet.code);
+        if (mtgSet.childCodes !== null) mtgSet.childCodes.forEach(childCode => setCodes.push(childCode));
+    });
+
+    const cells = [
+        report.seasonNumber,
+        formatDocDate(report.startDate),
+        formatDocDate(report.endDate),
+        setNames.join('\n'),
+        setCodes.join('\n'),
+        '' // Updates, that one is yours
+    ];
+
+    document.getElementById('seasonHistoryTable').innerHTML = '<table class="table table-sm data-table">'
+        + '<thead><tr>' + SEASON_HISTORY_COLUMNS.map(column => '<th class="fw-normal text-body-secondary">' + column + '</th>').join('') + '</tr></thead>'
+        + '<tbody id="seasonHistoryRow"><tr>'
+        + cells.map(cell => '<td style="white-space: normal;">' + escapeHtml(cell).replace(/\n/g, '<br>') + '</td>').join('')
+        + '</tr></tbody>'
+        + '</table>';
+    setOutcome('step5Outcome', 'season ' + report.seasonNumber + ', ' + formatDate(report.startDate) + ' - ' + formatDate(report.endDate));
+}
+
+// Google Docs drops the html into the selected cells, everything else gets the tab separated version
+async function copySeasonHistoryRow(elementId) {
+    const row = document.getElementById(elementId);
+    const values = [];
+    row.querySelectorAll('td').forEach(cell => values.push(cell.innerText.replace(/\n/g, ', ')));
+    const text = values.join('\t');
+
+    if (window.ClipboardItem === undefined) { // plain http, or a browser that never heard of it
+        await navigator.clipboard.writeText(text);
+        return;
+    }
+
+    await navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob(['<table>' + row.outerHTML + '</table>'], {type: 'text/html'}),
+        'text/plain': new Blob([text], {type: 'text/plain'})
+    })]);
 }
 
 // Steps 6 and 7 - the community bits
@@ -761,7 +844,7 @@ function cardCountOf(deckList) {
     return deckList.trim().split('\n').length + ' cards';
 }
 
-function renderAnnouncement(committed) {
+function renderAnnouncement(committed, newSets) {
     document.getElementById('step7Empty').classList.add('d-none');
     document.getElementById('step7Data').classList.remove('d-none');
 
@@ -774,11 +857,11 @@ function renderAnnouncement(committed) {
         ''
     ];
 
-    if (committed.newSets.length === 0) {
+    if (newSets.length === 0) {
         lines.push('No new sets this season.');
     } else {
         lines.push('Newly playable sets:');
-        committed.newSets.forEach(mtgSet => {
+        newSets.forEach(mtgSet => {
             lines.push('- ' + mtgSet.name + ' (' + mtgSet.code + '), ' + mtgSet.newCardCount + ' new cards');
             if (mtgSet.commanderDecks !== null && mtgSet.commanderDecks.length > 0) {
                 lines.push('  Commander decks: ' + mtgSet.commanderDecks.join(', '));
@@ -793,6 +876,54 @@ function renderAnnouncement(committed) {
 
     document.getElementById('announcementText').value = lines.join('\n');
     setOutcome('step7Outcome', 'ready to post');
+}
+
+// The checkmarks
+
+function setStepDone(step, isDone) {
+    document.getElementById('step' + step + 'Body').closest('.accordion-item').classList.toggle('is-done', isDone);
+}
+
+function completeStep(step) {
+    if (doneSteps.indexOf(step) === -1) doneSteps.push(step);
+    sessionStorage.setItem(DONE_STEPS_STORAGE_KEY, JSON.stringify({seasonNumber: draftReport.seasonNumber, steps: doneSteps}));
+    renderDoneSteps();
+
+    if (step === LAST_STEP) {
+        closeStep('step' + step + 'Body');
+        return;
+    }
+
+    openStep('step' + (step + 1) + 'Body'); // opening the next one closes this one, they share the accordion
+}
+
+function renderDoneSteps() {
+    doneSteps.forEach(step => {
+        setStepDone(step, true);
+        if (DONE_OUTCOMES[step] !== undefined) setOutcome('step' + step + 'Outcome', DONE_OUTCOMES[step]);
+    });
+}
+
+// Ticked off by hand, so they survive a reload - as long as it is still the same season
+function restoreDoneSteps(report) {
+    doneSteps = [];
+
+    const stored = sessionStorage.getItem(DONE_STEPS_STORAGE_KEY);
+    if (stored === null) return;
+
+    try {
+        const parsed = JSON.parse(stored);
+        if (parsed.seasonNumber === report.seasonNumber) doneSteps = parsed.steps;
+    } catch (error) {
+        sessionStorage.removeItem(DONE_STEPS_STORAGE_KEY);
+    }
+}
+
+function forgetDoneSteps() {
+    doneSteps = [];
+    sessionStorage.removeItem(DONE_STEPS_STORAGE_KEY);
+
+    for (let step = 1; step <= LAST_STEP; step++) setStepDone(step, false); // 0 is the token, that one is still there
 }
 
 // Odds and ends
@@ -813,6 +944,25 @@ function setOutcome(elementId, text) {
 
 function openStep(bodyId) {
     bootstrap.Collapse.getOrCreateInstance(document.getElementById(bodyId)).show();
+}
+
+function closeStep(bodyId) {
+    bootstrap.Collapse.getOrCreateInstance(document.getElementById(bodyId)).hide();
+}
+
+// Back where you were after a reload - waiting for the deploy with step 4 open shouldn't cost you the step
+function restoreOpenStep() {
+    const bodyId = sessionStorage.getItem(OPEN_STEP_STORAGE_KEY);
+    if (bodyId === null) return;
+    if (document.getElementById(bodyId) === null) return; // stored by a build that numbered the steps differently
+
+    openStep(bodyId);
+}
+
+function flashCopied(button) {
+    const label = button.textContent;
+    button.textContent = 'Copied';
+    setTimeout(() => { button.textContent = label; }, 1500);
 }
 
 function escapeHtml(text) {
@@ -880,6 +1030,21 @@ function formatDate(isoDate) {
     return Number(parts[2]) + ' ' + MONTH_NAMES[Number(parts[1]) - 1] + ' ' + parts[0];
 }
 
+// The Season History table writes them German style
+function formatDocDate(isoDate) {
+    const parts = isoDate.split('-');
+
+    return parts[2] + '.' + parts[1] + '.' + parts[0];
+}
+
+function todayInUtc() {
+    return new Date().toISOString().substring(0, 10);
+}
+
+function isoDatePlusDays(isoDate, days) {
+    return new Date(Date.parse(isoDate + 'T00:00:00Z') + days * 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
+}
+
 function formatDateTime(isoDateTime) {
     if (isoDateTime === null || isoDateTime === undefined) return '';
 
@@ -901,12 +1066,24 @@ function wireUpControls() {
     });
     document.getElementById('tokenForget').addEventListener('click', () => forgetToken());
 
-    document.getElementById('metaSource').addEventListener('change', event => {
-        document.getElementById('banFileInputs').classList.toggle('d-none', event.target.value !== 'files');
-    });
+    document.querySelectorAll('input[name="metaSource"]').forEach(radio => radio.addEventListener('change', () => {
+        document.getElementById('mtgTop8warning').classList.toggle('d-none', metaSourceValue() !== 'mtgtop8');
+        document.getElementById('banFileInputs').classList.toggle('d-none', metaSourceValue() !== 'files');
+    }));
+    document.getElementById('startDate').addEventListener('change', renderPreparationDefaults);
     document.getElementById('prepareButton').addEventListener('click', startPreparation);
     document.getElementById('cancelButton').addEventListener('click', cancelPreparation);
     document.getElementById('discardButton').addEventListener('click', discardDraft);
+
+    document.getElementById('stepAccordion').addEventListener('shown.bs.collapse', event => {
+        sessionStorage.setItem(OPEN_STEP_STORAGE_KEY, event.target.id);
+    });
+    // Opening the next step closes the current one, so only an accordion with nothing open at all forgets it
+    document.getElementById('stepAccordion').addEventListener('hidden.bs.collapse', () => {
+        if (document.querySelector('#stepAccordion .accordion-collapse.show') === null) {
+            sessionStorage.removeItem(OPEN_STEP_STORAGE_KEY);
+        }
+    });
 
     document.getElementById('commitAnyway').addEventListener('change', updateCommitButton);
     document.getElementById('commitButton').addEventListener('click', commitSeason);
@@ -919,13 +1096,25 @@ function wireUpControls() {
             return;
         }
 
+        const doneButton = event.target.closest('[data-done-step]');
+        if (doneButton !== null) {
+            completeStep(Number(doneButton.dataset.doneStep));
+            return;
+        }
+
+        const copyRowButton = event.target.closest('[data-copy-html]');
+        if (copyRowButton !== null) {
+            await copySeasonHistoryRow(copyRowButton.dataset.copyHtml);
+            flashCopied(copyRowButton);
+            return;
+        }
+
         const copyButton = event.target.closest('[data-copy-target]');
         if (copyButton === null) return;
 
         const source = document.getElementById(copyButton.dataset.copyTarget);
         await navigator.clipboard.writeText(source.value !== undefined ? source.value : source.textContent);
-        copyButton.textContent = 'Copied';
-        setTimeout(() => { copyButton.textContent = 'Copy'; }, 1500);
+        flashCopied(copyButton);
     });
 }
 

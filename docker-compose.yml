@@ -11,6 +11,7 @@ services:
       postgresql_db:
         condition: service_healthy
     volumes:
+      - ./src/main/resources/static:/opt/app/static:ro
       - seasons:/opt/app/seasons
   postgresql_db:
     image: "postgres:17-alpine"

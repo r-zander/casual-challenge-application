@@ -9,6 +9,8 @@ See [Documentation api.casualchallenge.gg](https://docs.google.com/document/d/1f
 - First start builds the jar and runs every migration, takes a few minutes
 - API on http://localhost:8080, Documentation on http://localhost:8080/docs
 - Postgres on localhost:5433, `postgres`/`postgres`
+- `src/main/resources/static` is mounted into the container - edit a page, reload the browser, done, no rebuild
+- everything else (java, templates, migrations) needs `docker compose up --build`
 - `docker compose down -v` throws the database away and starts over
 
 The server runs `docker-compose.prod.yml`, not this one.

@@ -67,6 +67,13 @@ spring:
       on-profile: local
   datasource:
     url: jdbc:postgresql://postgresql_db:5432/casual_challenge?stringtype=unspecified
+  web:
+    resources:
+      static-locations: file:/opt/app/static/,classpath:/static/ # mounted from the project, so editing a page and reloading is enough
+      cache:
+        period: 0
+      chain:
+        cache: false # without this a renamed page keeps answering 500 until the container restarts
 casual-challenge:
   security:
     jwt:

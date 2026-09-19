@@ -74,6 +74,9 @@ spring:
         period: 0
       chain:
         cache: false # without this a renamed page keeps answering 500 until the container restarts
+  thymeleaf:
+    prefix: file:/opt/app/templates/
+    cache: false
 casual-challenge:
   security:
     jwt:

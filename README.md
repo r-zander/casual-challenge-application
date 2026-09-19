@@ -19,4 +19,9 @@ See [Documentation api.casualchallenge.gg](https://docs.google.com/document/d/1f
     docker compose exec casual_challenge_application java -cp app.jar "-Dloader.main=gg.casualchallenge.application.CliTools" org.springframework.boot.loader.launch.PropertiesLauncher generate-admin-jwt ##your_name##
     ```
 
+- The wizard can push the three season migrations to GitHub itself. Needs a token with write access to contents and
+  pull requests, pasted into step 3 - it is used for that one call and stored nowhere. Point
+  `casual-challenge.season.github.repository` at a repository of your own while you try it out
+- `casual-challenge.season.github.base-branch` is what the pull request goes against, `master` on the real one
+
 The server runs `docker-compose.prod.yml`, not this one.

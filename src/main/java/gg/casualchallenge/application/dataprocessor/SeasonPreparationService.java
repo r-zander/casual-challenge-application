@@ -320,11 +320,16 @@ public class SeasonPreparationService {
                 request.getPriceWindow().getStart(),
                 request.getPriceWindow().getEnd(),
                 currentSeason.getId(),
+                currentSeason.getEndDate(),
                 currentSeason.getUpdatedAt(),
                 printings.getMetaDate() != null ? printings.getMetaDate().toString() : null,
                 request.getMetaSource().toString(),
                 report.getPreparedAt(),
                 request.getPreparedBy(),
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 toJson(report)
@@ -391,6 +396,19 @@ public class SeasonPreparationService {
         if (!seasonNumber.matches("[0-9]+")) return 0; // whatever that is, it is the first to go
 
         return Integer.parseInt(seasonNumber);
+    }
+
+    public static boolean deleteArchive(Path archiveDirectory, int seasonNumber) {
+        Path seasonDirectory = archiveDirectory.resolve(SEASON_DIRECTORY_PREFIX + seasonNumber);
+        if (!Files.isDirectory(seasonDirectory)) return false;
+
+        try {
+            deleteArchive(seasonDirectory);
+            return true;
+        } catch (IOException e) {
+            log.warn("Couldn't delete the season archive '{}'.", seasonDirectory, e);
+            return false;
+        }
     }
 
     private static void deleteArchive(Path seasonDirectory) throws IOException {
@@ -727,6 +745,7 @@ public class SeasonPreparationService {
                 currentSeason.getSeasonNumber(),
                 LocalDateTime.now(Constants.TIMEZONE),
                 request.getPreparedBy(),
+                null,
                 null,
                 null,
                 counts,

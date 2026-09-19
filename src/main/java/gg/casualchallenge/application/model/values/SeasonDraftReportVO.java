@@ -32,6 +32,8 @@ public class SeasonDraftReportVO { // everything you need to decide whether the 
     LocalDateTime committedAt; // the report is stored before the commit, SeasonDraftService fills these two from season_draft
     @With
     String committedBy;
+    @With
+    String pullRequestUrl; // where the migrations went, null when they were downloaded by hand
     CountsVO counts;
     List<String> duplicateMetaShareNames;
     List<BanChangeVO> newBans;

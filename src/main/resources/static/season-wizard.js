@@ -37,6 +37,7 @@ let pollTimer = null;
 let hasBlockingSanityFailure = false;
 let downloadedParts = [];
 let doneSteps = [];
+let removalPreview = null;
 
 // Step 0 - the token
 
@@ -647,13 +648,21 @@ function updateCommitButton() {
 }
 
 async function commitSeason() {
-    if (!window.confirm('Commit season ' + draftReport.seasonNumber + '? /v1/cards waits a second or two while it goes in.')) return;
+    const githubToken = document.getElementById('githubTokenInput').value.trim();
+    const question = githubToken === ''
+        ? 'Commit season ' + draftReport.seasonNumber + '? /v1/cards waits a second or two while it goes in.'
+        : 'Commit season ' + draftReport.seasonNumber + ' and open a pull request with the migrations?';
+    if (!window.confirm(question)) return;
 
     hideError('commitError');
     document.getElementById('commitButton').disabled = true;
     document.getElementById('reloadCacheButton').classList.add('d-none');
 
-    const response = await request('./admin/v1/season/commit', {method: 'POST'});
+    const response = await request('./admin/v1/season/commit', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({githubToken: githubToken === '' ? null : githubToken})
+    });
     if (!response.ok) {
         const message = await errorMessageOf(response);
         showError('commitError', response.status === 409
@@ -665,6 +674,7 @@ async function commitSeason() {
         return;
     }
 
+    document.getElementById('githubTokenInput').value = ''; // it did its job, no reason to keep it around
     renderCommitted(await response.json());
     await loadDraft(); // now it has committedAt --> the sql files get their final names
     await runLiveChecks();
@@ -682,6 +692,9 @@ function renderCommitted(committed) {
         ['Cards remapped', formatNumber(committed.counts.remappedCards)],
         ['Names updated', formatNumber(committed.counts.updatedCardNames)]
     ];
+    if (committed.pullRequest !== null && committed.pullRequest !== undefined) {
+        rows.push(['Pull request', committed.pullRequest.url]);
+    }
 
     document.getElementById('commitResult').innerHTML = '<div class="alert alert-success">Season '
         + committed.seasonNumber + ' is live.</div>'
@@ -727,6 +740,21 @@ function renderDownloads(report) {
     document.getElementById('downloadButtons').innerHTML = SQL_PARTS.map(part =>
         '<button type="button" class="btn btn-outline-primary btn-sm" data-sql-part="' + part + '">' + part + '</button>').join('');
     setOutcome('step4Outcome', '');
+    renderPullRequest(report.pullRequestUrl);
+}
+
+function renderPullRequest(pullRequestUrl) {
+    const hasPullRequest = pullRequestUrl !== null && pullRequestUrl !== undefined;
+    document.getElementById('downloadInstructions').classList.toggle('d-none', hasPullRequest);
+    document.getElementById('downloadPushHint').classList.toggle('d-none', hasPullRequest);
+    document.getElementById('pullRequestResult').classList.toggle('d-none', !hasPullRequest);
+    if (!hasPullRequest) return;
+
+    const number = pullRequestUrl.substring(pullRequestUrl.lastIndexOf('/') + 1);
+    document.getElementById('pullRequestResult').innerHTML = '<div class="alert alert-success">The three migrations are in '
+        + '<a href="' + escapeHtml(pullRequestUrl) + '" target="_blank" rel="noreferrer">pull request #' + escapeHtml(number)
+        + '</a>. Merge it, then run the deploy workflow. The downloads are still here if you want them anyway.</div>';
+    setOutcome('step4Outcome', 'pull request #' + number + ' opened');
 }
 
 async function downloadSql(part) {
@@ -876,6 +904,108 @@ function renderAnnouncement(committed, newSets) {
 
     document.getElementById('announcementText').value = lines.join('\n');
     setOutcome('step7Outcome', 'ready to post');
+}
+
+// Removing a season
+
+async function loadRemovalPreview() {
+    hideError('removalError');
+    document.getElementById('removalPreview').classList.add('d-none');
+    document.getElementById('removalConfirm').classList.add('d-none');
+    document.getElementById('removalResult').innerHTML = '';
+    removalPreview = null;
+
+    const seasonNumber = document.getElementById('removalSeasonInput').value.trim();
+    if (seasonNumber === '') {
+        showError('removalError', 'Which season?');
+        return;
+    }
+
+    const response = await request('./admin/v1/season/' + encodeURIComponent(seasonNumber) + '/removal');
+    if (!response.ok) {
+        showError('removalError', await errorMessageOf(response));
+        return;
+    }
+
+    removalPreview = await response.json();
+    renderRemovalPreview(removalPreview);
+}
+
+function renderRemovalPreview(preview) {
+    const rows = [
+        ['Season', preview.seasonNumber + ', ' + formatDate(preview.startDate) + ' - ' + formatDate(preview.endDate)],
+        ['Committed', preview.committedAt !== null ? formatDateTime(preview.committedAt) + ' by ' + preview.committedBy : 'not by this wizard'],
+        ['Card season data', formatNumber(preview.cardSeasonDataRows) + ' rows'],
+        ['Cards', formatNumber(preview.cardsAddedBySeason) + ' that no other season needs'],
+        ['Goes back', preview.renamedCards + ' renames, ' + preview.oracleIdRemaps + ' oracle ids'],
+        ['Previous season', preview.previousSeasonNumber !== null
+            ? 'season ' + preview.previousSeasonNumber + ', ends ' + formatDate(preview.previousSeasonEndDate) + ' again'
+            : 'not recorded'],
+        ['Archive', preview.archiveDirectory]
+    ];
+    if (preview.pullRequestUrl !== null) rows.push(['Pull request', preview.pullRequestUrl]);
+
+    const refusals = preview.refusals.length === 0 ? ''
+        : '<div class="alert alert-warning">Season ' + preview.seasonNumber + ' stays:<ul class="mb-0">'
+        + preview.refusals.map(refusal => '<li>' + escapeHtml(refusal) + '</li>').join('') + '</ul></div>';
+
+    document.getElementById('removalPreview').innerHTML = refusals
+        + '<table class="table table-sm data-table">'
+        + rows.map(row => '<tr><th class="fw-normal text-body-secondary">' + row[0] + '</th><td>' + escapeHtml(row[1]) + '</td></tr>').join('')
+        + '</table>';
+    document.getElementById('removalPreview').classList.remove('d-none');
+
+    document.getElementById('removalTokenBlock').classList.toggle('d-none', preview.pullRequestUrl === null);
+    document.getElementById('removalConfirmInput').value = '';
+    document.getElementById('removalConfirm').classList.toggle('d-none', !preview.removable);
+    updateRemovalButton();
+}
+
+function updateRemovalButton() {
+    const isConfirmed = removalPreview !== null
+        && document.getElementById('removalConfirmInput').value.trim() === String(removalPreview.seasonNumber);
+
+    document.getElementById('removalButton').disabled = !isConfirmed;
+}
+
+async function removeSeason() {
+    if (!window.confirm('Remove season ' + removalPreview.seasonNumber + '? Season ' + removalPreview.previousSeasonNumber + ' is the current one afterwards.')) return;
+
+    hideError('removalError');
+    document.getElementById('removalButton').disabled = true;
+
+    const githubToken = document.getElementById('removalGithubToken').value.trim();
+    const response = await request('./admin/v1/season/' + removalPreview.seasonNumber + '/removal', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({githubToken: githubToken === '' ? null : githubToken})
+    });
+    if (!response.ok) {
+        showError('removalError', await errorMessageOf(response));
+        updateRemovalButton();
+        return;
+    }
+
+    renderRemoved(await response.json());
+}
+
+function renderRemoved(removed) {
+    const lines = [
+        formatNumber(removed.counts.cardSeasonDataRows) + ' card season data rows gone',
+        formatNumber(removed.counts.deletedCards) + ' cards gone',
+        removed.counts.undoneRenames + ' renames and ' + removed.counts.undoneRemaps + ' oracle ids back where they were'
+    ];
+    if (removed.closedPullRequestUrl !== null) lines.push('branch deleted, ' + removed.closedPullRequestUrl + ' closed with it');
+    if (removed.archiveDeleted) lines.push('the season folder in the archive is gone');
+
+    document.getElementById('removalPreview').classList.add('d-none');
+    document.getElementById('removalConfirm').classList.add('d-none');
+    document.getElementById('removalGithubToken').value = '';
+    document.getElementById('removalResult').innerHTML = '<div class="alert alert-success">Season ' + removed.seasonNumber
+        + ' is gone. Season ' + removed.previousSeasonNumber + ' ends ' + escapeHtml(formatDate(removed.previousSeasonEndDate))
+        + ' again. Reload the page before the next run.</div>'
+        + '<ul>' + lines.map(line => '<li>' + escapeHtml(line) + '</li>').join('') + '</ul>';
+    removalPreview = null;
 }
 
 // The checkmarks
@@ -1084,6 +1214,10 @@ function wireUpControls() {
             sessionStorage.removeItem(OPEN_STEP_STORAGE_KEY);
         }
     });
+
+    document.getElementById('removalPreviewButton').addEventListener('click', loadRemovalPreview);
+    document.getElementById('removalConfirmInput').addEventListener('input', updateRemovalButton);
+    document.getElementById('removalButton').addEventListener('click', removeSeason);
 
     document.getElementById('commitAnyway').addEventListener('change', updateCommitButton);
     document.getElementById('commitButton').addEventListener('click', commitSeason);

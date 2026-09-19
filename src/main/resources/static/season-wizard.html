@@ -161,6 +161,15 @@
       font-weight: 500;
     }
 
+    .danger-zone > summary {
+      padding: .35em 0;
+      border-bottom: 1px solid var(--bs-border-color);
+
+      cursor: pointer;
+      font-weight: 500;
+      color: var(--bs-danger);
+    }
+
     .deck-list {
       font-family: "Fira Code", monospace;
       font-size: .8rem;
@@ -420,6 +429,20 @@
                 draft stays with its report - our only record of the season start.
               </p>
 
+              <div class="mb-3">
+                <label for="githubTokenInput" class="form-label">GitHub token <span
+                    class="text-body-secondary">(optional)</span></label>
+                <input type="password" class="form-control" id="githubTokenInput" autocomplete="off"
+                       placeholder="github_pat_...">
+                <div class="form-text">
+                  With a token the three migrations go onto a branch of their own and into a pull request against
+                  master, so step 4 is a click instead of three downloads and a copy. Needs write access to contents
+                  and pull requests. It is used for this one call and stored nowhere. If GitHub says no, the season
+                  is not committed either and you just try again. Leave it empty and everything works as it always
+                  did.
+                </div>
+              </div>
+
               <div id="commitBlocked" class="alert alert-warning d-none" role="alert">
                 <div id="commitBlockedReason"></div>
                 <div class="form-check mt-2">
@@ -465,17 +488,20 @@
             <div class="accordion-body">
               <div id="step4Empty" class="text-body-secondary">No draft yet.</div>
               <div id="step4Data" class="d-none">
-                <div id="downloadWarning" class="alert alert-warning d-none" role="alert">
-                  Before the commit these carry the preparation time and name, not the commit ones. Works
-                  too, just don't mix the two.
+                <div id="pullRequestResult" class="d-none"></div>
+                <div id="downloadInstructions">
+                  <div id="downloadWarning" class="alert alert-warning d-none" role="alert">
+                    Before the commit these carry the preparation time and name, not the commit ones. Works
+                    too, just don't mix the two.
+                  </div>
+                  <p>
+                    All three share the timestamp, so <code>00</code> runs first. Copy them over to
+                    <code>casual-challenge-application/src/main/resources/db/changelog/migrations</code>.
+                  </p>
                 </div>
-                <p>
-                  All three share the timestamp, so <code>00</code> runs first. Copy them over to
-                  <code>casual-challenge-application/src/main/resources/db/changelog/migrations</code>.
-                </p>
                 <div class="d-flex flex-wrap gap-2" id="downloadButtons"></div>
                 <div id="downloadError" class="alert alert-danger mt-3 d-none" role="alert"></div>
-                <p class="mt-4">
+                <p class="mt-4" id="downloadPushHint">
                   Then commit + push to master and run the deploy workflow. On the server they change
                   nothing, the commit already wrote all of it - they're there so the database can be
                   rebuilt from the repository alone. The deploy runs them anyway, so if the app doesn't
@@ -584,6 +610,56 @@
         </div>
 
       </div>
+
+      <details class="danger-zone mt-5" id="removalZone">
+        <summary>Remove a season</summary>
+        <div class="pt-3">
+          <p>
+            For the rehearsal. Undoes exactly what the commit did - the season, its card season data, the cards it
+            brought, the renames, the oracle id remaps - and gives the season below it its end date back. Once a
+            migration for the season has run on this database it stays, whatever else you do: it is part of the
+            repository by then and the next deploy would write it straight back.
+          </p>
+
+          <div class="row g-2 align-items-end">
+            <div class="col-auto">
+              <label for="removalSeasonInput" class="form-label">Season</label>
+              <input type="number" class="form-control" id="removalSeasonInput" style="width: 7em">
+            </div>
+            <div class="col-auto">
+              <button type="button" class="btn btn-outline-secondary" id="removalPreviewButton">What would go?
+              </button>
+            </div>
+          </div>
+
+          <div id="removalError" class="alert alert-danger mt-3 d-none" role="alert"></div>
+          <div id="removalPreview" class="mt-4 d-none"></div>
+
+          <div id="removalConfirm" class="mt-4 d-none">
+            <div class="mb-3 d-none" id="removalTokenBlock">
+              <label for="removalGithubToken" class="form-label">GitHub token</label>
+              <input type="password" class="form-control" id="removalGithubToken" autocomplete="off"
+                     placeholder="github_pat_...">
+              <div class="form-text">
+                The migrations of this season went to GitHub. The branch goes with the season, and that closes the
+                pull request.
+              </div>
+            </div>
+            <div class="row g-2 align-items-end">
+              <div class="col-auto">
+                <label for="removalConfirmInput" class="form-label">Type the season number to confirm</label>
+                <input type="text" class="form-control" id="removalConfirmInput" style="width: 7em"
+                       autocomplete="off">
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-danger" id="removalButton" disabled>Remove the season</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="removalResult" class="mt-4"></div>
+        </div>
+      </details>
     </div>
   </main>
 

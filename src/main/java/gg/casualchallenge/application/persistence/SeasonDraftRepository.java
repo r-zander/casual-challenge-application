@@ -2,7 +2,9 @@ package gg.casualchallenge.application.persistence;
 
 import gg.casualchallenge.application.model.values.CommittedSeasonCountsVO;
 import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
+import gg.casualchallenge.application.model.values.SeasonDraftReportVO;
 import gg.casualchallenge.application.model.values.SeasonDraftVO;
+import gg.casualchallenge.application.model.values.SeasonRemovalCountsVO;
 import gg.casualchallenge.application.model.values.SeasonVO;
 import gg.casualchallenge.application.persistence.converters.LegalityConverter;
 import gg.casualchallenge.application.persistence.converters.MtgFormatConverter;
@@ -31,7 +33,7 @@ public class SeasonDraftRepository {
     private static final LegalityConverter LEGALITY_CONVERTER = new LegalityConverter();
     private static final MtgFormatConverter MTG_FORMAT_CONVERTER = new MtgFormatConverter();
 
-    private static final String SELECT_DRAFT = "SELECT id, season_number, start_date, end_date, price_window_start, price_window_end, previous_season_id, previous_season_updated_at, mtgjson_date, meta_source, prepared_at, prepared_by, committed_at, committed_by, report FROM public.season_draft";
+    private static final String SELECT_DRAFT = "SELECT id, season_number, start_date, end_date, price_window_start, price_window_end, previous_season_id, previous_season_end_date, previous_season_updated_at, mtgjson_date, meta_source, prepared_at, prepared_by, committed_at, committed_by, migration_branch, pull_request_url, removed_at, removed_by, report FROM public.season_draft";
 
     private static final String INSERT_DRAFT_CARD = "INSERT INTO public.season_draft_card (season_draft_id, oracle_id, previous_oracle_id, name, normalized_name, budget_points, legality, meta_share_standard, meta_share_pioneer, meta_share_modern, meta_share_legacy, meta_share_vintage, meta_share_pauper, banned_in, vintage_restricted, is_new_card, skip_reason)" +
             " VALUES (?, ?, ?, ?, ?, ?, ?::legality, ?, ?, ?, ?, ?, ?, ?::mtg_format, ?, ?, ?)";
@@ -51,8 +53,8 @@ public class SeasonDraftRepository {
                 + " (SELECT id FROM public.season_draft WHERE committed_at IS NOT NULL AND id <> (SELECT MAX(id) FROM public.season_draft WHERE committed_at IS NOT NULL))");
 
         Integer draftId = jdbcTemplate.queryForObject(
-                "INSERT INTO public.season_draft (season_number, start_date, end_date, price_window_start, price_window_end, previous_season_id, previous_season_updated_at, mtgjson_date, meta_source, prepared_at, prepared_by, report)" +
-                        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                "INSERT INTO public.season_draft (season_number, start_date, end_date, price_window_start, price_window_end, previous_season_id, previous_season_end_date, previous_season_updated_at, mtgjson_date, meta_source, prepared_at, prepared_by, report)" +
+                        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
                 Integer.class,
                 draft.getSeasonNumber(),
                 draft.getStartDate(),
@@ -60,6 +62,7 @@ public class SeasonDraftRepository {
                 draft.getPriceWindowStart(),
                 draft.getPriceWindowEnd(),
                 draft.getPreviousSeasonId(),
+                draft.getPreviousSeasonEndDate(),
                 draft.getPreviousSeasonUpdatedAt(),
                 draft.getMtgJsonDate(),
                 draft.getMetaSource(),
@@ -119,7 +122,14 @@ public class SeasonDraftRepository {
     }
 
     @Transactional
-    public CommittedSeasonCountsVO commit(int draftId, LocalDateTime addedAt, LocalDateTime committedAt, String committedBy) {
+    public CommittedSeasonCountsVO commit(
+            int draftId,
+            LocalDateTime addedAt,
+            LocalDateTime committedAt,
+            String committedBy,
+            String migrationBranch,
+            String pullRequestUrl
+    ) {
         List<SeasonDraftVO> drafts = jdbcTemplate.query(SELECT_DRAFT + " WHERE id = ? FOR UPDATE", SeasonDraftRepository::toDraftVO, draftId);
         if (drafts.isEmpty()) {
             throw new IllegalStateException("There is no season draft with id '" + draftId + "'.");
@@ -233,7 +243,8 @@ public class SeasonDraftRepository {
                 draftId);
 
         // Not now(): the database runs in local time while prepared_at is UTC, and the two of them name the migration files
-        jdbcTemplate.update("UPDATE public.season_draft SET committed_at = ?, committed_by = ? WHERE id = ?", committedAt, committedBy, draftId);
+        jdbcTemplate.update("UPDATE public.season_draft SET committed_at = ?, committed_by = ?, migration_branch = ?, pull_request_url = ? WHERE id = ?",
+                committedAt, committedBy, migrationBranch, pullRequestUrl, draftId);
 
         return new CommittedSeasonCountsVO(remaps.size(), updatedCardNames, insertedCards, upsertedCardSeasonData);
     }
@@ -241,6 +252,113 @@ public class SeasonDraftRepository {
     @Transactional
     public void discard() {
         jdbcTemplate.update("DELETE FROM public.season_draft WHERE committed_at IS NULL"); // season_draft_card is cascaded
+    }
+
+    public SeasonDraftVO findCommittedDraft(int seasonNumber) {
+        List<SeasonDraftVO> drafts = jdbcTemplate.query(SELECT_DRAFT + " WHERE season_number = ? AND committed_at IS NOT NULL AND removed_at IS NULL ORDER BY id DESC LIMIT 1", SeasonDraftRepository::toDraftVO, seasonNumber);
+        if (drafts.isEmpty()) return null;
+        return drafts.get(0);
+    }
+
+    /** Liquibase's own bookkeeping. Once a season migration ran here the season belongs to the repository, and removing it would last until the next deployment. */
+    public boolean hasAppliedSeasonMigration(int seasonNumber) {
+        Integer changeSets = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM public.databasechangelog WHERE filename LIKE ? OR filename LIKE ?",
+                Integer.class,
+                "%_00_add_season_" + seasonNumber + ".sql",
+                "%_for_season_" + seasonNumber + ".sql");
+
+        return changeSets != null && changeSets > 0;
+    }
+
+    public int countCardSeasonData(int seasonId) {
+        Integer rows = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card_season_data WHERE season_id = ?", Integer.class, seasonId);
+        return rows != null ? rows : 0;
+    }
+
+    // Same condition the removal deletes by, only that the season data is still there while we are counting
+    public int countCardsAddedAt(LocalDateTime addedAt, int seasonId) {
+        Integer cards = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM public.card WHERE added_at = ? AND NOT EXISTS (SELECT 1 FROM public.card_season_data WHERE card_oracle_id = card.oracle_id AND season_id <> ?)",
+                Integer.class,
+                addedAt,
+                seasonId);
+
+        return cards != null ? cards : 0;
+    }
+
+    /** The inverse of commit, driven by what that commit recorded. Keep the two in sync. */
+    @Transactional
+    public SeasonRemovalCountsVO remove(
+            int draftId,
+            List<SeasonDraftReportVO.OracleIdChangeVO> oracleIdChanges,
+            List<SeasonDraftReportVO.RenamedCardVO> renamedCards,
+            LocalDateTime removedAt,
+            String removedBy
+    ) {
+        List<SeasonDraftVO> drafts = jdbcTemplate.query(SELECT_DRAFT + " WHERE id = ? FOR UPDATE", SeasonDraftRepository::toDraftVO, draftId);
+        if (drafts.isEmpty()) {
+            throw new IllegalStateException("There is no season draft with id '" + draftId + "'.");
+        }
+
+        SeasonDraftVO draft = drafts.get(0);
+        int seasonNumber = draft.getSeasonNumber();
+        if (draft.getCommittedAt() == null) {
+            throw new IllegalStateException("The draft for season " + seasonNumber + " was never committed.");
+        }
+        if (draft.getRemovedAt() != null) {
+            throw new IllegalStateException("Season " + seasonNumber + " was removed already, on " + draft.getRemovedAt() + ".");
+        }
+        if (draft.getPreviousSeasonEndDate() == null) {
+            throw new IllegalStateException("The draft for season " + seasonNumber + " was prepared by an older build, it never stored the end date season " + draft.getPreviousSeasonId() + " had before the commit.");
+        }
+        if (hasAppliedSeasonMigration(seasonNumber)) {
+            throw new IllegalStateException("A migration for season " + seasonNumber + " has run on this database --> the season is part of the repository and the next deployment would write it again.");
+        }
+
+        // The current season is the one with the latest start date, same as everywhere else in the application
+        List<SeasonVO> currentSeasons = jdbcTemplate.query("SELECT id, season_number, start_date, end_date, updated_at FROM public.season ORDER BY start_date DESC LIMIT 1", SeasonDraftRepository::toSeasonVO);
+        if (currentSeasons.isEmpty() || currentSeasons.get(0).getSeasonNumber() != seasonNumber) {
+            throw new IllegalStateException("Season " + seasonNumber + " is not the current season, and only the newest one can be removed.");
+        }
+
+        SeasonVO season = currentSeasons.get(0);
+        int cardSeasonDataRows = jdbcTemplate.update("DELETE FROM public.card_season_data WHERE season_id = ?", season.getId());
+
+        // Step: MTGJSON's renames go back, but only where the name is still the one the commit wrote
+        int undoneRenames = 0;
+        for (SeasonDraftReportVO.RenamedCardVO renamedCard : renamedCards) {
+            undoneRenames += jdbcTemplate.update("UPDATE public.card SET name = ?, normalized_name = ? WHERE oracle_id = ? AND name = ? AND normalized_name = ?",
+                    renamedCard.getPreviousName(),
+                    renamedCard.getPreviousNormalizedName(),
+                    renamedCard.getOracleId(),
+                    renamedCard.getName(),
+                    renamedCard.getNormalizedName());
+        }
+
+        // Step: the cards this season brought. added_at is the draft's prepared_at for every one of them, and the NOT EXISTS keeps whatever another season still needs
+        int deletedCards = jdbcTemplate.update(
+                "DELETE FROM public.card WHERE added_at = ? AND NOT EXISTS (SELECT 1 FROM public.card_season_data WHERE card_oracle_id = card.oracle_id)",
+                draft.getPreparedAt());
+
+        for (SeasonDraftReportVO.OracleIdChangeVO oracleIdChange : oracleIdChanges) {
+            // Both updates in one statement, same reason as in commit
+            jdbcTemplate.update("WITH remapped_card AS (UPDATE public.card SET oracle_id = ? WHERE oracle_id = ?) UPDATE public.card_season_data SET card_oracle_id = ? WHERE card_oracle_id = ?",
+                    oracleIdChange.getPreviousOracleId(),
+                    oracleIdChange.getOracleId(),
+                    oracleIdChange.getPreviousOracleId(),
+                    oracleIdChange.getOracleId());
+        }
+
+        // Step: open the previous season again and drop this one. updated_at is new, not restored, or nobody out there notices that the season went away
+        jdbcTemplate.update("UPDATE public.season SET end_date = ?, updated_at = now() WHERE id = ?", draft.getPreviousSeasonEndDate(), draft.getPreviousSeasonId());
+        jdbcTemplate.update("DELETE FROM public.season WHERE id = ?", season.getId());
+        jdbcTemplate.execute("SELECT setval('season_id_seq', (SELECT MAX(id) FROM public.season))");
+
+        // The draft stays, it is the only record of the season start. It just says now that the season is gone again.
+        jdbcTemplate.update("UPDATE public.season_draft SET removed_at = ?, removed_by = ? WHERE id = ?", removedAt, removedBy, draftId);
+
+        return new SeasonRemovalCountsVO(cardSeasonDataRows, deletedCards, oracleIdChanges.size(), undoneRenames);
     }
 
     private static SeasonVO toSeasonVO(ResultSet resultSet, int rowNumber) throws SQLException {
@@ -261,6 +379,7 @@ public class SeasonDraftRepository {
                 resultSet.getObject("price_window_start", LocalDate.class),
                 resultSet.getObject("price_window_end", LocalDate.class),
                 resultSet.getInt("previous_season_id"),
+                resultSet.getObject("previous_season_end_date", LocalDate.class),
                 resultSet.getObject("previous_season_updated_at", LocalDateTime.class),
                 resultSet.getString("mtgjson_date"),
                 resultSet.getString("meta_source"),
@@ -268,6 +387,10 @@ public class SeasonDraftRepository {
                 resultSet.getString("prepared_by"),
                 resultSet.getObject("committed_at", LocalDateTime.class),
                 resultSet.getString("committed_by"),
+                resultSet.getString("migration_branch"),
+                resultSet.getString("pull_request_url"),
+                resultSet.getObject("removed_at", LocalDateTime.class),
+                resultSet.getString("removed_by"),
                 resultSet.getString("report"));
     }
 

@@ -4,7 +4,9 @@ import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
 import gg.casualchallenge.application.model.values.CommittedSeasonCountsVO;
 import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
+import gg.casualchallenge.application.model.values.SeasonDraftReportVO;
 import gg.casualchallenge.application.model.values.SeasonDraftVO;
+import gg.casualchallenge.application.model.values.SeasonRemovalCountsVO;
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
 import liquibase.integration.spring.SpringLiquibase;
 import org.junit.jupiter.api.AfterAll;
@@ -41,10 +43,17 @@ class SeasonDraftRepositoryTest {
 
     private static final UUID GONE_CARD = UUID.fromString("e91d3b52-8a7c-4f16-b2d9-0c4e5a6b7d38");
 
+    private static final LocalDate SEASON_20_END_DATE = LocalDate.of(2026, 6, 21);
     private static final LocalDateTime SEASON_20_UPDATED_AT = LocalDateTime.of(2026, 4, 6, 10, 59, 0);
     private static final LocalDateTime SEASON_20_ADDED_AT = LocalDateTime.of(2026, 4, 6, 8, 59, 1);
     private static final LocalDateTime PREPARED_AT = LocalDateTime.of(2026, 6, 7, 18, 30, 0);
     private static final LocalDateTime COMMITTED_AT = LocalDateTime.of(2026, 6, 8, 9, 15, 0);
+    private static final LocalDateTime REMOVED_AT = LocalDateTime.of(2026, 6, 8, 11, 40, 0);
+
+    private static final List<SeasonDraftReportVO.OracleIdChangeVO> ORACLE_ID_CHANGES =
+            List.of(new SeasonDraftReportVO.OracleIdChangeVO("Joven and Chandler", JOVEN_OLD, JOVEN_NEW, "ATQ"));
+    private static final List<SeasonDraftReportVO.RenamedCardVO> RENAMED_CARDS =
+            List.of(new SeasonDraftReportVO.RenamedCardVO(JOVEN_NEW, "Joven", "joven", "Joven and Chandler", "joven-and-chandler"));
 
     private static EmbeddedPostgres embeddedPostgres;
     private static JdbcTemplate jdbcTemplate;
@@ -144,7 +153,7 @@ class SeasonDraftRepositoryTest {
         IllegalStateException exception = assertThrows(IllegalStateException.class, () -> commitDraftInTransaction(draftId));
         assertEquals("Card 'Joven and Chandler' is remapped to oracle id '" + JOVEN_NEW + "', which already belongs to 'Unrelated Card'.", exception.getMessage());
         assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season WHERE season_number = 21", Integer.class));
-        assertEquals(LocalDate.of(2026, 6, 7), jdbcTemplate.queryForObject("SELECT end_date FROM public.season WHERE id = 20", LocalDate.class));
+        assertEquals(SEASON_20_END_DATE, jdbcTemplate.queryForObject("SELECT end_date FROM public.season WHERE id = 20", LocalDate.class));
         assertEquals(SEASON_20_UPDATED_AT, jdbcTemplate.queryForObject("SELECT updated_at FROM public.season WHERE id = 20", LocalDateTime.class));
         assertEquals(4, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card", Integer.class));
         assertNull(seasonDraftRepository.findDraft().getCommittedAt());
@@ -173,7 +182,7 @@ class SeasonDraftRepositoryTest {
 
         assertThrows(DataIntegrityViolationException.class, () -> commitDraftInTransaction(draftId));
         assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season WHERE season_number = 21", Integer.class));
-        assertEquals(LocalDate.of(2026, 6, 7), jdbcTemplate.queryForObject("SELECT end_date FROM public.season WHERE id = 20", LocalDate.class));
+        assertEquals(SEASON_20_END_DATE, jdbcTemplate.queryForObject("SELECT end_date FROM public.season WHERE id = 20", LocalDate.class));
         assertEquals(SEASON_20_UPDATED_AT, jdbcTemplate.queryForObject("SELECT updated_at FROM public.season WHERE id = 20", LocalDateTime.class));
         assertEquals(3, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card", Integer.class));
         assertEquals(3, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card_season_data", Integer.class));
@@ -242,13 +251,88 @@ class SeasonDraftRepositoryTest {
         assertEquals(3, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season_draft", Integer.class)); // the reports stay, they are the record of a season start
     }
 
+    @Test
+    void testRemove() {
+        seedPreviousSeason();
+        int draftId = replaceDraft();
+        commitDraftInTransaction(draftId);
+        assertEquals(1, seasonDraftRepository.countCardsAddedAt(PREPARED_AT, 21));
+
+        SeasonRemovalCountsVO counts = removeSeasonInTransaction(draftId);
+
+        assertEquals(3, counts.getCardSeasonDataRows());
+        assertEquals(1, counts.getDeletedCards());
+        assertEquals(1, counts.getUndoneRemaps());
+        assertEquals(1, counts.getUndoneRenames());
+        assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season WHERE id = 21", Integer.class));
+        assertEquals(SEASON_20_END_DATE, jdbcTemplate.queryForObject("SELECT end_date FROM public.season WHERE id = 20", LocalDate.class));
+        assertTrue(jdbcTemplate.queryForObject("SELECT updated_at FROM public.season WHERE id = 20", LocalDateTime.class).isAfter(SEASON_20_UPDATED_AT));
+        assertEquals(21L, jdbcTemplate.queryForObject("SELECT nextval('season_id_seq')", Long.class));
+        assertEquals(3, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card", Integer.class));
+        assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card WHERE oracle_id = ?", Integer.class, FRESH_FACE));
+        assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card WHERE oracle_id = ?", Integer.class, JOVEN_NEW));
+        assertEquals("Joven", jdbcTemplate.queryForObject("SELECT name FROM public.card WHERE oracle_id = ?", String.class, JOVEN_OLD));
+        assertEquals("joven", jdbcTemplate.queryForObject("SELECT normalized_name FROM public.card WHERE oracle_id = ?", String.class, JOVEN_OLD));
+        assertEquals(SEASON_20_ADDED_AT, jdbcTemplate.queryForObject("SELECT added_at FROM public.card WHERE oracle_id = ?", LocalDateTime.class, BLACK_LOTUS));
+        assertEquals(0, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card_season_data WHERE season_id = 21", Integer.class));
+        assertEquals(3, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card_season_data", Integer.class));
+        assertEquals(1, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card_season_data WHERE card_oracle_id = ?", Integer.class, JOVEN_OLD));
+        assertEquals(REMOVED_AT, jdbcTemplate.queryForObject("SELECT removed_at FROM public.season_draft WHERE id = ?", LocalDateTime.class, draftId));
+        assertEquals("raoul_zander", jdbcTemplate.queryForObject("SELECT removed_by FROM public.season_draft WHERE id = ?", String.class, draftId));
+        assertNull(seasonDraftRepository.findCommittedDraft(21));
+    }
+
+    @Test
+    void testRemove_withRemovedSeason() {
+        seedPreviousSeason();
+        int draftId = replaceDraft();
+        commitDraftInTransaction(draftId);
+        removeSeasonInTransaction(draftId);
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> removeSeasonInTransaction(draftId));
+
+        assertTrue(exception.getMessage().contains("was removed already"));
+    }
+
+    @Test
+    void testRemove_withNewerSeason() {
+        seedPreviousSeason();
+        int draftId = replaceDraft();
+        commitDraftInTransaction(draftId);
+        jdbcTemplate.update("INSERT INTO public.season (id, season_number, start_date, end_date, updated_at) VALUES (22, 22, '2026-08-17', '2026-10-25', now())");
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> removeSeasonInTransaction(draftId));
+
+        assertTrue(exception.getMessage().contains("not the current season"));
+        assertEquals(1, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season WHERE id = 21", Integer.class));
+    }
+
+    @Test
+    void testRemove_withAppliedMigration() {
+        seedPreviousSeason();
+        int draftId = replaceDraft();
+        commitDraftInTransaction(draftId);
+        seedAppliedMigration("db/changelog/migrations/20260608_0915_00_add_season_21.sql");
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> removeSeasonInTransaction(draftId));
+        jdbcTemplate.update("DELETE FROM public.databasechangelog WHERE id = 'season-migration'");
+
+        assertTrue(exception.getMessage().contains("has run on this database"));
+        assertEquals(1, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season WHERE id = 21", Integer.class));
+    }
+
+    private static void seedAppliedMigration(String fileName) {
+        jdbcTemplate.update("INSERT INTO public.databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype)"
+                + " VALUES ('season-migration', 'raoul_zander', ?, now(), 999, 'EXECUTED')", fileName);
+    }
+
     private static void seedPreviousSeason() {
         jdbcTemplate.update("DELETE FROM public.season_draft");
         jdbcTemplate.update("DELETE FROM public.card_season_data");
         jdbcTemplate.update("DELETE FROM public.card");
         jdbcTemplate.update("DELETE FROM public.season");
 
-        jdbcTemplate.update("INSERT INTO public.season (id, season_number, start_date, end_date, updated_at) VALUES (20, 20, '2026-04-05', '2026-06-07', ?)", SEASON_20_UPDATED_AT);
+        jdbcTemplate.update("INSERT INTO public.season (id, season_number, start_date, end_date, updated_at) VALUES (20, 20, '2026-04-05', ?, ?)", SEASON_20_END_DATE, SEASON_20_UPDATED_AT);
         jdbcTemplate.update("INSERT INTO public.card (oracle_id, name, normalized_name, added_at) VALUES (?, 'Ancestor''s Chosen', 'ancestors-chosen', ?)", ANCESTORS_CHOSEN, SEASON_20_ADDED_AT);
         jdbcTemplate.update("INSERT INTO public.card (oracle_id, name, normalized_name, added_at) VALUES (?, 'Joven', 'joven', ?)", JOVEN_OLD, SEASON_20_ADDED_AT);
         jdbcTemplate.update("INSERT INTO public.card (oracle_id, name, normalized_name, added_at) VALUES (?, 'Black Lotus', 'black-lotus', ?)", BLACK_LOTUS, SEASON_20_ADDED_AT);
@@ -266,11 +350,16 @@ class SeasonDraftRepositoryTest {
                 LocalDate.of(2026, 3, 30),
                 LocalDate.of(2026, 6, 8),
                 20,
+                SEASON_20_END_DATE,
                 SEASON_20_UPDATED_AT,
                 "2026-06-07",
                 "mtggoldfish",
                 PREPARED_AT,
                 "raoul_zander",
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 "Season 21 (XXI), 2026-06-08 - 2026-08-16");
@@ -290,6 +379,10 @@ class SeasonDraftRepositoryTest {
     }
 
     private static CommittedSeasonCountsVO commitDraftInTransaction(int draftId) { // in the application the @Transactional proxy opens it
-        return transactionTemplate.execute(transactionStatus -> seasonDraftRepository.commit(draftId, PREPARED_AT, COMMITTED_AT, "janik_nissen"));
+        return transactionTemplate.execute(transactionStatus -> seasonDraftRepository.commit(draftId, PREPARED_AT, COMMITTED_AT, "janik_nissen", null, null));
+    }
+
+    private static SeasonRemovalCountsVO removeSeasonInTransaction(int draftId) {
+        return transactionTemplate.execute(transactionStatus -> seasonDraftRepository.remove(draftId, ORACLE_ID_CHANGES, RENAMED_CARDS, REMOVED_AT, "raoul_zander"));
     }
 }

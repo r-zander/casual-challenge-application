@@ -16,4 +16,5 @@ public class CommittedSeasonResponse {
     List<MtgSetDTO> newSets;
     SeasonDraftReportResponse.ScryfallDecksDTO scryfallDecks;
     CommittedSeasonCountsDTO counts;
+    PullRequestDTO pullRequest;
 }

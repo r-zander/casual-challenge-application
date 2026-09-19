@@ -106,6 +106,7 @@ class SeasonDraftServiceTest {
                 LocalDate.of(2026, 7, 5),
                 LocalDate.of(2026, 9, 13),
                 20,
+                LocalDate.of(2026, 6, 7),
                 LocalDateTime.of(2026, 4, 5, 10, 59),
                 "2026-09-13",
                 "mtggoldfish",
@@ -113,6 +114,10 @@ class SeasonDraftServiceTest {
                 preparedBy,
                 committedAt,
                 committedBy,
+                null,
+                null,
+                null,
+                null,
                 "{}");
     }
 
@@ -145,6 +150,7 @@ class SeasonDraftServiceTest {
                 20,
                 PREPARED_AT,
                 "raoul_zander",
+                null,
                 null,
                 null,
                 counts,

@@ -10,6 +10,7 @@ import gg.casualchallenge.application.dataprocessor.model.SeasonSqlFile;
 import gg.casualchallenge.application.dataprocessor.model.SeasonSqlFileVO;
 import gg.casualchallenge.application.model.values.CommittedSeasonCountsVO;
 import gg.casualchallenge.application.model.values.CommittedSeasonVO;
+import gg.casualchallenge.application.model.values.PullRequestVO;
 import gg.casualchallenge.application.model.values.SeasonDraftReportVO;
 import gg.casualchallenge.application.model.values.SeasonDraftVO;
 import gg.casualchallenge.application.persistence.SeasonDraftRepository;
@@ -35,6 +36,7 @@ public class SeasonDraftService {
 
     private final SeasonDraftRepository seasonDraftRepository;
     private final CasualChallengeService casualChallengeService;
+    private final GitHubClient gitHubClient;
     private final SeasonDates seasonDates;
     private final ObjectMapper objectMapper;
     private final String exportDirectory;
@@ -42,12 +44,14 @@ public class SeasonDraftService {
     public SeasonDraftService(
             SeasonDraftRepository seasonDraftRepository,
             CasualChallengeService casualChallengeService,
+            GitHubClient gitHubClient,
             SeasonDates seasonDates,
             ObjectMapper objectMapper,
             @Value("${casual-challenge.season.export-directory}") String exportDirectory
     ) {
         this.seasonDraftRepository = seasonDraftRepository;
         this.casualChallengeService = casualChallengeService;
+        this.gitHubClient = gitHubClient;
         this.seasonDates = seasonDates;
         this.objectMapper = objectMapper;
         this.exportDirectory = exportDirectory;
@@ -60,14 +64,43 @@ public class SeasonDraftService {
         return toReport(draft);
     }
 
-    public CommittedSeasonVO commit(String committedBy) {
+    /** @param githubToken null = no pull request, download the migrations instead */
+    public CommittedSeasonVO commit(String committedBy, String githubToken) {
         SeasonDraftVO draft = uncommittedDraft(DraftAction.COMMIT);
+        LocalDateTime committedAt = LocalDateTime.now(Constants.TIMEZONE); // names the migration files as well, so GitHub and the database have to share one value
+
+        // GitHub goes first. It is the part that fails, and as long as nothing is written the draft is simply still there to commit again.
+        PullRequestVO pullRequest = null;
+        if (githubToken != null && !githubToken.isEmpty()) {
+            SeasonDraftVO asCommitted = draft.withCommittedAt(committedAt).withCommittedBy(committedBy);
+            pullRequest = gitHubClient.openPullRequest(githubToken, asCommitted, sqlFiles(asCommitted));
+        }
 
         CommittedSeasonCountsVO counts;
         casualChallengeService.lockCards();
         try {
-            // prepared_at is what the exported migration writes into card.added_at, so the database gets the very same value
-            counts = seasonDraftRepository.commit(draft.getId(), draft.getPreparedAt(), LocalDateTime.now(Constants.TIMEZONE), committedBy);
+            try {
+                // prepared_at is what the exported migration writes into card.added_at, so the database gets the very same value
+                counts = seasonDraftRepository.commit(
+                        draft.getId(),
+                        draft.getPreparedAt(),
+                        committedAt,
+                        committedBy,
+                        pullRequest != null ? pullRequest.getBranch() : null,
+                        pullRequest != null ? pullRequest.getUrl() : null);
+            } catch (RuntimeException e) {
+                if (pullRequest == null) throw e;
+
+                // The season did not happen, so its pull request has no business being out there
+                try {
+                    gitHubClient.deleteBranch(githubToken, pullRequest.getBranch());
+                } catch (RuntimeException cleanUpFailure) {
+                    throw new IllegalStateException(e.getMessage() + " Branch '" + pullRequest.getBranch() + "' is still on GitHub on top of that, delete it before the next attempt.", e);
+                }
+
+                throw e;
+            }
+
             try {
                 casualChallengeService.preloadCards();
             } catch (RuntimeException e) {
@@ -100,7 +133,8 @@ public class SeasonDraftService {
                 seasonDates.nextSeasonStart(committedDraft.getEndDate()),
                 report.getSetsReleased(),
                 report.getScryfallDecks(),
-                counts
+                counts,
+                pullRequest
         );
     }
 
@@ -135,6 +169,15 @@ public class SeasonDraftService {
         }
 
         return author;
+    }
+
+    private List<SeasonSqlFileVO> sqlFiles(SeasonDraftVO draft) {
+        List<SeasonSqlFileVO> files = new ArrayList<>(SeasonSqlFile.values().length);
+        for (SeasonSqlFile part : SeasonSqlFile.values()) {
+            files.add(new SeasonSqlFileVO(sqlFileName(draft, part), sqlContent(draft, part)));
+        }
+
+        return files;
     }
 
     private void writeSqlFiles(SeasonDraftVO draft) throws IOException {
@@ -197,7 +240,8 @@ public class SeasonDraftService {
         try {
             return objectMapper.readValue(draft.getReport(), SeasonDraftReportVO.class)
                     .withCommittedAt(draft.getCommittedAt())
-                    .withCommittedBy(draft.getCommittedBy());
+                    .withCommittedBy(draft.getCommittedBy())
+                    .withPullRequestUrl(draft.getPullRequestUrl());
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Couldn't read the report of the draft for season " + draft.getSeasonNumber() + ".", e);
         }

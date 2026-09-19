@@ -1,6 +1,7 @@
 package gg.casualchallenge.application.api;
 
 import gg.casualchallenge.application.api.datamodel.CommittedSeasonResponse;
+import gg.casualchallenge.application.api.datamodel.SeasonCommitRequest;
 import gg.casualchallenge.application.api.datamodel.SeasonDraftReportResponse;
 import gg.casualchallenge.application.dataprocessor.SeasonDraftService;
 import gg.casualchallenge.application.dataprocessor.model.SeasonSqlFile;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -84,11 +86,16 @@ public class SeasonDraftControllerV1 {
     @PostMapping(path = "/season/commit")
     @Operation(
             summary = "Commit the draft",
-            description = "Writes the season, the new cards and their season data in one transaction, remaps the oracle ids that changed and reloads the card cache. Answers with the facts for the season announcement. 409 when there is no draft, when it was committed already or when the current season was touched since the preparation ran - prepare again in that case."
+            description = "Writes the season, the new cards and their season data in one transaction, remaps the oracle ids that changed and reloads the card cache. Answers with the facts for the season announcement. 409 when there is no draft, when it was committed already or when the current season was touched since the preparation ran - prepare again in that case.\n\n"
+                    + "Pass a GitHub token and the three migrations go onto a branch of their own and into a pull request against master before anything is written - so a token that GitHub doesn't like means the season is not committed either and you simply try again. Without a token nothing changes, the migrations stay downloads."
     )
-    public CommittedSeasonResponse commitSeason(Principal principal) {
+    public CommittedSeasonResponse commitSeason(
+            @RequestBody(required = false) SeasonCommitRequest request,
+            Principal principal
+    ) {
         try {
-            return CommittedSeasonMapper.INSTANCE.toResponse(this.seasonDraftService.commit(principal.getName()));
+            return CommittedSeasonMapper.INSTANCE.toResponse(
+                    this.seasonDraftService.commit(principal.getName(), request != null ? request.getGithubToken() : null));
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
         }

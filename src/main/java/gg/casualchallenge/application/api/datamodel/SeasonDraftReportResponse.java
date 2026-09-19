@@ -29,6 +29,7 @@ public class SeasonDraftReportResponse { // same field names as SeasonDraftRepor
     String preparedBy;
     LocalDateTime committedAt;
     String committedBy;
+    String pullRequestUrl;
     CountsDTO counts;
     List<String> duplicateMetaShareNames;
     List<BanChangeDTO> newBans;

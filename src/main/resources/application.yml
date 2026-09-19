@@ -79,8 +79,6 @@ spring:
     cache: false
 casual-challenge:
   security:
-    jwt:
-      secret-key: eq85tLUTVJtjZOumr3IqBxEayN9KBudLam9MwnUs3j78PwLnzg # local only, the server reads its key from /run/secrets
     rate-limit:
       capacity: 100
       refill-per-minute: 100

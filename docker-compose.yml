@@ -13,6 +13,7 @@ services:
     volumes:
       - ./src/main/resources/static:/opt/app/static:ro
       - ./src/main/resources/templates:/opt/app/templates:ro
+      - ./secrets:/run/secrets # the jwt key lands in here on the first start, same path the server has it under
       - seasons:/opt/app/seasons
   postgresql_db:
     image: "postgres:17-alpine"

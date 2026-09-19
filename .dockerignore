@@ -3,6 +3,7 @@
 .idea
 data
 seasons
+secrets
 ssl
 build/*
 !build/libs

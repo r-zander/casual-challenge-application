@@ -10,5 +10,5 @@ RUN ./gradlew bootJar --no-daemon
 FROM eclipse-temurin:21-alpine
 WORKDIR /opt/app
 COPY --from=build /opt/build/build/libs/casual-challenge-application-0.0.1-SNAPSHOT.jar app.jar
-# no key file on the first start --> make one up, CliTools wants it in the working directory as well
-ENTRYPOINT ["sh","-c","[ -f /run/secrets/jwt_private_key ] || tr -dc A-Za-z0-9 </dev/urandom | head -c 50 >/run/secrets/jwt_private_key; cp /run/secrets/jwt_private_key jwt_private_key.txt; exec java -Xms256m -Xmx1024m -jar -Dspring.profiles.active=local app.jar"]
+# no key file on the first start --> make one up, the configtree import needs it without the .txt, CliTools wants it in the working directory as well
+ENTRYPOINT ["sh","-c","[ -f secrets/jwt_private_key.txt ] || tr -dc A-Za-z0-9 </dev/urandom | head -c 50 >secrets/jwt_private_key.txt; mkdir -p /run/secrets; cp secrets/jwt_private_key.txt /run/secrets/jwt_private_key; cp secrets/jwt_private_key.txt jwt_private_key.txt; exec java -Xms256m -Xmx1024m -jar -Dspring.profiles.active=local app.jar"]

@@ -12,11 +12,11 @@ See [Documentation api.casualchallenge.gg](https://docs.google.com/document/d/1f
 - `src/main/resources/static` and `templates` are mounted into the container - edit a page, reload the browser, done, no rebuild
 - everything else (java, migrations) needs `docker compose up --build`
 - `docker compose down -v` throws the database away and starts over
-- The jwt key is made up on the first start and kept in `./secrets`, gitignored - overwrite the file in there if you want a specific one
-- Admin token for the season wizard:
+- The jwt key is made up on the first start and kept in `./secrets/jwt_private_key.txt`, gitignored - overwrite that file if you want a specific one
+- Create an admin token for the season wizard (in PowerShell or CMD):
 
-```
-docker compose exec casual_challenge_application java -cp app.jar -Dloader.main=gg.casualchallenge.application.CliTools org.springframework.boot.loader.launch.PropertiesLauncher generate-admin-jwt ##YOUR_NAME##
-```
+    ```
+    docker compose exec casual_challenge_application java -cp app.jar "-Dloader.main=gg.casualchallenge.application.CliTools" org.springframework.boot.loader.launch.PropertiesLauncher generate-admin-jwt ##your_name##
+    ```
 
 The server runs `docker-compose.prod.yml`, not this one.

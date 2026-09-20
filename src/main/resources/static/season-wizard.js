@@ -9,12 +9,24 @@ const PLAUSIBLE_CARD_COUNT_MAXIMUM = 45000;
 const PLAUSIBLE_EXCHANGE_RATE_MINIMUM = 1.0;
 const PLAUSIBLE_EXCHANGE_RATE_MAXIMUM = 2.5;
 const ALLOWED_MISSING_PRICE_DAYS = 3; // MTGJSON drops the odd day, 68 of 70 is a normal window
-// casual-challenge.season.length-in-weeks and price-window-days, only used for the "leave it empty and you get this" lines
+// casual-challenge.season.length-in-weeks and price-window-days, only used for the "leave it empty, and you get this" lines
 const SEASON_LENGTH_IN_DAYS = 10 * 7;
 const PRICE_WINDOW_DAYS = 70;
 const SQL_PARTS = ['00_add_season', '01_insert_cards', '02_insert_card_season_data'];
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'];
+const MONTH_NAMES = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec'
+];
 // The columns of the Season History table in CC - Organisation, in that order
 const SEASON_HISTORY_COLUMNS = ['Season', 'Start', 'Ende', 'Neu spielbare Sets', 'Set Code', 'Updates'];
 const LAST_STEP = 7;
@@ -471,7 +483,14 @@ function check(label, actual, isPassing, isBlocking, expectation) {
     let className = 'check-pass';
     if (!isPassing) className = isBlocking ? 'check-fail' : 'check-warn';
 
-    return {label: label, actual: actual, isPassing: isPassing, isBlocking: isBlocking, expectation: expectation, className: className};
+    return {
+        label: label,
+        actual: actual,
+        isPassing: isPassing,
+        isBlocking: isBlocking,
+        expectation: expectation,
+        className: className
+    };
 }
 
 function isEveryFormatAt(rowCounts, expected) {
@@ -713,7 +732,7 @@ async function runLiveChecks() {
     const seasonInfo = await loadCurrentSeason(); // the current season is another one now --> so are the defaults in step 1
     if (seasonInfo !== null) {
         seasonLine = 'Season ' + seasonInfo.seasonNumber + ', updated ' + formatDateTime(seasonInfo.updatedAt)
-            + ' UTC - the fresh timestamp is what makes the extension reload.';
+            + ' UTC - browser extensions reload their cache based on that timestamp.';
     }
 
     document.getElementById('liveCheckList').innerHTML = '<li>' + escapeHtml(seasonLine) + '</li>'
@@ -903,7 +922,7 @@ function renderAnnouncement(committed, newSets) {
     }
 
     document.getElementById('announcementText').value = lines.join('\n');
-    setOutcome('step7Outcome', 'ready to post');
+    setOutcome('step7Outcome', 'facts prepared');
 }
 
 // Removing a season
@@ -1016,7 +1035,10 @@ function setStepDone(step, isDone) {
 
 function completeStep(step) {
     if (doneSteps.indexOf(step) === -1) doneSteps.push(step);
-    sessionStorage.setItem(DONE_STEPS_STORAGE_KEY, JSON.stringify({seasonNumber: draftReport.seasonNumber, steps: doneSteps}));
+    sessionStorage.setItem(DONE_STEPS_STORAGE_KEY, JSON.stringify({
+        seasonNumber: draftReport.seasonNumber,
+        steps: doneSteps
+    }));
     renderDoneSteps();
 
     if (step === LAST_STEP) {
@@ -1092,7 +1114,9 @@ function restoreOpenStep() {
 function flashCopied(button) {
     const label = button.textContent;
     button.textContent = 'Copied';
-    setTimeout(() => { button.textContent = label; }, 1500);
+    setTimeout(() => {
+        button.textContent = label;
+    }, 1500);
 }
 
 function escapeHtml(text) {

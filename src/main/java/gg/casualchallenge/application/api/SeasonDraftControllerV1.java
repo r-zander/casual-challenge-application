@@ -86,7 +86,7 @@ public class SeasonDraftControllerV1 {
     @PostMapping(path = "/season/commit")
     @Operation(
             summary = "Commit the draft",
-            description = "Writes the season, the new cards and their season data in one transaction, remaps the oracle ids that changed and reloads the card cache. Answers with the facts for the season announcement. 409 when there is no draft, when it was committed already or when the current season was touched since the preparation ran - prepare again in that case.\n\n"
+            description = "Writes the season, the new cards and their season data in one transaction, remaps the oracle ids that changed and reloads the card cache. Answers with the facts for the season announcement. 409 when there is no draft, when it was committed already, when a sanity check says the numbers are wrong (commitAnyway goes ahead regardless) or when the current season was touched since the preparation ran - prepare again in that case.\n\n"
                     + "Pass a GitHub token and the three migrations go onto a branch of their own and into a pull request against master before anything is written - so a token that GitHub doesn't like means the season is not committed either and you simply try again. Without a token nothing changes, the migrations stay downloads."
     )
     public CommittedSeasonResponse commitSeason(
@@ -95,7 +95,7 @@ public class SeasonDraftControllerV1 {
     ) {
         try {
             return CommittedSeasonMapper.INSTANCE.toResponse(
-                    this.seasonDraftService.commit(principal.getName(), request != null ? request.getGithubToken() : null));
+                    this.seasonDraftService.commit(principal.getName(), request != null ? request.getGithubToken() : null, request != null && request.isCommitAnyway()));
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
         }

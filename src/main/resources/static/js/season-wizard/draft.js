@@ -133,6 +133,7 @@ function renderDraft(report) {
  * @returns {Promise<void>}
  */
 export async function discardDraft() {
+    if (state.draftReport === null) return; // the button sits inside the draft block, so only a race gets here
     if (!window.confirm('Throw the draft for season ' + state.draftReport.seasonNumber + ' away?')) return;
 
     const response = await request('./admin/v1/season/draft', {method: 'DELETE'});

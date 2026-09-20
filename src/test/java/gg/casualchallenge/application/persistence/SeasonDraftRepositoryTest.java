@@ -280,6 +280,25 @@ class SeasonDraftRepositoryTest {
         assertEquals(REMOVED_AT, jdbcTemplate.queryForObject("SELECT removed_at FROM public.season_draft WHERE id = ?", LocalDateTime.class, draftId));
         assertEquals("raoul_zander", jdbcTemplate.queryForObject("SELECT removed_by FROM public.season_draft WHERE id = ?", String.class, draftId));
         assertNull(seasonDraftRepository.findCommittedDraft(21));
+        assertNull(seasonDraftRepository.findDraft()); // the row is still there as the record of that start, it just isn't the draft any more
+    }
+
+    @Test
+    void testRemove_withOpenDraft() {
+        seedPreviousSeason();
+        int removedDraftId = replaceDraft();
+        commitDraftInTransaction(removedDraftId);
+        removeSeasonInTransaction(removedDraftId);
+        int draftId = replaceDraft();
+
+        assertNull(seasonDraftRepository.findDraft().getCommittedAt());
+        assertEquals(draftId, seasonDraftRepository.findUncommittedDraft().getId());
+
+        seasonDraftRepository.discard();
+
+        assertEquals(1, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season_draft", Integer.class));
+        assertNull(seasonDraftRepository.findDraft());
+        assertNull(seasonDraftRepository.findUncommittedDraft());
     }
 
     @Test

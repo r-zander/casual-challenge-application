@@ -38,13 +38,14 @@ export async function commitSeason() {
     const response = await request('./admin/v1/season/commit', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({githubToken: githubToken === '' ? null : githubToken})
+        body: JSON.stringify({
+            githubToken: githubToken === '' ? null : githubToken,
+            commitAnyway: inputOf('commitAnyway').checked // the server checks the draft as well, the checkbox unlocks both ends
+        })
     });
     if (!response.ok) {
         const message = await errorMessageOf(response);
-        showError('commitError', response.status === 409
-            ? message + ' Either it is in already, or the current season changed since the preparation --> prepare again.'
-            : message);
+        showError('commitError', response.status === 409 ? message + ' Nothing was written.' : message);
         // The one failure that leaves a committed season behind names its own fix
         document.getElementById('reloadCacheButton').classList.toggle('d-none', message.indexOf('cards/reload') === -1);
         updateCommitButton();

@@ -13,6 +13,7 @@ import gg.casualchallenge.application.model.values.CommittedSeasonVO;
 import gg.casualchallenge.application.model.values.PullRequestVO;
 import gg.casualchallenge.application.model.values.SeasonDraftReportVO;
 import gg.casualchallenge.application.model.values.SeasonDraftVO;
+import gg.casualchallenge.application.model.values.SeasonSanityChecksVO;
 import gg.casualchallenge.application.persistence.SeasonDraftRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -64,9 +65,19 @@ public class SeasonDraftService {
         return toReport(draft);
     }
 
-    /** @param githubToken null = no pull request, download the migrations instead */
-    public CommittedSeasonVO commit(String committedBy, String githubToken) {
+    /**
+     * @param githubToken null = no pull request, download the migrations instead
+     * @param commitAnyway the sanity checks say no and you know better
+     */
+    public CommittedSeasonVO commit(String committedBy, String githubToken, boolean commitAnyway) {
         SeasonDraftVO draft = uncommittedDraft(DraftAction.COMMIT);
+        if (!commitAnyway) {
+            SeasonSanityChecksVO sanityChecks = SeasonSanityChecks.of(toReport(draft));
+            if (sanityChecks.isCommitBlocked()) {
+                throw new IllegalStateException("Sanity check is off for season " + draft.getSeasonNumber() + ": " + String.join(", ", sanityChecks.getBlockingLabels()) + ". Usually MtgGoldfish changed their page or blocked half the requests --> prepare again, or commit anyway.");
+            }
+        }
+
         LocalDateTime committedAt = LocalDateTime.now(Constants.TIMEZONE); // names the migration files as well, so GitHub and the database have to share one value
 
         // GitHub goes first. It is the part that fails, and as long as nothing is written the draft is simply still there to commit again.
@@ -113,7 +124,7 @@ public class SeasonDraftService {
         log.info("Committed season {}. {} cards added, {} names or normalized names updated, {} remapped, {} season data rows written.",
                 draft.getSeasonNumber(), counts.getInsertedCards(), counts.getUpdatedCardNames(), counts.getRemappedCards(), counts.getUpsertedCardSeasonData());
 
-        SeasonDraftVO committedDraft = seasonDraftRepository.findDraft(); // committed_at decides the migration file names
+        SeasonDraftVO committedDraft = draft.withCommittedAt(committedAt).withCommittedBy(committedBy); // committed_at decides the migration file names, and it is the row that was just written - no reason to read it back
         if (!exportDirectory.isEmpty()) {
             try {
                 writeSqlFiles(committedDraft);
@@ -230,7 +241,8 @@ public class SeasonDraftService {
 
         SeasonDraftVO latestDraft = seasonDraftRepository.findDraft();
         if (latestDraft != null) {
-            throw new IllegalStateException("Draft for season " + latestDraft.getSeasonNumber() + " was already committed.");
+            // Committed, or somebody discarded it while this page was open - from here the two look the same
+            throw new IllegalStateException("There is no season draft to " + action + ". Season " + latestDraft.getSeasonNumber() + " is the newest one and it is committed.");
         }
 
         throw new IllegalStateException("There is no season draft to " + action + ".");

@@ -102,7 +102,8 @@ public class SeasonDraftRepository {
     }
 
     public SeasonDraftVO findDraft() {
-        List<SeasonDraftVO> drafts = jdbcTemplate.query(SELECT_DRAFT + " ORDER BY id DESC LIMIT 1", SeasonDraftRepository::toDraftVO);
+        // A removed season's draft stays as the record of that start, it just isn't the draft any more
+        List<SeasonDraftVO> drafts = jdbcTemplate.query(SELECT_DRAFT + " WHERE removed_at IS NULL ORDER BY id DESC LIMIT 1", SeasonDraftRepository::toDraftVO);
         if (drafts.isEmpty()) return null;
         return drafts.get(0);
     }

@@ -1,3 +1,5 @@
 /gradlew text eol=lf
 *.bat text eol=crlf
 *.jar binary
+*.woff2 binary
+/src/main/resources/static/vendor/*/** -text

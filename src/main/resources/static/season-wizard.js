@@ -1,5 +1,6 @@
 const TOKEN_STORAGE_KEY = 'casual-challenge-admin-token';
 const DONE_STEPS_STORAGE_KEY = 'casual-challenge-done-steps';
+const COMMIT_RESULT_STORAGE_KEY = 'casual-challenge-commit-result';
 const OPEN_STEP_STORAGE_KEY = 'casual-challenge-open-step';
 const POLL_INTERVAL = 3 * 1000;
 const EXPECTED_TOP_50_ROWS = 50;
@@ -33,19 +34,17 @@ const LAST_STEP = 7;
 // What the header says once a step is ticked off, for the two that had a to-do in there
 const DONE_OUTCOMES = {4: 'pushed and deployed', 7: 'posted'};
 
-// The five steps of SeasonPreparationService, matched by prefix - step 3 carries the meta source in its text
-const PREPARATION_STEPS = [
-    'Reading AllPrintings.json',
-    'Reading AllPrices.json',
-    'Reading meta shares from',
-    'Calculating budget points',
-    'Storing the season draft'
-];
+// SeasonPreparationStep: the five steps the status counts, stepNumber is 0 while it is still warming up
+const PREPARATION_STEP_COUNT = 5;
+// Seasons will not reach 90 before any of us is retired
+const ROMAN_NUMERALS = [[50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
 
 let adminToken = null;
 let draftReport = null;
 let currentSeason = null;
+let preparationStatus = null;
 let pollTimer = null;
+let isStopping = false;
 let hasBlockingSanityFailure = false;
 let downloadedParts = [];
 let doneSteps = [];
@@ -114,6 +113,7 @@ function forgetToken(reason) {
     stopPolling();
     sessionStorage.removeItem(TOKEN_STORAGE_KEY);
     sessionStorage.removeItem(DONE_STEPS_STORAGE_KEY);
+    sessionStorage.removeItem(COMMIT_RESULT_STORAGE_KEY);
     sessionStorage.removeItem(OPEN_STEP_STORAGE_KEY);
     adminToken = null;
     draftReport = null;
@@ -199,8 +199,21 @@ function appendDateParameter(parameters, elementId) {
 }
 
 async function cancelPreparation() {
+    isStopping = true;
+    const cancelButton = document.getElementById('cancelButton');
+    cancelButton.disabled = true;
+    cancelButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Stopping...';
+
     const response = await request('./admin/v1/season/preparation', {method: 'DELETE'});
-    if (!response.ok) showError('prepareError', await errorMessageOf(response));
+    if (!response.ok) {
+        isStopping = false;
+        cancelButton.disabled = false;
+        cancelButton.textContent = 'Give up on it';
+        showError('prepareError', await errorMessageOf(response));
+        return;
+    }
+
+    await pollPreparation(); // waiting out the poll interval first looks like nothing happened
 }
 
 function startPolling() {
@@ -240,8 +253,8 @@ function metaSourceValue() {
 }
 
 function renderPreparationStatus(status) {
+    preparationStatus = status;
     const isRunning = status.state === 'RUNNING';
-    const stepIndex = preparationStepIndex(status.step);
 
     document.getElementById('preparationProgress').classList.toggle('d-none', status.state === 'IDLE');
     document.getElementById('cancelButton').classList.toggle('d-none', !isRunning);
@@ -250,9 +263,15 @@ function renderPreparationStatus(status) {
 
     document.querySelectorAll('#preparationSteps .preparation-step').forEach(element => {
         const step = Number(element.dataset.step);
-        element.classList.toggle('is-done', status.state === 'DONE' || step < stepIndex);
-        element.classList.toggle('is-current', isRunning && step === stepIndex);
+        element.classList.toggle('is-done', status.state === 'DONE' || step < status.stepNumber);
+        element.classList.toggle('is-current', isRunning && step === status.stepNumber);
     });
+
+    if (!isRunning && isStopping) {
+        isStopping = false;
+        document.getElementById('cancelButton').disabled = false;
+        document.getElementById('cancelButton').textContent = 'Give up on it';
+    }
 
     if (status.state === 'FAILED') {
         showError('prepareError', status.errorMessage !== null ? status.errorMessage : 'It gave up without saying why.');
@@ -262,25 +281,30 @@ function renderPreparationStatus(status) {
     setOutcome('step1Outcome', preparationOutcome(status));
 }
 
-function preparationStepIndex(step) {
-    if (step === null || step === undefined) return 0;
+// Nothing ran, or what ran has nothing to show for it anymore --> step 1 from the top
+function resetPreparation() {
+    if (preparationStatus !== null && (preparationStatus.state === 'RUNNING' || preparationStatus.state === 'FAILED')) return;
 
-    for (let index = 0; index < PREPARATION_STEPS.length; index++) {
-        if (step.startsWith(PREPARATION_STEPS[index])) return index + 1;
-    }
+    document.getElementById('preparationProgress').classList.add('d-none');
+    document.getElementById('preparationClock').textContent = '';
+    document.querySelectorAll('#preparationSteps .preparation-step').forEach(element => {
+        element.classList.remove('is-done');
+        element.classList.remove('is-current');
+    });
 
-    return 0; // "Untap, Upkeep, Draw!" and the closing line are neither of the five
+    setOutcome('step1Outcome', 'nothing running');
+    setStepDone(1, false);
 }
 
 function preparationOutcome(status) {
-    const stepIndex = preparationStepIndex(status.step);
-
     switch (status.state) {
         case 'IDLE':
             return 'nothing running';
         case 'RUNNING':
+            if (isStopping) return 'stopping, ' + status.step;
+
             // 0 is the warm-up line and the closing one, neither of them is one of the five steps
-            return stepIndex === 0 ? status.step : 'step ' + stepIndex + ' of ' + PREPARATION_STEPS.length + ', ' + status.step;
+            return status.stepNumber === 0 ? status.step : 'step ' + status.stepNumber + ' of ' + PREPARATION_STEP_COUNT + ', ' + status.step;
         case 'DONE':
             return 'done';
         case 'FAILED':
@@ -302,15 +326,41 @@ function clockText(status) {
     const seconds = Math.max(0, Math.round((finishedAt - startedAt) / 1000));
     const elapsed = seconds < 60 ? seconds + ' s' : Math.floor(seconds / 60) + ' min ' + (seconds % 60) + ' s';
 
-    return status.state === 'RUNNING' ? 'Running for ' + elapsed + '.' : 'Took ' + elapsed + '.';
+    if (status.state !== 'RUNNING') return 'Took ' + elapsed + '.';
+    if (isStopping) return 'Running for ' + elapsed + '. Stopping after the current step.';
+
+    return 'Running for ' + elapsed + '.';
 }
 
 async function loadCurrentSeason() {
     const response = await fetch('./legacy/season/current');
     currentSeason = response.ok ? await response.json() : null;
+    renderCurrentSeason();
     renderPreparationDefaults();
 
     return currentSeason;
+}
+
+// Where we stand before anything is touched: the season that is live right now and how it is doing on time
+function renderCurrentSeason() {
+    document.getElementById('currentSeasonEmpty').classList.toggle('d-none', currentSeason !== null);
+    document.getElementById('currentSeasonData').classList.toggle('d-none', currentSeason === null);
+    if (currentSeason === null) return;
+
+    const today = todayInUtc();
+    const daysSinceStart = daysBetween(currentSeason.startDate, today);
+    const daysUntilEnd = daysBetween(today, currentSeason.endDate);
+    const isOverdue = daysUntilEnd < 0;
+
+    document.getElementById('currentSeasonNumber').textContent = currentSeason.seasonNumber
+        + ' (' + romanNumeral(currentSeason.seasonNumber) + ')';
+    document.getElementById('currentSeasonStarted').textContent = formatDate(currentSeason.startDate) + ', ' + agoText(daysSinceStart);
+    document.getElementById('currentSeasonScheduled').textContent = (isOverdue ? 'ended ' : 'ends ')
+        + formatDate(currentSeason.endDate) + ', ' + endsText(daysUntilEnd);
+    document.getElementById('currentSeasonScheduled').classList.toggle('text-warning', isOverdue);
+    document.getElementById('currentSeasonRunning').textContent = lengthText(daysBetween(currentSeason.startDate, currentSeason.endDate) + 1)
+        + ' planned, ' + lengthText(daysSinceStart + 1) + ' so far';
+    document.getElementById('currentSeasonUpdated').textContent = 'updated ' + formatDateTime(currentSeason.updatedAt) + ' UTC';
 }
 
 // The dates SeasonPreparationService.withDefaults would pick. A date input ignores its placeholder --> below the field
@@ -357,6 +407,10 @@ async function loadDraft() {
     downloadedParts = [];
     restoreDoneSteps(draftReport);
     renderDraft(draftReport);
+    if (draftReport.committedAt !== null) {
+        restoreCommitResult(draftReport);
+        await runLiveChecks();
+    }
 }
 
 // Reports written by older builds leave some of the lists out entirely --> don't let one null take the page down
@@ -388,12 +442,15 @@ function renderNoDraft() {
     ['step2Outcome', 'step3Outcome', 'step4Outcome', 'step5Outcome', 'step6Outcome', 'step7Outcome']
         .forEach(outcome => setOutcome(outcome, ''));
     forgetDoneSteps();
+    sessionStorage.removeItem(COMMIT_RESULT_STORAGE_KEY);
+    resetPreparation(); // the run that led here is gone with the draft
     hasBlockingSanityFailure = false;
     updateCommitButton();
 }
 
 function renderDraft(report) {
     document.getElementById('commitAnyway').checked = false;
+    document.getElementById('discardButton').classList.toggle('d-none', report.committedAt !== null); // a committed draft stays, it is the record of that season start
     ['step2', 'step4', 'step5', 'step6'].forEach(step => {
         document.getElementById(step + 'Empty').classList.add('d-none');
         document.getElementById(step + 'Data').classList.remove('d-none');
@@ -652,7 +709,9 @@ async function discardDraft() {
         return;
     }
 
+    resetPreparation();
     await loadDraft(); // a DELETE hands back the last committed draft, if there is one
+    openStep('step1Body');
 }
 
 // Step 3 - committing
@@ -694,9 +753,29 @@ async function commitSeason() {
     }
 
     document.getElementById('githubTokenInput').value = ''; // it did its job, no reason to keep it around
-    renderCommitted(await response.json());
-    await loadDraft(); // now it has committedAt --> the sql files get their final names
-    await runLiveChecks();
+    const committed = await response.json();
+    sessionStorage.setItem(COMMIT_RESULT_STORAGE_KEY, JSON.stringify({
+        seasonNumber: committed.seasonNumber,
+        committed: committed
+    }));
+    await loadDraft(); // now it has committedAt --> the sql files get their final names, and the result comes back out of the storage
+}
+
+// The counts and the pull request number are in that one answer and nowhere else - no GET replays them
+function restoreCommitResult(report) {
+    const stored = sessionStorage.getItem(COMMIT_RESULT_STORAGE_KEY);
+    if (stored === null) return;
+
+    let committed = null;
+    try {
+        const parsed = JSON.parse(stored);
+        if (parsed.seasonNumber === report.seasonNumber) committed = parsed.committed;
+    } catch (error) {
+        sessionStorage.removeItem(COMMIT_RESULT_STORAGE_KEY);
+    }
+    if (committed === null) return; // committed from somewhere else --> the report is all we have
+
+    renderCommitted(committed);
 }
 
 function renderCommitted(committed) {
@@ -731,12 +810,22 @@ async function runLiveChecks() {
     let seasonLine = 'Could not read /legacy/season/current.';
     const seasonInfo = await loadCurrentSeason(); // the current season is another one now --> so are the defaults in step 1
     if (seasonInfo !== null) {
-        seasonLine = 'Season ' + seasonInfo.seasonNumber + ', updated ' + formatDateTime(seasonInfo.updatedAt)
+        seasonLine = 'Season ' + seasonInfo.seasonNumber + ' is live, updated ' + formatDateTime(seasonInfo.updatedAt)
             + ' UTC - browser extensions reload their cache based on that timestamp.';
     }
 
-    document.getElementById('liveCheckList').innerHTML = '<li>' + escapeHtml(seasonLine) + '</li>'
-        + '<li><a href="./bans" target="_blank" rel="noreferrer">The ban list page</a> should show the new season.</li>';
+    document.getElementById('liveCheckSeason').textContent = seasonLine;
+    const wasChecked = doneSteps.indexOf(3) !== -1; // ticked before the reload
+    document.querySelectorAll('#liveChecks input[type="checkbox"]').forEach(checkbox => checkbox.checked = wasChecked);
+}
+
+function updateLiveChecks() {
+    let isEverythingChecked = true;
+    document.querySelectorAll('#liveChecks input[type="checkbox"]').forEach(checkbox => {
+        if (!checkbox.checked) isEverythingChecked = false;
+    });
+
+    if (isEverythingChecked && doneSteps.indexOf(3) === -1) completeStep(3);
 }
 
 async function reloadCardCache() {
@@ -748,8 +837,7 @@ async function reloadCardCache() {
 
     hideError('commitError');
     document.getElementById('reloadCacheButton').classList.add('d-none');
-    await loadDraft();
-    await runLiveChecks();
+    await loadDraft(); // the draft is committed in this one, so the verification comes with it
 }
 
 // Step 4 - the migrations
@@ -760,20 +848,39 @@ function renderDownloads(report) {
         '<button type="button" class="btn btn-outline-primary btn-sm" data-sql-part="' + part + '">' + part + '</button>').join('');
     setOutcome('step4Outcome', '');
     renderPullRequest(report.pullRequestUrl);
+    markGitChecklist();
 }
 
 function renderPullRequest(pullRequestUrl) {
-    const hasPullRequest = pullRequestUrl !== null && pullRequestUrl !== undefined;
-    document.getElementById('downloadInstructions').classList.toggle('d-none', hasPullRequest);
-    document.getElementById('downloadPushHint').classList.toggle('d-none', hasPullRequest);
-    document.getElementById('pullRequestResult').classList.toggle('d-none', !hasPullRequest);
-    if (!hasPullRequest) return;
+    const isOpened = hasPullRequest();
+    document.getElementById('pullRequestResult').classList.toggle('d-none', !isOpened);
+    if (!isOpened) return;
 
     const number = pullRequestUrl.substring(pullRequestUrl.lastIndexOf('/') + 1);
-    document.getElementById('pullRequestResult').innerHTML = '<div class="alert alert-success">The three migrations are in '
-        + '<a href="' + escapeHtml(pullRequestUrl) + '" target="_blank" rel="noreferrer">pull request #' + escapeHtml(number)
-        + '</a>. Merge it, then run the deploy workflow. The downloads are still here if you want them anyway.</div>';
+    document.getElementById('pullRequestLink').href = pullRequestUrl;
+    document.getElementById('pullRequestNumber').textContent = number;
     setOutcome('step4Outcome', 'pull request #' + number + ' opened');
+    setStepDone(4, true);
+}
+
+function hasPullRequest() {
+    return draftReport !== null && draftReport.pullRequestUrl !== null && draftReport.pullRequestUrl !== undefined;
+}
+
+// A pull request does 1 to 4 on its own, without one the downloads are the only entry the page can tick
+function markGitChecklist() {
+    document.querySelectorAll('#gitChecklist .checklist-step').forEach(element => {
+        const step = Number(element.dataset.checklistStep);
+        const isDone = hasPullRequest() ? step <= 4 : step === 1 && downloadedParts.length === SQL_PARTS.length;
+        element.classList.toggle('is-done', isDone);
+    });
+}
+
+async function downloadAllSql() {
+    for (let index = 0; index < SQL_PARTS.length; index++) {
+        const wasDownloaded = await downloadSql(SQL_PARTS[index]);
+        if (!wasDownloaded) return; // the other two would fail the same way
+    }
 }
 
 async function downloadSql(part) {
@@ -782,7 +889,7 @@ async function downloadSql(part) {
     const response = await request('./admin/v1/season/draft/sql/' + part);
     if (!response.ok) {
         showError('downloadError', await errorMessageOf(response));
-        return;
+        return false;
     }
 
     const blob = await response.blob();
@@ -796,7 +903,10 @@ async function downloadSql(part) {
     URL.revokeObjectURL(objectUrl);
 
     if (downloadedParts.indexOf(part) === -1) downloadedParts.push(part);
-    setOutcome('step4Outcome', downloadedParts.length + ' of ' + SQL_PARTS.length + ' downloaded');
+    if (!hasPullRequest()) setOutcome('step4Outcome', downloadedParts.length + ' of ' + SQL_PARTS.length + ' downloaded');
+    markGitChecklist();
+
+    return true;
 }
 
 // Same rule as SeasonDraftService.sqlFileName, for when the header doesn't survive the trip
@@ -991,7 +1101,9 @@ async function removeSeason() {
     if (!window.confirm('Remove season ' + removalPreview.seasonNumber + '? Season ' + removalPreview.previousSeasonNumber + ' is the current one afterwards.')) return;
 
     hideError('removalError');
-    document.getElementById('removalButton').disabled = true;
+    const removalButton = document.getElementById('removalButton');
+    removalButton.disabled = true;
+    removalButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Removing...';
 
     const githubToken = document.getElementById('removalGithubToken').value.trim();
     const response = await request('./admin/v1/season/' + removalPreview.seasonNumber + '/removal', {
@@ -999,13 +1111,16 @@ async function removeSeason() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({githubToken: githubToken === '' ? null : githubToken})
     });
+    removalButton.textContent = 'Remove the season';
     if (!response.ok) {
         showError('removalError', await errorMessageOf(response));
         updateRemovalButton();
         return;
     }
 
+    sessionStorage.removeItem(COMMIT_RESULT_STORAGE_KEY); // that commit is undone
     renderRemoved(await response.json());
+    await loadCurrentSeason(); // the season before it is the current one again
 }
 
 function renderRemoved(removed) {
@@ -1199,6 +1314,50 @@ function isoDatePlusDays(isoDate, days) {
     return new Date(Date.parse(isoDate + 'T00:00:00Z') + days * 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
 }
 
+function daysBetween(fromIsoDate, toIsoDate) {
+    return Math.round((Date.parse(toIsoDate + 'T00:00:00Z') - Date.parse(fromIsoDate + 'T00:00:00Z')) / (24 * 60 * 60 * 1000));
+}
+
+function dayText(days) {
+    return days + (days === 1 ? ' day' : ' days');
+}
+
+function agoText(days) {
+    if (days === 0) return 'today';
+    if (days === 1) return 'yesterday';
+
+    return days + ' days ago';
+}
+
+function endsText(days) {
+    if (days < 0) return agoText(-days);
+    if (days === 0) return 'today';
+
+    return 'in ' + dayText(days);
+}
+
+function lengthText(days) {
+    if (days < 14) return dayText(days);
+
+    const weeks = Math.floor(days / 7);
+    const remainingDays = days % 7;
+
+    return weeks + ' weeks' + (remainingDays === 0 ? '' : ' and ' + dayText(remainingDays));
+}
+
+function romanNumeral(seasonNumber) {
+    let rest = seasonNumber;
+    let roman = '';
+    ROMAN_NUMERALS.forEach(numeral => {
+        while (rest >= numeral[0]) {
+            roman += numeral[1];
+            rest -= numeral[0];
+        }
+    });
+
+    return roman;
+}
+
 function formatDateTime(isoDateTime) {
     if (isoDateTime === null || isoDateTime === undefined) return '';
 
@@ -1246,6 +1405,8 @@ function wireUpControls() {
     document.getElementById('commitAnyway').addEventListener('change', updateCommitButton);
     document.getElementById('commitButton').addEventListener('click', commitSeason);
     document.getElementById('reloadCacheButton').addEventListener('click', reloadCardCache);
+    document.getElementById('liveChecks').addEventListener('change', updateLiveChecks);
+    document.getElementById('downloadAllButton').addEventListener('click', downloadAllSql);
 
     document.addEventListener('click', async event => {
         const downloadButton = event.target.closest('[data-sql-part]');

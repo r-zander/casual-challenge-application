@@ -209,6 +209,14 @@
     .preparation-step.is-done {
       color: var(--bs-success);
     }
+
+    .checklist-step {
+      margin-bottom: .5em;
+    }
+
+    .checklist-step.is-done {
+      color: var(--bs-success);
+    }
   </style>
 </head>
 <body>
@@ -250,6 +258,35 @@
     </section>
 
     <div id="wizard" class="d-none">
+      <div class="card mb-4" id="currentSeason">
+        <div class="card-body">
+          <div id="currentSeasonEmpty" class="text-body-secondary d-none">
+            <code>/legacy/season/current</code> has no season for us.
+          </div>
+          <div id="currentSeasonData">
+            <h2 class="card-title h5">Season <span id="currentSeasonNumber"></span></h2>
+            <table class="table table-sm data-table mb-0">
+              <tr>
+                <th class="fw-normal text-body-secondary">Started</th>
+                <td id="currentSeasonStarted"></td>
+              </tr>
+              <tr>
+                <th class="fw-normal text-body-secondary">Scheduled</th>
+                <td id="currentSeasonScheduled"></td>
+              </tr>
+              <tr>
+                <th class="fw-normal text-body-secondary">Running</th>
+                <td id="currentSeasonRunning"></td>
+              </tr>
+              <tr>
+                <th class="fw-normal text-body-secondary">Data</th>
+                <td id="currentSeasonUpdated"></td>
+              </tr>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <div class="accordion" id="stepAccordion">
 
         <div class="accordion-item">
@@ -466,11 +503,17 @@
 
               <div id="liveChecks" class="mt-4 d-none">
                 <h3>Verification</h3>
-                <ul class="" id="liveCheckList"></ul>
+                <p class="text-body-secondary" id="liveCheckSeason"></p>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="banListChecked">
+                  <label class="form-check-label" for="banListChecked">
+                    <a href="./bans" target="_blank" rel="noreferrer">The ban list page</a> shows the new season
+                  </label>
+                </div>
                 <div class="form-check">
                   <input class="form-check-input" type="checkbox" id="extensionChecked">
-                  <label class="form-check-label" for="extensionChecked">Looked up a card with the extension on
-                    Scryfall</label>
+                  <label class="form-check-label" for="extensionChecked">A card looked up with the extension on
+                    Scryfall shows the new budget points</label>
                 </div>
               </div>
             </div>
@@ -491,25 +534,48 @@
             <div class="accordion-body">
               <div id="step4Empty" class="text-body-secondary">No draft yet.</div>
               <div id="step4Data" class="d-none">
-                <div id="pullRequestResult" class="d-none"></div>
-                <div id="downloadInstructions">
-                  <div id="downloadWarning" class="alert alert-warning d-none" role="alert">
-                    Before the commit these carry the preparation time and name, not the commit ones. Works
-                    too, just don't mix the two.
-                  </div>
-                  <p>
-                    All three share the timestamp, so <code>00</code> runs first. Copy them over to
-                    <code>casual-challenge-application/src/main/resources/db/changelog/migrations</code>.
-                  </p>
+                <div id="pullRequestResult" class="alert alert-success d-none" role="alert">
+                  1 to 4 are done: the three migrations are in
+                  <a id="pullRequestLink" target="_blank" rel="noreferrer">pull request #<span
+                      id="pullRequestNumber"></span></a>. Merge it, then run the deploy workflow. The
+                  downloads are still here if you want them anyway.
                 </div>
-                <div class="d-flex flex-wrap gap-2" id="downloadButtons"></div>
-                <div id="downloadError" class="alert alert-danger mt-3 d-none" role="alert"></div>
-                <p class="mt-4" id="downloadPushHint">
-                  Then commit + push to master and run the deploy workflow. On the server they change
-                  nothing, the commit already wrote all of it - they're there so the database can be
-                  rebuilt from the repository alone. The deploy runs them anyway, so if the app doesn't
-                  come back up afterwards, it's the migrations. Time to hit up Raoul.
-                </p>
+                <div id="downloadWarning" class="alert alert-warning d-none" role="alert">
+                  Before the commit these carry the preparation time and name, not the commit ones. Works
+                  too, just don't mix the two.
+                </div>
+                <ol id="gitChecklist">
+                  <li class="checklist-step" data-checklist-step="1">
+                    Download the three migration files
+                    <div class="d-flex flex-wrap gap-2 my-2">
+                      <button type="button" class="btn btn-primary btn-sm" id="downloadAllButton">Download all
+                        three
+                      </button>
+                      <div class="d-flex flex-wrap gap-2" id="downloadButtons"></div>
+                    </div>
+                    <div class="form-text">
+                      All three share the timestamp, so <code>00</code> runs first. The browser asks once
+                      whether it may save several files - say yes.
+                    </div>
+                    <div id="downloadError" class="alert alert-danger mt-2 d-none" role="alert"></div>
+                  </li>
+                  <li class="checklist-step" data-checklist-step="2">
+                    Copy them into
+                    <code>casual-challenge-application/src/main/resources/db/changelog/migrations</code>
+                  </li>
+                  <li class="checklist-step" data-checklist-step="3">Commit them</li>
+                  <li class="checklist-step" data-checklist-step="4">Push to master</li>
+                  <li class="checklist-step" data-checklist-step="5">
+                    Run the
+                    <a href="https://github.com/r-zander/casual-challenge-application/actions/workflows/spring-boot-workflow.yml"
+                       target="_blank" rel="noreferrer">deploy workflow</a>
+                    <div class="form-text">
+                      On the server the migrations change nothing, the commit already wrote all of it -
+                      they're there so the database can be rebuilt from the repository alone. If the app
+                      doesn't come back up afterwards, it's them. Time to hit up Raoul.
+                    </div>
+                  </li>
+                </ol>
                 <div class="d-flex justify-content-end mt-4">
                   <button type="button" class="btn btn-primary" data-done-step="4">Done</button>
                 </div>
@@ -662,6 +728,9 @@
               <div class="col-auto">
                 <button type="button" class="btn btn-danger" id="removalButton" disabled>Remove the season</button>
               </div>
+            </div>
+            <div class="form-text">
+              Takes a few seconds: the card season data, the cards, the renames and the card cache on top.
             </div>
           </div>
 

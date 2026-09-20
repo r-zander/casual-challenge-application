@@ -18,6 +18,7 @@ import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrintingsVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonSet;
 import gg.casualchallenge.application.dataprocessor.model.PriceWindowVO;
 import gg.casualchallenge.application.dataprocessor.model.SeasonPreparationState;
+import gg.casualchallenge.application.dataprocessor.model.SeasonPreparationStep;
 import gg.casualchallenge.application.dataprocessor.model.Staple;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
@@ -67,7 +68,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Slf4j
 public class SeasonPreparationService {
 
-    private static final int TOTAL_STEPS = 5;
+    private static final int TOTAL_STEPS = SeasonPreparationStep.STORING_THE_DRAFT.getNumber();
 
     private static final int MAX_SKIP_REASON_LENGTH = 255;
 
@@ -103,7 +104,7 @@ public class SeasonPreparationService {
     });
     private final AtomicBoolean cancelRequested = new AtomicBoolean(false);
 
-    private volatile SeasonPreparationStatusVO preparation = new SeasonPreparationStatusVO(SeasonPreparationState.IDLE, null, null, null, null);
+    private volatile SeasonPreparationStatusVO preparation = new SeasonPreparationStatusVO(SeasonPreparationState.IDLE, null, null, null, null, null);
 
     public SeasonPreparationService(
             MtgJsonClient mtgJsonClient,
@@ -155,7 +156,7 @@ public class SeasonPreparationService {
         }
 
         cancelRequested.set(false);
-        preparation = new SeasonPreparationStatusVO(SeasonPreparationState.RUNNING, "Untap, Upkeep, Draw!", LocalDateTime.now(Constants.TIMEZONE), null, null);
+        preparation = new SeasonPreparationStatusVO(SeasonPreparationState.RUNNING, SeasonPreparationStep.STARTING, "Untap, Upkeep, Draw!", LocalDateTime.now(Constants.TIMEZONE), null, null);
         preparationExecutor.submit(() -> runPreparation(fullRequest));
 
         return preparation;
@@ -218,12 +219,13 @@ public class SeasonPreparationService {
             SeasonDraftVO draft = prepareSeason(request);
             if (draft == null) {
                 log.info("Preparing a new season was cancelled. Nothing was written.");
-                preparation = new SeasonPreparationStatusVO(SeasonPreparationState.CANCELLED, preparation.getStep(), preparation.getStartedAt(), LocalDateTime.now(Constants.TIMEZONE), null);
+                preparation = new SeasonPreparationStatusVO(SeasonPreparationState.CANCELLED, preparation.getStepId(), preparation.getStep(), preparation.getStartedAt(), LocalDateTime.now(Constants.TIMEZONE), null);
                 return;
             }
 
             preparation = new SeasonPreparationStatusVO(
                     SeasonPreparationState.DONE,
+                    SeasonPreparationStep.READY_FOR_REVIEW,
                     "Season " + draft.getSeasonNumber() + " is ready for review.",
                     preparation.getStartedAt(),
                     LocalDateTime.now(Constants.TIMEZONE),
@@ -233,6 +235,7 @@ public class SeasonPreparationService {
             log.error("Preparing a new season failed.", throwable);
             preparation = new SeasonPreparationStatusVO(
                     SeasonPreparationState.FAILED,
+                    preparation.getStepId(),
                     preparation.getStep(),
                     preparation.getStartedAt(),
                     LocalDateTime.now(Constants.TIMEZONE),
@@ -250,7 +253,7 @@ public class SeasonPreparationService {
 
         Path seasonArchive = createArchive(currentSeason.getSeasonNumber() + 1, request);
 
-        startStep(1, "Reading AllPrintings.json");
+        startStep(SeasonPreparationStep.READING_ALL_PRINTINGS, "Reading AllPrintings.json");
         MtgJsonPrintingsVO printings = mtgJsonClient.fetchPrintings(seasonArchive);
         LocalDate lastPricedDay = printings.getMetaDate();
         if (lastPricedDay != null && request.getPriceWindow().getEnd().isAfter(lastPricedDay.plusDays(1))) {
@@ -259,16 +262,16 @@ public class SeasonPreparationService {
         }
         if (cancelRequested.get()) return null;
 
-        startStep(2, "Reading AllPrices.json");
+        startStep(SeasonPreparationStep.READING_ALL_PRICES, "Reading AllPrices.json");
         MtgJsonPricesVO prices = mtgJsonClient.fetchPrices(printings.getPrintingsByUuid(), request.getPriceWindow(), seasonArchive);
         if (cancelRequested.get()) return null;
 
-        startStep(3, "Reading meta shares from " + request.getMetaSource());
+        startStep(SeasonPreparationStep.READING_META_SHARES, "Reading meta shares from " + request.getMetaSource());
         MetaSharesVO metaShares = fetchMetaShares(request);
         writeArchiveFile(seasonArchive, STAPLES_FILE, metaShares);
         if (cancelRequested.get()) return null;
 
-        startStep(4, "Calculating budget points and assembling the draft - the big step");
+        startStep(SeasonPreparationStep.ASSEMBLING_THE_DRAFT, "Calculating budget points and assembling the draft - the big step");
         AssembledDraftVO assembledDraft = assemble(
                 printings,
                 prices,
@@ -281,7 +284,7 @@ public class SeasonPreparationService {
         );
         if (cancelRequested.get()) return null;
 
-        startStep(5, "Storing the season draft");
+        startStep(SeasonPreparationStep.STORING_THE_DRAFT, "Storing the season draft");
         SeasonDraftVO draft = toDraft(assembledDraft.getReport(), printings, request, currentSeason);
         seasonDraftRepository.replace(draft, assembledDraft.getCards());
         pruneArchive(archiveDirectory, archivedSeasons);
@@ -290,9 +293,9 @@ public class SeasonPreparationService {
         return draft;
     }
 
-    private void startStep(int step, String description) {
-        log.info("{} / {} | {}", step, TOTAL_STEPS, description);
-        preparation = new SeasonPreparationStatusVO(SeasonPreparationState.RUNNING, description, preparation.getStartedAt(), null, null);
+    private void startStep(SeasonPreparationStep step, String description) {
+        log.info("{} / {} | {}", step.getNumber(), TOTAL_STEPS, description);
+        preparation = new SeasonPreparationStatusVO(SeasonPreparationState.RUNNING, step, description, preparation.getStartedAt(), null, null);
     }
 
     private MetaSharesVO fetchMetaShares(SeasonPreparationRequestVO request) {

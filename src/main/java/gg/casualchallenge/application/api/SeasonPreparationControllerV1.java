@@ -99,7 +99,7 @@ public class SeasonPreparationControllerV1 {
     @GetMapping(path = "/season/preparation")
     @Operation(
             summary = "Status of the preparation",
-            description = "IDLE until the first one was started, after that RUNNING, DONE, FAILED or CANCELLED, with the step it is on and the error message if it failed."
+            description = "IDLE until the first one was started, after that RUNNING, DONE, FAILED or CANCELLED, with the step it is on (stepId and stepNumber name it, step is the sentence) and the error message if it failed."
     )
     public SeasonPreparationStatusResponse getSeasonPreparationStatus() {
         return SeasonPreparationStatusMapper.INSTANCE.toResponse(this.seasonPreparationService.status());

@@ -3,6 +3,7 @@ package gg.casualchallenge.application.api.security;
 import gg.casualchallenge.application.api.security.ratelimit.RateLimitingFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -41,6 +42,9 @@ public class SecurityConfig {
                         .requestMatchers("/v1/**").authenticated() // API itself needs authentication
                         .anyRequest().permitAll() // everything else (documentation, swagger-ui, landing page, error pages etc can be access freely)
                 )
+                .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(
+                        (request, response, authenticationException) -> response.sendError(HttpStatus.UNAUTHORIZED.value(), "No bearer token.")
+                ))
 
                 .addFilterBefore(jwtAuthenticationFilter, LogoutFilter.class)
                 .addFilterBefore(rateLimitingFilter, AnonymousAuthenticationFilter.class);

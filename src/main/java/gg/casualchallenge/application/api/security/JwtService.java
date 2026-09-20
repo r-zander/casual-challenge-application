@@ -2,6 +2,7 @@ package gg.casualchallenge.application.api.security;
 
 import gg.casualchallenge.application.common.Constants;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
@@ -53,6 +54,10 @@ public class JwtService {
     }
 
     public boolean validateToken(String token) {
-        return extractClaims(token).getExpiration().after(new Date());
+        try {
+            return extractClaims(token).getExpiration().after(new Date());
+        } catch (JwtException | IllegalArgumentException e) { // garbage, wrong signature, expired, empty --> the filters answer 401
+            return false;
+        }
     }
 }

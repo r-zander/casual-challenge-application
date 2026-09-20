@@ -25,7 +25,6 @@ export async function request(path, options) {
     const response = await fetch(path, requestOptions);
     if (response.status === 401) {
         unauthorizedHandler('Token stopped working - expired, or the JWT secret was rotated.');
-        throw new Error('The token was rejected.');
     }
 
     return response;

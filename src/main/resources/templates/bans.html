@@ -1,35 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="dark" xmlns:th="http://www.thymeleaf.org">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Casual Challenge Ban List</title>
-    <link href="./vendor/bootstrap-5.3.3/bootstrap.min.css" rel="stylesheet">
-    <link href="./css/fonts.css" rel="stylesheet">
-    <style>
-        html, body {
-            height: 100%;
-        }
-
-        body {
-            display: flex;
-            flex-direction: column;
-
-            font-family: "Fira Code", monospace;
-        }
-
-        h1, h2 {
-            font-family: "Libre Baskerville", serif;
-        }
-
-        main {
-            flex: 1;
-        }
-
-        strong {
-            white-space: nowrap;
-        }
-    </style>
+    <th:block th:replace="~{fragments/layout :: pageHead('Casual Challenge Ban List')}"></th:block>
 </head>
 <body>
 <div class="container py-5 d-flex flex-column min-vh-100" style="max-width: 47em;">
@@ -74,17 +46,9 @@
         </p>
     </main>
 
-    <footer class="text-center mt-5">
-        <hr />
-
-        <p>&copy; 2025 Casual Challenge. All rights reserved.</p>
-        <p>
-            The information presented on this site about <b>Magic: The Gathering</b>, both literal and graphical, is copyrighted by <b>Wizards of the Coast</b>.<br />
-            This website is not produced, endorsed, supported, or affiliated with <b>Wizards of the Coast</b>.
-        </p>
-    </footer>
+    <footer th:replace="~{fragments/layout :: footer}"></footer>
 </div>
 
-<script src="./vendor/bootstrap-5.3.3/bootstrap.bundle.min.js"></script>
+<script th:replace="~{fragments/layout :: scripts}"></script>
 </body>
 </html>

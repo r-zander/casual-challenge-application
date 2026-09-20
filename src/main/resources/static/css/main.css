@@ -1,0 +1,22 @@
+html, body {
+    height: 100%;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+
+    font-family: "Fira Code", monospace;
+}
+
+h1, h2 {
+    font-family: "Libre Baskerville", serif;
+}
+
+main {
+    flex: 1;
+}
+
+strong {
+    white-space: nowrap;
+}

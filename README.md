@@ -8,6 +8,7 @@ See [Documentation api.casualchallenge.gg](https://docs.google.com/document/d/1f
 - `docker compose up` in this folder
 - First start builds the jar and runs every migration, takes a few minutes
 - API on http://localhost:8080, Documentation on http://localhost:8080/docs
+- Season wizard on http://localhost:8080/season-wizard
 - Postgres on localhost:5433, `postgres`/`postgres`
 - `src/main/resources/static` and `templates` are mounted into the container - edit a page, reload the browser, done, no rebuild
 - everything else (java, migrations) needs `docker compose up --build`

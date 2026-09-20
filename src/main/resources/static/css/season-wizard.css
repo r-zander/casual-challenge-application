@@ -1,0 +1,188 @@
+:root {
+    /* slow fade out, art appearing */
+    --reveal-duration: 3.5s;
+    --reveal-delay: .5s;
+    --reveal-timing: ease-in-out;
+
+    /* quick fade in, back to preparing a season */
+    --restore-duration: .35s;
+    --restore-delay: 0s;
+    --restore-timing: ease-out;
+}
+
+body {
+    background: url("../images/cogwork-librarian-by-dan-murayama-scott.jpg") no-repeat top center fixed;
+    background-size: cover;
+}
+
+.container {
+    flex-shrink: 0; /* body is flex column with 100% height --> necessary to contain all children */
+    background-color: rgba(var(--bs-body-bg-rgb), .92);
+    transition: background-color var(--restore-duration) var(--restore-timing) var(--restore-delay);
+}
+
+/* Some neat trick to fade out the content background when the mouse is outside */
+html:hover .container:not(:hover) {
+    background-color: transparent;
+    transition: background-color var(--reveal-duration) var(--reveal-timing) var(--reveal-delay);
+}
+
+.accordion {
+    --bs-accordion-bg: transparent;
+    --bs-accordion-active-bg: transparent;
+}
+
+.card {
+    --bs-card-bg: transparent;
+}
+
+.credit {
+    font-size: .75rem;
+    font-weight: 300;
+    opacity: .8;
+}
+
+.credit a {
+    color: inherit;
+    text-decoration: underline;
+}
+
+.credit a:hover, .credit a:focus, .credit a:active {
+    text-decoration: none;
+}
+
+.step-check {
+    flex: 0 0 1.5em;
+    margin-right: .25em;
+
+    color: var(--bs-success);
+    text-align: center;
+}
+
+.accordion-item.is-done .step-check::before {
+    content: "\2713";
+}
+
+.step-number {
+    display: flex;
+    flex: 0 0 1.9em;
+    align-items: center;
+    justify-content: center;
+    height: 1.9em;
+    margin-right: .25em;
+    border: 1px solid var(--bs-white);
+    border-radius: 50%;
+
+    font-family: "Fira Code", monospace;
+    font-weight: 500;
+}
+
+.accordion-button:not(.collapsed) .step-number {
+    border-color: var(--bs-accordion-active-color);
+}
+
+.accordion-item.is-done .step-number {
+    border-color: var(--bs-success);
+    background-color: var(--bs-success);
+
+    color: var(--bs-white);
+}
+
+.step-title {
+    flex: 0 0 13.5em;
+}
+
+.step-outcome {
+    flex: 1 1 auto;
+    padding-left: 1em;
+
+    font-family: "Fira Code", monospace;
+    font-size: .75rem;
+}
+
+.accordion-body h3 {
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.btn:disabled {
+    opacity: .4;
+}
+
+.data-table {
+    font-size: .8rem;
+}
+
+.data-table td, .data-table th {
+    white-space: nowrap;
+}
+
+.card-list {
+    max-height: 22em;
+    overflow-y: auto;
+}
+
+.report-section > summary {
+    padding: .35em 0;
+    border-bottom: 1px solid var(--bs-border-color);
+
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.danger-zone > summary {
+    padding: .35em 0;
+    border-bottom: 1px solid var(--bs-border-color);
+
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--bs-danger);
+}
+
+.deck-list {
+    font-family: "Fira Code", monospace;
+    font-size: .8rem;
+    height: 12em;
+}
+
+.command {
+    font-size: .75rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.check-pass::before {
+    content: "OK   ";
+    color: var(--bs-success);
+}
+
+.check-fail::before {
+    content: "FAIL ";
+    color: var(--bs-danger);
+}
+
+.check-warn::before {
+    content: "HUH  ";
+    color: var(--bs-warning);
+}
+
+.preparation-step {
+    color: var(--bs-secondary-color);
+}
+
+.preparation-step.is-current {
+    color: var(--bs-body-color);
+    font-weight: 500;
+}
+
+.preparation-step.is-done {
+    color: var(--bs-success);
+}
+
+.checklist-step {
+    margin-bottom: .5em;
+}
+
+.checklist-step.is-done {
+    color: var(--bs-success);
+}

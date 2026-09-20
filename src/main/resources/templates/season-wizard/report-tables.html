@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <title>Season wizard report tables</title>
+</head>
+<body>
+
+<details class="report-section mb-2" th:fragment="section(title, note, rows, table)"
+         th:with="count=${rows == null ? 0 : #lists.size(rows)}">
+  <summary><th:block th:text="${title}"></th:block> <span class="text-body-secondary" th:text="${count}"></span></summary>
+  <div class="mt-2 mb-4">
+    <p class="text-body-secondary" th:if="${note != ''}" th:text="${note}"></p>
+    <p class="text-body-secondary" th:if="${count == 0}">None.</p>
+    <th:block th:if="${count > 0}">
+      <th:block th:replace="${table}"></th:block>
+    </th:block>
+  </div>
+</details>
+
+<div class="card-list" th:fragment="banChanges(cards)">
+  <table class="table table-sm table-striped data-table">
+    <thead>
+    <tr>
+      <th class="fw-normal text-body-secondary">Card</th>
+      <th class="fw-normal text-body-secondary">BP</th>
+      <th class="fw-normal text-body-secondary">Why</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="card : ${cards}">
+      <td><a target="_blank" rel="noreferrer" th:href="${format.scryfallUrl(card.name)}" th:text="${card.name}"></a></td>
+      <td class="text-end" th:text="${format.budgetPoints(card.budgetPoints)}"></td>
+      <td th:text="${format.banReasons(card)}"></td>
+    </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card-list" th:fragment="budgetPointChanges(cards)">
+  <table class="table table-sm table-striped data-table">
+    <thead>
+    <tr>
+      <th class="fw-normal text-body-secondary">Card</th>
+      <th class="fw-normal text-body-secondary">Was</th>
+      <th class="fw-normal text-body-secondary">Now</th>
+      <th class="fw-normal text-body-secondary">Change</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="card : ${cards}">
+      <td><a target="_blank" rel="noreferrer" th:href="${format.scryfallUrl(card.name)}" th:text="${card.name}"></a></td>
+      <td class="text-end" th:text="${format.budgetPoints(card.previousBudgetPoints)}"></td>
+      <td class="text-end" th:text="${format.budgetPoints(card.budgetPoints)}"></td>
+      <td class="text-end" th:text="${format.change(card.change)}"></td>
+    </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card-list" th:fragment="leftOutCards(cards)">
+  <table class="table table-sm table-striped data-table">
+    <thead>
+    <tr>
+      <th class="fw-normal text-body-secondary">Card</th>
+      <th class="fw-normal text-body-secondary">Why</th>
+      <th class="fw-normal text-body-secondary">Oracle id</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="card : ${cards}">
+      <td><a target="_blank" rel="noreferrer" th:href="${format.scryfallUrl(card.name)}" th:text="${card.name}"></a></td>
+      <td th:text="${card.reason}"></td>
+      <td class="text-body-secondary" th:text="${card.oracleId}"></td>
+    </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card-list" th:fragment="oracleIdChanges(cards)">
+  <table class="table table-sm table-striped data-table">
+    <thead>
+    <tr>
+      <th class="fw-normal text-body-secondary">Card</th>
+      <th class="fw-normal text-body-secondary">Was</th>
+      <th class="fw-normal text-body-secondary">Now</th>
+      <th class="fw-normal text-body-secondary">First set</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="card : ${cards}">
+      <td><a target="_blank" rel="noreferrer" th:href="${format.scryfallUrl(card.name)}" th:text="${card.name}"></a></td>
+      <td class="text-body-secondary" th:text="${card.previousOracleId}"></td>
+      <td class="text-body-secondary" th:text="${card.oracleId}"></td>
+      <td th:text="${card.firstSetCode}"></td>
+    </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card-list" th:fragment="renamedCards(cards)">
+  <table class="table table-sm table-striped data-table">
+    <thead>
+    <tr>
+      <th class="fw-normal text-body-secondary">Was</th>
+      <th class="fw-normal text-body-secondary">Now</th>
+      <th class="fw-normal text-body-secondary">Normalized was</th>
+      <th class="fw-normal text-body-secondary">Normalized now</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="card : ${cards}">
+      <td th:text="${card.previousName}"></td>
+      <td><a target="_blank" rel="noreferrer" th:href="${format.scryfallUrl(card.name)}" th:text="${card.name}"></a></td>
+      <td class="text-body-secondary" th:text="${card.previousNormalizedName}"></td>
+      <td class="text-body-secondary" th:text="${card.normalizedName}"></td>
+    </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card-list" th:fragment="sets(sets)">
+  <table class="table table-sm table-striped data-table">
+    <thead>
+    <tr>
+      <th class="fw-normal text-body-secondary">Set</th>
+      <th class="fw-normal text-body-secondary">Code</th>
+      <th class="fw-normal text-body-secondary">Released</th>
+      <th class="fw-normal text-body-secondary">Type</th>
+      <th class="fw-normal text-body-secondary">New cards</th>
+      <th class="fw-normal text-body-secondary">Also</th>
+      <th class="fw-normal text-body-secondary">Commander decks</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="mtgSet : ${sets}">
+      <td th:text="${mtgSet.name}"></td>
+      <td th:text="${mtgSet.code}"></td>
+      <td th:text="${format.date(mtgSet.releaseDate)}"></td>
+      <td th:text="${mtgSet.type}"></td>
+      <td class="text-end" th:text="${format.number(mtgSet.newCardCount)}"></td>
+      <td th:text="${format.joined(mtgSet.childCodes)}"></td>
+      <td th:text="${format.joined(mtgSet.commanderDecks)}"></td>
+    </tr>
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <title>Season wizard removal preview</title>
+</head>
+<body>
+
+<div data-container="removalPreview" th:fragment="preview">
+  <div class="alert alert-warning" th:if="${!#lists.isEmpty(preview.refusals)}">Season <th:block th:text="${preview.seasonNumber}"></th:block> stays:<ul class="mb-0"><li th:each="refusal : ${preview.refusals}" th:text="${refusal}"></li></ul></div>
+  <table class="table table-sm data-table">
+    <tr>
+      <th class="fw-normal text-body-secondary">Season</th>
+      <td th:text="|${preview.seasonNumber}, ${format.date(preview.startDate)} - ${format.date(preview.endDate)}|"></td>
+    </tr>
+    <tr>
+      <th class="fw-normal text-body-secondary">Committed</th>
+      <td th:text="${preview.committedAt != null} ? |${format.dateTime(preview.committedAt)} by ${preview.committedBy}| : 'not by this wizard'"></td>
+    </tr>
+    <tr>
+      <th class="fw-normal text-body-secondary">Card season data</th>
+      <td th:text="|${format.number(preview.cardSeasonDataRows)} rows|"></td>
+    </tr>
+    <tr>
+      <th class="fw-normal text-body-secondary">Cards</th>
+      <td th:text="|${format.number(preview.cardsAddedBySeason)} that no other season needs|"></td>
+    </tr>
+    <tr>
+      <th class="fw-normal text-body-secondary">Goes back</th>
+      <td th:text="|${preview.renamedCards} renames, ${preview.oracleIdRemaps} oracle ids|"></td>
+    </tr>
+    <tr>
+      <th class="fw-normal text-body-secondary">Previous season</th>
+      <td th:text="${preview.previousSeasonNumber != null} ? |season ${preview.previousSeasonNumber}, ends ${format.date(preview.previousSeasonEndDate)} again| : 'not recorded'"></td>
+    </tr>
+    <tr>
+      <th class="fw-normal text-body-secondary">Archive</th>
+      <td th:text="${preview.archiveDirectory}"></td>
+    </tr>
+    <tr th:if="${preview.pullRequestUrl != null}">
+      <th class="fw-normal text-body-secondary">Pull request</th>
+      <td th:text="${preview.pullRequestUrl}"></td>
+    </tr>
+  </table>
+</div>
+
+</body>
+</html>

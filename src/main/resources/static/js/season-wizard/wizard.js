@@ -3,17 +3,13 @@ const DONE_STEPS_STORAGE_KEY = 'casual-challenge-done-steps';
 const COMMIT_RESULT_STORAGE_KEY = 'casual-challenge-commit-result';
 const OPEN_STEP_STORAGE_KEY = 'casual-challenge-open-step';
 const POLL_INTERVAL = 3 * 1000;
-const EXPECTED_TOP_50_ROWS = 50;
-const EXPECTED_TOP_150_ROWS = 150;
-const PLAUSIBLE_CARD_COUNT_MINIMUM = 25000;
-const PLAUSIBLE_CARD_COUNT_MAXIMUM = 45000;
-const PLAUSIBLE_EXCHANGE_RATE_MINIMUM = 1.0;
-const PLAUSIBLE_EXCHANGE_RATE_MAXIMUM = 2.5;
-const ALLOWED_MISSING_PRICE_DAYS = 3; // MTGJSON drops the odd day, 68 of 70 is a normal window
 // casual-challenge.season.length-in-weeks and price-window-days, only used for the "leave it empty, and you get this" lines
 const SEASON_LENGTH_IN_DAYS = 10 * 7;
 const PRICE_WINDOW_DAYS = 70;
 const SQL_PARTS = ['00_add_season', '01_insert_cards', '02_insert_card_season_data'];
+// Everything the server renders for step 2, 5 and 6
+const REPORT_CONTAINERS = ['draftHeader', 'sanityChecks', 'commitBlockedReason', 'reportSections',
+    'seasonHistoryTable', 'scryfallDecks'];
 const MONTH_NAMES = [
     'Jan',
     'Feb',
@@ -28,8 +24,6 @@ const MONTH_NAMES = [
     'Nov',
     'Dec'
 ];
-// The columns of the Season History table in CC - Organisation, in that order
-const SEASON_HISTORY_COLUMNS = ['Season', 'Start', 'Ende', 'Neu spielbare Sets', 'Set Code', 'Updates'];
 const LAST_STEP = 7;
 // What the header says once a step is ticked off, for the two that had a to-do in there
 const DONE_OUTCOMES = {4: 'pushed and deployed', 7: 'posted'};
@@ -140,6 +134,17 @@ async function request(path, options) {
     return response;
 }
 
+// The server sends one wrapper per container --> each [data-container] names where its html goes
+function fillSections(html) {
+    const template = document.createElement('template');
+    template.innerHTML = html;
+    template.content.querySelectorAll('[data-container]').forEach(wrapper => {
+        document.getElementById(wrapper.dataset.container).replaceChildren(...wrapper.childNodes);
+    });
+
+    return template.content;
+}
+
 async function errorMessageOf(response) {
     const body = await response.text();
     if (body === '') return response.status + ' ' + response.statusText;
@@ -202,7 +207,7 @@ async function cancelPreparation() {
     isStopping = true;
     const cancelButton = document.getElementById('cancelButton');
     cancelButton.disabled = true;
-    cancelButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Stopping...';
+    showSpinner(cancelButton, 'Stopping...');
 
     const response = await request('./admin/v1/season/preparation', {method: 'DELETE'});
     if (!response.ok) {
@@ -403,9 +408,25 @@ async function loadDraft() {
         return;
     }
 
-    draftReport = withEmptyLists(await response.json());
+    // The json is the state, the fragment only the view --> both bodies are in hand before anything on the page moves
+    const sectionsResponse = await request('./admin/season-wizard/draft');
+    const report = await response.json();
+    const sectionsBody = sectionsResponse.ok ? await sectionsResponse.text() : await errorMessageOf(sectionsResponse);
+
+    draftReport = withEmptyLists(report);
     downloadedParts = [];
     restoreDoneSteps(draftReport);
+
+    if (sectionsResponse.ok) {
+        hideError('draftError');
+        const sanityChecks = fillSections(sectionsBody).querySelector('[data-container="sanityChecks"]');
+        hasBlockingSanityFailure = sanityChecks === null || sanityChecks.dataset.commitBlocked !== 'false'; // no verdict --> no commit without the checkbox
+    } else {
+        showError('draftError', sectionsBody);
+        renderMissingReport();
+        hasBlockingSanityFailure = true;
+    }
+
     renderDraft(draftReport);
     if (draftReport.committedAt !== null) {
         restoreCommitResult(draftReport);
@@ -413,14 +434,15 @@ async function loadDraft() {
     }
 }
 
+// The draft is there, its report is not --> the one of the draft before it must not stay on screen next to it
+function renderMissingReport() {
+    REPORT_CONTAINERS.forEach(container => document.getElementById(container).replaceChildren());
+    document.getElementById('commitBlockedReason').textContent = 'The report didn\'t load, so nobody checked the draft.';
+}
+
 // Reports written by older builds leave some of the lists out entirely --> don't let one null take the page down
 function withEmptyLists(report) {
-    ['duplicateMetaShareNames', 'newBans', 'unbans', 'newExtended', 'noLongerExtended',
-        'budgetPointChanges', 'topIncreases', 'topDecreases', 'zeroBudgetPointCards',
-        'missingCards', 'skippedCards', 'oracleIdChanges', 'renamedCards', 'normalizedNameFixes',
-        'setsReleased'].forEach(field => {
-        if (report[field] === null || report[field] === undefined) report[field] = [];
-    });
+    if (report.setsReleased === null || report.setsReleased === undefined) report.setsReleased = [];
     if (report.scryfallDecks === null || report.scryfallDecks === undefined) {
         report.scryfallDecks = {newBans: '', unbans: '', currentBans: ''};
     }
@@ -436,7 +458,7 @@ function renderNoDraft() {
     document.getElementById('step7Empty').classList.remove('d-none');
     document.getElementById('step7Data').classList.add('d-none');
     document.getElementById('commitBlocked').classList.add('d-none');
-    document.getElementById('commitResult').innerHTML = '';
+    document.getElementById('commitResult').classList.add('d-none');
     document.getElementById('liveChecks').classList.add('d-none');
 
     ['step2Outcome', 'step3Outcome', 'step4Outcome', 'step5Outcome', 'step6Outcome', 'step7Outcome']
@@ -456,12 +478,8 @@ function renderDraft(report) {
         document.getElementById(step + 'Data').classList.remove('d-none');
     });
 
-    renderDraftHeader(report);
-    renderSanityChecks(report);
-    renderReportSections(report);
-    renderSeasonHistory(report);
+    document.getElementById('commitBlocked').classList.toggle('d-none', !hasBlockingSanityFailure);
     renderDownloads(report);
-    renderScryfallDecks(report.scryfallDecks);
     updateCommitButton();
 
     setStepDone(1, true);
@@ -469,6 +487,9 @@ function renderDraft(report) {
 
     setOutcome('step2Outcome', 'season ' + report.seasonNumber + ', ' + formatNumber(report.counts.cards) + ' cards, '
         + report.counts.newBans + ' new bans, ' + report.counts.unbans + ' unbans');
+    setOutcome('step5Outcome', 'season ' + report.seasonNumber + ', ' + formatDate(report.startDate) + ' - ' + formatDate(report.endDate));
+    setOutcome('step6Outcome', [report.scryfallDecks.newBans, report.scryfallDecks.unbans, report.scryfallDecks.currentBans]
+        .map(cardCountOf).join(' / '));
 
     if (report.committedAt === null) {
         setOutcome('step3Outcome', 'not committed');
@@ -478,226 +499,6 @@ function renderDraft(report) {
     }
 
     renderDoneSteps(); // after the outcomes above, two of them get overwritten
-}
-
-function renderDraftHeader(report) {
-    const rows = [
-        ['Season', report.seasonNumber + ' (' + report.romanSeasonNumber + '), following season ' + report.previousSeasonNumber],
-        ['Runs', formatDate(report.startDate) + ' until ' + formatDate(report.endDate)],
-        ['Finals Friday', formatDate(report.finalsFriday)],
-        ['Next season starts', formatDate(report.nextSeasonStart)],
-        ['Price window', formatDate(report.priceWindowStart) + ' until ' + formatDate(report.priceWindowEnd) + ', end exclusive'],
-        ['MTGJSON', report.mtgJsonVersion + ' of ' + formatDate(report.mtgJsonDate)],
-        ['Staples from', report.metaSource],
-        ['Prepared', formatDateTime(report.preparedAt) + ' UTC' + byLine(report.preparedBy)]
-    ];
-    if (report.committedAt !== null) {
-        rows.push(['Committed', formatDateTime(report.committedAt) + ' UTC' + byLine(report.committedBy)]);
-    }
-
-    document.getElementById('draftHeader').innerHTML = '<table class="table table-sm data-table mb-0">'
-        + rows.map(row => '<tr><th class="fw-normal text-body-secondary">' + row[0] + '</th><td>' + escapeHtml(row[1]) + '</td></tr>').join('')
-        + '</table>';
-}
-
-function renderSanityChecks(report) {
-    const counts = report.counts;
-    const checks = [];
-
-    checks.push(check('Cards', formatNumber(counts.cards) + ', ' + formatNumber(counts.newCards) + ' of them new',
-        counts.cards >= PLAUSIBLE_CARD_COUNT_MINIMUM && counts.cards <= PLAUSIBLE_CARD_COUNT_MAXIMUM, false, 'around 33k'));
-    checks.push(check('Priced days', counts.pricedDays + ' of ' + priceWindowDays(report),
-        counts.pricedDays >= priceWindowDays(report) - ALLOWED_MISSING_PRICE_DAYS, false, 'the whole window, give or take a day'));
-    checks.push(check('Top 50 rows', rowCountSummary(counts.top50Rows, EXPECTED_TOP_50_ROWS),
-        isEveryFormatAt(counts.top50Rows, EXPECTED_TOP_50_ROWS), true, '50 per format'));
-    checks.push(check('Top 150 rows', rowCountSummary(counts.top150Rows, EXPECTED_TOP_150_ROWS),
-        isEveryFormatAt(counts.top150Rows, EXPECTED_TOP_150_ROWS), true, '150 per format'));
-    checks.push(check('Cards counted twice', report.duplicateMetaShareNames.length === 0 ? 'none' : report.duplicateMetaShareNames.join(', '),
-        report.duplicateMetaShareNames.length === 0, true, 'none'));
-    checks.push(check('Exchange rate', counts.exchangeRate.toFixed(2) + ' USD per EUR, adjusted ' + counts.adjustedExchangeRate.toFixed(2),
-        counts.exchangeRate > PLAUSIBLE_EXCHANGE_RATE_MINIMUM && counts.exchangeRate < PLAUSIBLE_EXCHANGE_RATE_MAXIMUM,
-        false, 'somewhere between 1 and 2.5'));
-    checks.push(check('Cards without a price', formatNumber(counts.cardsWithoutPrice), true, false, ''));
-
-    document.getElementById('sanityChecks').innerHTML = checks.map(entry =>
-        '<li class="' + entry.className + '">' + escapeHtml(entry.label) + ': <strong>' + escapeHtml(String(entry.actual)) + '</strong>'
-        + (entry.isPassing || entry.expectation === '' ? '' : ' <span class="text-body-secondary">expected ' + escapeHtml(entry.expectation) + '</span>')
-        + '</li>').join('');
-
-    const blocking = checks.filter(entry => entry.isBlocking && !entry.isPassing);
-    hasBlockingSanityFailure = blocking.length > 0;
-
-    const commitBlocked = document.getElementById('commitBlocked');
-    commitBlocked.classList.toggle('d-none', !hasBlockingSanityFailure);
-    if (hasBlockingSanityFailure) {
-        document.getElementById('commitBlockedReason').innerHTML = 'Sanity check is off: '
-            + escapeHtml(blocking.map(entry => entry.label.toLowerCase()).join(', '))
-            + '. Usually MtgGoldfish changed their page or blocked half the requests --> prepare again.';
-    }
-}
-
-function check(label, actual, isPassing, isBlocking, expectation) {
-    let className = 'check-pass';
-    if (!isPassing) className = isBlocking ? 'check-fail' : 'check-warn';
-
-    return {
-        label: label,
-        actual: actual,
-        isPassing: isPassing,
-        isBlocking: isBlocking,
-        expectation: expectation,
-        className: className
-    };
-}
-
-function isEveryFormatAt(rowCounts, expected) {
-    return Object.keys(rowCounts).every(format => rowCounts[format] === expected);
-}
-
-function rowCountSummary(rowCounts, expected) {
-    const offenders = Object.keys(rowCounts).filter(format => rowCounts[format] !== expected);
-    if (offenders.length === 0) return expected + ' per format';
-
-    return offenders.map(format => formatName(format) + ' ' + rowCounts[format]).join(', ');
-}
-
-function priceWindowDays(report) {
-    const start = Date.parse(report.priceWindowStart + 'T00:00:00Z');
-    const end = Date.parse(report.priceWindowEnd + 'T00:00:00Z');
-
-    return Math.round((end - start) / (24 * 60 * 60 * 1000));
-}
-
-function renderReportSections(report) {
-    const sections = [];
-
-    sections.push(reportSection('New bans', report.newBans.length,
-        'The news of the season.', banChangeTable(report.newBans)));
-    sections.push(reportSection('Unbans', report.unbans.length, '', banChangeTable(report.unbans)));
-    sections.push(reportSection('Newly extended', report.newExtended.length, '', banChangeTable(report.newExtended)));
-    sections.push(reportSection('No longer extended', report.noLongerExtended.length, '', banChangeTable(report.noLongerExtended)));
-
-    sections.push(reportSection('Biggest increases', report.topIncreases.length,
-        'A card that jumps tenfold is usually one weird printing --> src/main/resources/IgnoredPrices.json, deploy, prepare again.',
-        budgetPointTable(report.topIncreases)));
-    sections.push(reportSection('Biggest decreases', report.topDecreases.length, '', budgetPointTable(report.topDecreases)));
-    sections.push(reportSection('All relevant budget point changes', report.budgetPointChanges.length, '', budgetPointTable(report.budgetPointChanges)));
-
-    sections.push(reportSection('Cards at zero budget points', report.zeroBudgetPointCards.length,
-        'No price anywhere. A handful every season is normal.', budgetPointTable(report.zeroBudgetPointCards)));
-    sections.push(reportSection('Missing cards', report.missingCards.length,
-        'A card you know from the extension showing up here is the one to look at.', leftOutTable(report.missingCards)));
-    sections.push(reportSection('Skipped cards', report.skippedCards.length,
-        'Playtest cards, acorn cards and the like.', leftOutTable(report.skippedCards)));
-
-    sections.push(reportSection('Oracle id changes', report.oracleIdChanges.length,
-        'MTGJSON re-identified these. Commit applies them, nothing to do.', oracleIdTable(report.oracleIdChanges)));
-    sections.push(reportSection('Renamed cards', report.renamedCards.length,
-        'Commit applies them, nothing to do.', renamedTable(report.renamedCards)));
-    sections.push(reportSection('Normalized name fixes', report.normalizedNameFixes.length,
-        'Commit applies them, nothing to do.', renamedTable(report.normalizedNameFixes)));
-
-    sections.push(reportSection('Sets that became playable', report.setsReleased.length,
-        'For the Season History row and the announcement. Commander sets and promos are folded into their main set. '
-        + 'MTGJSON lists the Collector’s Editions as decks of their own, so some show up twice - just skip those.',
-        setTable(report.setsReleased)));
-
-    document.getElementById('reportSections').innerHTML = sections.join('');
-}
-
-function reportSection(title, count, note, bodyHtml) {
-    return '<details class="report-section mb-2">'
-        + '<summary>' + escapeHtml(title) + ' <span class="text-body-secondary">' + count + '</span></summary>'
-        + '<div class="mt-2 mb-4">'
-        + (note === '' ? '' : '<p class="text-body-secondary">' + note + '</p>')
-        + (count === 0 ? '<p class="text-body-secondary">None.</p>' : bodyHtml)
-        + '</div>'
-        + '</details>';
-}
-
-function dataTable(headers, rowsHtml) {
-    return '<div class="card-list"><table class="table table-sm table-striped data-table">'
-        + '<thead><tr>' + headers.map(header => '<th class="fw-normal text-body-secondary">' + header + '</th>').join('') + '</tr></thead>'
-        + '<tbody>' + rowsHtml + '</tbody>'
-        + '</table></div>';
-}
-
-function banChangeTable(cards) {
-    const rows = cards.map(card => '<tr>'
-        + '<td>' + cardLink(card.name) + '</td>'
-        + '<td class="text-end">' + budgetPointText(card.budgetPoints) + '</td>'
-        + '<td>' + escapeHtml(banReasons(card)) + '</td>'
-        + '</tr>').join('');
-
-    return dataTable(['Card', 'BP', 'Why'], rows);
-}
-
-// Same reasons as the ban list page, in the same order
-function banReasons(card) {
-    const reasons = [];
-    const metaShares = metaShareText(card.metaShares);
-    if (metaShares !== '') reasons.push(metaShares);
-    if (card.bannedIn !== null) reasons.push('banned in ' + formatName(card.bannedIn));
-    if (card.vintageRestricted) reasons.push('restricted in Vintage');
-
-    return reasons.join(', ');
-}
-
-function budgetPointTable(cards) {
-    const rows = cards.map(card => '<tr>'
-        + '<td>' + cardLink(card.name) + '</td>'
-        + '<td class="text-end">' + budgetPointText(card.previousBudgetPoints) + '</td>'
-        + '<td class="text-end">' + budgetPointText(card.budgetPoints) + '</td>'
-        + '<td class="text-end">' + (card.change > 0 ? '+' + formatNumber(card.change) : formatNumber(card.change)) + '</td>'
-        + '</tr>').join('');
-
-    return dataTable(['Card', 'Was', 'Now', 'Change'], rows);
-}
-
-function leftOutTable(cards) {
-    const rows = cards.map(card => '<tr>'
-        + '<td>' + cardLink(card.name) + '</td>'
-        + '<td>' + escapeHtml(card.reason) + '</td>'
-        + '<td class="text-body-secondary">' + escapeHtml(card.oracleId) + '</td>'
-        + '</tr>').join('');
-
-    return dataTable(['Card', 'Why', 'Oracle id'], rows);
-}
-
-function oracleIdTable(cards) {
-    const rows = cards.map(card => '<tr>'
-        + '<td>' + cardLink(card.name) + '</td>'
-        + '<td class="text-body-secondary">' + escapeHtml(card.previousOracleId) + '</td>'
-        + '<td class="text-body-secondary">' + escapeHtml(card.oracleId) + '</td>'
-        + '<td>' + escapeHtml(card.firstSetCode) + '</td>'
-        + '</tr>').join('');
-
-    return dataTable(['Card', 'Was', 'Now', 'First set'], rows);
-}
-
-function renamedTable(cards) {
-    const rows = cards.map(card => '<tr>'
-        + '<td>' + escapeHtml(card.previousName) + '</td>'
-        + '<td>' + cardLink(card.name) + '</td>'
-        + '<td class="text-body-secondary">' + escapeHtml(card.previousNormalizedName) + '</td>'
-        + '<td class="text-body-secondary">' + escapeHtml(card.normalizedName) + '</td>'
-        + '</tr>').join('');
-
-    return dataTable(['Was', 'Now', 'Normalized was', 'Normalized now'], rows);
-}
-
-function setTable(sets) {
-    const rows = sets.map(mtgSet => '<tr>'
-        + '<td>' + escapeHtml(mtgSet.name) + '</td>'
-        + '<td>' + escapeHtml(mtgSet.code) + '</td>'
-        + '<td>' + formatDate(mtgSet.releaseDate) + '</td>'
-        + '<td>' + escapeHtml(mtgSet.type) + '</td>'
-        + '<td class="text-end">' + formatNumber(mtgSet.newCardCount) + '</td>'
-        + '<td>' + escapeHtml(joinOrEmpty(mtgSet.childCodes)) + '</td>'
-        + '<td>' + escapeHtml(joinOrEmpty(mtgSet.commanderDecks)) + '</td>'
-        + '</tr>').join('');
-
-    return dataTable(['Set', 'Code', 'Released', 'Type', 'New cards', 'Also', 'Commander decks'], rows);
 }
 
 async function discardDraft() {
@@ -779,26 +580,21 @@ function restoreCommitResult(report) {
 }
 
 function renderCommitted(committed) {
-    const rows = [
-        ['Season', committed.seasonNumber + ' (' + committed.romanSeasonNumber + ')'],
-        ['Starts', formatDate(committed.startDate)],
-        ['Finals Friday', formatDate(committed.finalsFriday)],
-        ['Ends', formatDate(committed.endDate)],
-        ['Next season starts', formatDate(committed.nextSeasonStart)],
-        ['Cards inserted', formatNumber(committed.counts.insertedCards)],
-        ['Card season data', formatNumber(committed.counts.upsertedCardSeasonData)],
-        ['Cards remapped', formatNumber(committed.counts.remappedCards)],
-        ['Names updated', formatNumber(committed.counts.updatedCardNames)]
-    ];
-    if (committed.pullRequest !== null && committed.pullRequest !== undefined) {
-        rows.push(['Pull request', committed.pullRequest.url]);
-    }
+    const isOpened = committed.pullRequest !== null && committed.pullRequest !== undefined;
 
-    document.getElementById('commitResult').innerHTML = '<div class="alert alert-success">Season '
-        + committed.seasonNumber + ' is live.</div>'
-        + '<table class="table table-sm data-table">'
-        + rows.map(row => '<tr><th class="fw-normal text-body-secondary">' + row[0] + '</th><td>' + escapeHtml(row[1]) + '</td></tr>').join('')
-        + '</table>';
+    document.getElementById('committedAlertSeason').textContent = committed.seasonNumber;
+    document.getElementById('committedSeason').textContent = committed.seasonNumber + ' (' + committed.romanSeasonNumber + ')';
+    document.getElementById('committedStartDate').textContent = formatDate(committed.startDate);
+    document.getElementById('committedFinalsFriday').textContent = formatDate(committed.finalsFriday);
+    document.getElementById('committedEndDate').textContent = formatDate(committed.endDate);
+    document.getElementById('committedNextSeasonStart').textContent = formatDate(committed.nextSeasonStart);
+    document.getElementById('committedInsertedCards').textContent = formatNumber(committed.counts.insertedCards);
+    document.getElementById('committedCardSeasonData').textContent = formatNumber(committed.counts.upsertedCardSeasonData);
+    document.getElementById('committedRemappedCards').textContent = formatNumber(committed.counts.remappedCards);
+    document.getElementById('committedUpdatedCardNames').textContent = formatNumber(committed.counts.updatedCardNames);
+    document.getElementById('committedPullRequest').textContent = isOpened ? committed.pullRequest.url : '';
+    document.getElementById('committedPullRequestRow').classList.toggle('d-none', !isOpened);
+    document.getElementById('commitResult').classList.remove('d-none');
 
     renderAnnouncement(committed, committed.newSets);
     document.getElementById('downloadWarning').classList.add('d-none');
@@ -844,8 +640,6 @@ async function reloadCardCache() {
 
 function renderDownloads(report) {
     document.getElementById('downloadWarning').classList.toggle('d-none', report.committedAt !== null);
-    document.getElementById('downloadButtons').innerHTML = SQL_PARTS.map(part =>
-        '<button type="button" class="btn btn-outline-primary btn-sm" data-sql-part="' + part + '">' + part + '</button>').join('');
     setOutcome('step4Outcome', '');
     renderPullRequest(report.pullRequestUrl);
     markGitChecklist();
@@ -931,33 +725,6 @@ function fileNameOf(response, part) {
 
 // Step 5 - the Season History row
 
-function renderSeasonHistory(report) {
-    const setNames = report.setsReleased.map(mtgSet => mtgSet.name
-        + (mtgSet.commanderDecks !== null && mtgSet.commanderDecks.length > 0 ? ' (+ Commander Decks)' : ''));
-    const setCodes = [];
-    report.setsReleased.forEach(mtgSet => {
-        setCodes.push(mtgSet.code);
-        if (mtgSet.childCodes !== null) mtgSet.childCodes.forEach(childCode => setCodes.push(childCode));
-    });
-
-    const cells = [
-        report.seasonNumber,
-        formatDocDate(report.startDate),
-        formatDocDate(report.endDate),
-        setNames.join('\n'),
-        setCodes.join('\n'),
-        '' // Updates, that one is yours
-    ];
-
-    document.getElementById('seasonHistoryTable').innerHTML = '<table class="table table-sm data-table">'
-        + '<thead><tr>' + SEASON_HISTORY_COLUMNS.map(column => '<th class="fw-normal text-body-secondary">' + column + '</th>').join('') + '</tr></thead>'
-        + '<tbody id="seasonHistoryRow"><tr>'
-        + cells.map(cell => '<td style="white-space: normal;">' + escapeHtml(cell).replace(/\n/g, '<br>') + '</td>').join('')
-        + '</tr></tbody>'
-        + '</table>';
-    setOutcome('step5Outcome', 'season ' + report.seasonNumber + ', ' + formatDate(report.startDate) + ' - ' + formatDate(report.endDate));
-}
-
 // Google Docs drops the html into the selected cells, everything else gets the tab separated version
 async function copySeasonHistoryRow(elementId) {
     const row = document.getElementById(elementId);
@@ -977,23 +744,6 @@ async function copySeasonHistoryRow(elementId) {
 }
 
 // Steps 6 and 7 - the community bits
-
-function renderScryfallDecks(decks) {
-    const lists = [
-        ['newBans', 'New bans', decks.newBans],
-        ['unbans', 'Unbans', decks.unbans],
-        ['currentBans', 'Current bans', decks.currentBans]
-    ];
-
-    document.getElementById('scryfallDecks').innerHTML = lists.map(list =>
-        '<div class="mb-4">'
-        + '<h3>' + list[1] + ' <span class="text-body-secondary">' + cardCountOf(list[2]) + '</span></h3>'
-        + '<textarea class="form-control deck-list mb-2" id="deck-' + list[0] + '" readonly>' + escapeHtml(list[2]) + '</textarea>'
-        + '<button type="button" class="btn btn-outline-secondary btn-sm" data-copy-target="deck-' + list[0] + '">Copy</button>'
-        + '</div>').join('');
-
-    setOutcome('step6Outcome', lists.map(list => cardCountOf(list[2])).join(' / '));
-}
 
 function cardCountOf(deckList) {
     if (deckList === null || deckList === undefined || deckList.trim() === '') return '0 cards';
@@ -1041,7 +791,7 @@ async function loadRemovalPreview() {
     hideError('removalError');
     document.getElementById('removalPreview').classList.add('d-none');
     document.getElementById('removalConfirm').classList.add('d-none');
-    document.getElementById('removalResult').innerHTML = '';
+    document.getElementById('removalResult').classList.add('d-none');
     removalPreview = null;
 
     const seasonNumber = document.getElementById('removalSeasonInput').value.trim();
@@ -1056,34 +806,22 @@ async function loadRemovalPreview() {
         return;
     }
 
-    removalPreview = await response.json();
-    renderRemovalPreview(removalPreview);
+    const sectionsResponse = await request('./admin/season-wizard/season/' + encodeURIComponent(seasonNumber) + '/removal');
+    if (!sectionsResponse.ok) {
+        showError('removalError', await errorMessageOf(sectionsResponse)); // nothing on screen to read --> nothing to confirm either
+        return;
+    }
+
+    const preview = await response.json();
+    const sectionsBody = await sectionsResponse.text();
+
+    removalPreview = preview;
+    fillSections(sectionsBody);
+    renderRemovalPreview(preview);
 }
 
 function renderRemovalPreview(preview) {
-    const rows = [
-        ['Season', preview.seasonNumber + ', ' + formatDate(preview.startDate) + ' - ' + formatDate(preview.endDate)],
-        ['Committed', preview.committedAt !== null ? formatDateTime(preview.committedAt) + ' by ' + preview.committedBy : 'not by this wizard'],
-        ['Card season data', formatNumber(preview.cardSeasonDataRows) + ' rows'],
-        ['Cards', formatNumber(preview.cardsAddedBySeason) + ' that no other season needs'],
-        ['Goes back', preview.renamedCards + ' renames, ' + preview.oracleIdRemaps + ' oracle ids'],
-        ['Previous season', preview.previousSeasonNumber !== null
-            ? 'season ' + preview.previousSeasonNumber + ', ends ' + formatDate(preview.previousSeasonEndDate) + ' again'
-            : 'not recorded'],
-        ['Archive', preview.archiveDirectory]
-    ];
-    if (preview.pullRequestUrl !== null) rows.push(['Pull request', preview.pullRequestUrl]);
-
-    const refusals = preview.refusals.length === 0 ? ''
-        : '<div class="alert alert-warning">Season ' + preview.seasonNumber + ' stays:<ul class="mb-0">'
-        + preview.refusals.map(refusal => '<li>' + escapeHtml(refusal) + '</li>').join('') + '</ul></div>';
-
-    document.getElementById('removalPreview').innerHTML = refusals
-        + '<table class="table table-sm data-table">'
-        + rows.map(row => '<tr><th class="fw-normal text-body-secondary">' + row[0] + '</th><td>' + escapeHtml(row[1]) + '</td></tr>').join('')
-        + '</table>';
     document.getElementById('removalPreview').classList.remove('d-none');
-
     document.getElementById('removalTokenBlock').classList.toggle('d-none', preview.pullRequestUrl === null);
     document.getElementById('removalConfirmInput').value = '';
     document.getElementById('removalConfirm').classList.toggle('d-none', !preview.removable);
@@ -1103,7 +841,7 @@ async function removeSeason() {
     hideError('removalError');
     const removalButton = document.getElementById('removalButton');
     removalButton.disabled = true;
-    removalButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Removing...';
+    showSpinner(removalButton, 'Removing...');
 
     const githubToken = document.getElementById('removalGithubToken').value.trim();
     const response = await request('./admin/v1/season/' + removalPreview.seasonNumber + '/removal', {
@@ -1124,21 +862,23 @@ async function removeSeason() {
 }
 
 function renderRemoved(removed) {
-    const lines = [
-        formatNumber(removed.counts.cardSeasonDataRows) + ' card season data rows gone',
-        formatNumber(removed.counts.deletedCards) + ' cards gone',
-        removed.counts.undoneRenames + ' renames and ' + removed.counts.undoneRemaps + ' oracle ids back where they were'
-    ];
-    if (removed.closedPullRequestUrl !== null) lines.push('branch deleted, ' + removed.closedPullRequestUrl + ' closed with it');
-    if (removed.archiveDeleted) lines.push('the season folder in the archive is gone');
+    document.getElementById('removedSeason').textContent = removed.seasonNumber;
+    document.getElementById('removedPreviousSeason').textContent = removed.previousSeasonNumber;
+    document.getElementById('removedPreviousSeasonEndDate').textContent = formatDate(removed.previousSeasonEndDate);
+    document.getElementById('removedCardSeasonData').textContent = formatNumber(removed.counts.cardSeasonDataRows) + ' card season data rows gone';
+    document.getElementById('removedCards').textContent = formatNumber(removed.counts.deletedCards) + ' cards gone';
+    document.getElementById('removedRenames').textContent = removed.counts.undoneRenames + ' renames and '
+        + removed.counts.undoneRemaps + ' oracle ids back where they were';
+    document.getElementById('removedPullRequest').textContent = removed.closedPullRequestUrl !== null
+        ? 'branch deleted, ' + removed.closedPullRequestUrl + ' closed with it'
+        : '';
+    document.getElementById('removedPullRequest').classList.toggle('d-none', removed.closedPullRequestUrl === null);
+    document.getElementById('removedArchive').classList.toggle('d-none', !removed.archiveDeleted);
 
     document.getElementById('removalPreview').classList.add('d-none');
     document.getElementById('removalConfirm').classList.add('d-none');
     document.getElementById('removalGithubToken').value = '';
-    document.getElementById('removalResult').innerHTML = '<div class="alert alert-success">Season ' + removed.seasonNumber
-        + ' is gone. Season ' + removed.previousSeasonNumber + ' ends ' + escapeHtml(formatDate(removed.previousSeasonEndDate))
-        + ' again. Reload the page before the next run.</div>'
-        + '<ul>' + lines.map(line => '<li>' + escapeHtml(line) + '</li>').join('') + '</ul>';
+    document.getElementById('removalResult').classList.remove('d-none');
     removalPreview = null;
 }
 
@@ -1209,6 +949,12 @@ function setOutcome(elementId, text) {
     document.getElementById(elementId).textContent = text;
 }
 
+function showSpinner(button, label) {
+    const spinner = document.createElement('span');
+    spinner.className = 'spinner-border spinner-border-sm';
+    button.replaceChildren(spinner, ' ' + label);
+}
+
 function openStep(bodyId) {
     bootstrap.Collapse.getOrCreateInstance(document.getElementById(bodyId)).show();
 }
@@ -1234,55 +980,9 @@ function flashCopied(button) {
     }, 1500);
 }
 
-function escapeHtml(text) {
-    if (text === null || text === undefined) return '';
-
-    const element = document.createElement('div');
-    element.textContent = String(text);
-
-    return element.innerHTML;
-}
-
-function cardLink(name) {
-    return '<a href="https://scryfall.com/search?q=' + encodeURIComponent('!"' + name + '"')
-        + '" target="_blank" rel="noreferrer">' + escapeHtml(name) + '</a>';
-}
-
-function joinOrEmpty(values) {
-    return values === null || values === undefined ? '' : values.join(', ');
-}
-
 // Drafts from before the admin name was tracked have neither prepared_by nor committed_by
 function byLine(name) {
     return name === null || name === undefined ? '' : ' by ' + name;
-}
-
-function budgetPointText(budgetPoints) {
-    return budgetPoints === null || budgetPoints === undefined ? '-' : formatNumber(budgetPoints);
-}
-
-function metaShareText(metaShares) {
-    if (metaShares === null || metaShares === undefined) return '';
-
-    const parts = [];
-    Object.keys(metaShares).forEach(format => {
-        const share = metaShares[format];
-        if (share === null) return;
-        if (share === 0) { // MtgGoldfish rounds down to full percent --> the tail of the list sits at zero
-            parts.push(formatName(format) + ' (< 1%)');
-            return;
-        }
-
-        parts.push(formatName(format) + ' (' + Math.round(share * 100 * 100) / 100 + '%)');
-    });
-
-    return parts.join(', ');
-}
-
-function formatName(enumValue) {
-    const lowercase = String(enumValue).toLowerCase().replace(/_/g, ' ');
-
-    return lowercase.charAt(0).toUpperCase() + lowercase.substring(1);
 }
 
 function formatNumber(value) {
@@ -1297,13 +997,6 @@ function formatDate(isoDate) {
     const parts = isoDate.split('-');
 
     return Number(parts[2]) + ' ' + MONTH_NAMES[Number(parts[1]) - 1] + ' ' + parts[0];
-}
-
-// The Season History table writes them German style
-function formatDocDate(isoDate) {
-    const parts = isoDate.split('-');
-
-    return parts[2] + '.' + parts[1] + '.' + parts[0];
 }
 
 function todayInUtc() {

@@ -209,6 +209,7 @@
             <div class="accordion-body">
               <div id="step2Empty" class="text-body-secondary">No draft yet.</div>
               <div id="step2Data" class="d-none">
+                <div id="draftError" class="alert alert-danger mt-3 d-none" role="alert"></div>
                 <div id="draftHeader" class="mb-4"></div>
 
                 <h3>Sanity check</h3>
@@ -284,7 +285,51 @@
               </div>
 
               <div id="commitError" class="alert alert-danger mt-3 d-none" role="alert"></div>
-              <div id="commitResult" class="mt-4"></div>
+              <div id="commitResult" class="mt-4 d-none">
+                <div class="alert alert-success">Season <span id="committedAlertSeason"></span> is live.</div>
+                <table class="table table-sm data-table">
+                  <tr>
+                    <th class="fw-normal text-body-secondary">Season</th>
+                    <td id="committedSeason"></td>
+                  </tr>
+                  <tr>
+                    <th class="fw-normal text-body-secondary">Starts</th>
+                    <td id="committedStartDate"></td>
+                  </tr>
+                  <tr>
+                    <th class="fw-normal text-body-secondary">Finals Friday</th>
+                    <td id="committedFinalsFriday"></td>
+                  </tr>
+                  <tr>
+                    <th class="fw-normal text-body-secondary">Ends</th>
+                    <td id="committedEndDate"></td>
+                  </tr>
+                  <tr>
+                    <th class="fw-normal text-body-secondary">Next season starts</th>
+                    <td id="committedNextSeasonStart"></td>
+                  </tr>
+                  <tr>
+                    <th class="fw-normal text-body-secondary">Cards inserted</th>
+                    <td id="committedInsertedCards"></td>
+                  </tr>
+                  <tr>
+                    <th class="fw-normal text-body-secondary">Card season data</th>
+                    <td id="committedCardSeasonData"></td>
+                  </tr>
+                  <tr>
+                    <th class="fw-normal text-body-secondary">Cards remapped</th>
+                    <td id="committedRemappedCards"></td>
+                  </tr>
+                  <tr>
+                    <th class="fw-normal text-body-secondary">Names updated</th>
+                    <td id="committedUpdatedCardNames"></td>
+                  </tr>
+                  <tr id="committedPullRequestRow" class="d-none">
+                    <th class="fw-normal text-body-secondary">Pull request</th>
+                    <td id="committedPullRequest"></td>
+                  </tr>
+                </table>
+              </div>
 
               <div id="liveChecks" class="mt-4 d-none">
                 <h3>Verification</h3>
@@ -336,7 +381,9 @@
                       <button type="button" class="btn btn-primary btn-sm" id="downloadAllButton">Download all
                         three
                       </button>
-                      <div class="d-flex flex-wrap gap-2" id="downloadButtons"></div>
+                      <button type="button" class="btn btn-outline-primary btn-sm" data-sql-part="00_add_season">00_add_season</button>
+                      <button type="button" class="btn btn-outline-primary btn-sm" data-sql-part="01_insert_cards">01_insert_cards</button>
+                      <button type="button" class="btn btn-outline-primary btn-sm" data-sql-part="02_insert_card_season_data">02_insert_card_season_data</button>
                     </div>
                     <div class="form-text">
                       All three share the timestamp, so <code>00</code> runs first. The browser asks once
@@ -519,7 +566,19 @@
             </div>
           </div>
 
-          <div id="removalResult" class="mt-4"></div>
+          <div id="removalResult" class="mt-4 d-none">
+            <div class="alert alert-success">
+              Season <span id="removedSeason"></span> is gone. Season <span id="removedPreviousSeason"></span> ends
+              <span id="removedPreviousSeasonEndDate"></span> again. Reload the page before the next run.
+            </div>
+            <ul>
+              <li id="removedCardSeasonData"></li>
+              <li id="removedCards"></li>
+              <li id="removedRenames"></li>
+              <li id="removedPullRequest" class="d-none"></li>
+              <li id="removedArchive" class="d-none">the season folder in the archive is gone</li>
+            </ul>
+          </div>
         </div>
       </details>
     </div>

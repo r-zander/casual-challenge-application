@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <title>Season wizard draft sections</title>
+</head>
+<body>
+
+<th:block th:fragment="sections">
+
+  <div data-container="draftHeader">
+    <table class="table table-sm data-table mb-0">
+      <tr>
+        <th class="fw-normal text-body-secondary">Season</th>
+        <td th:text="|${report.seasonNumber} (${report.romanSeasonNumber}), following season ${report.previousSeasonNumber}|"></td>
+      </tr>
+      <tr>
+        <th class="fw-normal text-body-secondary">Runs</th>
+        <td th:text="|${format.date(report.startDate)} until ${format.date(report.endDate)}|"></td>
+      </tr>
+      <tr>
+        <th class="fw-normal text-body-secondary">Finals Friday</th>
+        <td th:text="${format.date(report.finalsFriday)}"></td>
+      </tr>
+      <tr>
+        <th class="fw-normal text-body-secondary">Next season starts</th>
+        <td th:text="${format.date(report.nextSeasonStart)}"></td>
+      </tr>
+      <tr>
+        <th class="fw-normal text-body-secondary">Price window</th>
+        <td th:text="|${format.date(report.priceWindowStart)} until ${format.date(report.priceWindowEnd)}, end exclusive|"></td>
+      </tr>
+      <tr>
+        <th class="fw-normal text-body-secondary">MTGJSON</th>
+        <td th:text="|${report.mtgJsonVersion} of ${format.date(report.mtgJsonDate)}|"></td>
+      </tr>
+      <tr>
+        <th class="fw-normal text-body-secondary">Staples from</th>
+        <td th:text="${report.metaSource}"></td>
+      </tr>
+      <tr>
+        <th class="fw-normal text-body-secondary">Prepared</th>
+        <td th:text="|${format.dateTime(report.preparedAt)} UTC${format.byLine(report.preparedBy)}|"></td>
+      </tr>
+      <tr th:if="${report.committedAt != null}">
+        <th class="fw-normal text-body-secondary">Committed</th>
+        <td th:text="|${format.dateTime(report.committedAt)} UTC${format.byLine(report.committedBy)}|"></td>
+      </tr>
+    </table>
+  </div>
+
+  <ul data-container="sanityChecks" th:attr="data-commit-blocked=${sanityChecks.commitBlocked}">
+    <li th:each="check : ${sanityChecks.checks}"
+        th:class="${check.passing ? 'check-pass' : (check.blocking ? 'check-fail' : 'check-warn')}"><th:block th:text="${check.label}"></th:block>: <strong th:text="${check.actual}"></strong><th:block th:if="${!check.passing and check.expectation != ''}"> <span class="text-body-secondary" th:text="|expected ${check.expectation}|"></span></th:block></li>
+  </ul>
+
+  <div data-container="commitBlockedReason"><th:block th:if="${sanityChecks.commitBlocked}" th:text="|Sanity check is off: ${#strings.listJoin(sanityChecks.blockingLabels, ', ')}. Usually MtgGoldfish changed their page or blocked half the requests --&gt; prepare again.|"></th:block></div>
+
+  <div data-container="reportSections">
+    <details th:replace="~{season-wizard/report-tables :: section('New bans', 'The news of the season.', ${report.newBans}, ~{season-wizard/report-tables :: banChanges(${report.newBans})})}"></details>
+    <details th:replace="~{season-wizard/report-tables :: section('Unbans', '', ${report.unbans}, ~{season-wizard/report-tables :: banChanges(${report.unbans})})}"></details>
+    <details th:replace="~{season-wizard/report-tables :: section('Newly extended', '', ${report.newExtended}, ~{season-wizard/report-tables :: banChanges(${report.newExtended})})}"></details>
+    <details th:replace="~{season-wizard/report-tables :: section('No longer extended', '', ${report.noLongerExtended}, ~{season-wizard/report-tables :: banChanges(${report.noLongerExtended})})}"></details>
+    <details th:replace="~{season-wizard/report-tables :: section('Biggest increases', 'A card that jumps tenfold is usually one weird printing --&gt; src/main/resources/IgnoredPrices.json, deploy, prepare again.', ${report.topIncreases}, ~{season-wizard/report-tables :: budgetPointChanges(${report.topIncreases})})}"></details>
+    <details th:replace="~{season-wizard/report-tables :: section('Biggest decreases', '', ${report.topDecreases}, ~{season-wizard/report-tables :: budgetPointChanges(${report.topDecreases})})}"></details>
+    <details th:replace="~{season-wizard/report-tables :: section('All relevant budget point changes', '', ${report.budgetPointChanges}, ~{season-wizard/report-tables :: budgetPointChanges(${report.budgetPointChanges})})}"></details>
+    <details th:replace="~{season-wizard/report-tables :: section('Cards at zero budget points', 'No price anywhere. A handful every season is normal.', ${report.zeroBudgetPointCards}, ~{season-wizard/report-tables :: budgetPointChanges(${report.zeroBudgetPointCards})})}"></details>
+    <details th:replace="~{season-wizard/report-tables :: section('Missing cards', 'A card you know from the extension showing up here is the one to look at.', ${report.missingCards}, ~{season-wizard/report-tables :: leftOutCards(${report.missingCards})})}"></details>
+    <details th:replace="~{season-wizard/report-tables :: section('Skipped cards', 'Playtest cards, acorn cards and the like.', ${report.skippedCards}, ~{season-wizard/report-tables :: leftOutCards(${report.skippedCards})})}"></details>
+    <details th:replace="~{season-wizard/report-tables :: section('Oracle id changes', 'MTGJSON re-identified these. Commit applies them, nothing to do.', ${report.oracleIdChanges}, ~{season-wizard/report-tables :: oracleIdChanges(${report.oracleIdChanges})})}"></details>
+    <details th:replace="~{season-wizard/report-tables :: section('Renamed cards', 'Commit applies them, nothing to do.', ${report.renamedCards}, ~{season-wizard/report-tables :: renamedCards(${report.renamedCards})})}"></details>
+    <details th:replace="~{season-wizard/report-tables :: section('Normalized name fixes', 'Commit applies them, nothing to do.', ${report.normalizedNameFixes}, ~{season-wizard/report-tables :: renamedCards(${report.normalizedNameFixes})})}"></details>
+    <details th:replace="~{season-wizard/report-tables :: section('Sets that became playable', 'For the Season History row and the announcement. Commander sets and promos are folded into their main set. MTGJSON lists the Collector’s Editions as decks of their own, so some show up twice - just skip those.', ${report.setsReleased}, ~{season-wizard/report-tables :: sets(${report.setsReleased})})}"></details>
+  </div>
+
+  <div data-container="seasonHistoryTable">
+    <table class="table table-sm data-table">
+      <!--/* The columns of the Season History table in CC - Organisation, in that order */-->
+      <thead>
+      <tr>
+        <th class="fw-normal text-body-secondary">Season</th>
+        <th class="fw-normal text-body-secondary">Start</th>
+        <th class="fw-normal text-body-secondary">Ende</th>
+        <th class="fw-normal text-body-secondary">Neu spielbare Sets</th>
+        <th class="fw-normal text-body-secondary">Set Code</th>
+        <th class="fw-normal text-body-secondary">Updates</th><!--/* Updates, that one is yours */-->
+      </tr>
+      </thead>
+      <tbody id="seasonHistoryRow">
+      <tr>
+        <td style="white-space: normal;" th:text="${report.seasonNumber}"></td>
+        <td style="white-space: normal;" th:text="${format.docDate(report.startDate)}"></td>
+        <td style="white-space: normal;" th:text="${format.docDate(report.endDate)}"></td>
+        <td style="white-space: normal;"><th:block th:each="setName,iteration : ${format.setNames(report.setsReleased)}"><br th:if="${!iteration.first}"><th:block th:text="${setName}"></th:block></th:block></td>
+        <td style="white-space: normal;"><th:block th:each="setCode,iteration : ${format.setCodes(report.setsReleased)}"><br th:if="${!iteration.first}"><th:block th:text="${setCode}"></th:block></th:block></td>
+        <td style="white-space: normal;"></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div data-container="scryfallDecks">
+    <div class="mb-4">
+      <h3>New bans <span class="text-body-secondary" th:text="${format.cardCount(report.scryfallDecks?.newBans)}"></span></h3>
+      <textarea class="form-control deck-list mb-2" id="deck-newBans" readonly th:text="${report.scryfallDecks?.newBans}"></textarea>
+      <button type="button" class="btn btn-outline-secondary btn-sm" data-copy-target="deck-newBans">Copy</button>
+    </div>
+    <div class="mb-4">
+      <h3>Unbans <span class="text-body-secondary" th:text="${format.cardCount(report.scryfallDecks?.unbans)}"></span></h3>
+      <textarea class="form-control deck-list mb-2" id="deck-unbans" readonly th:text="${report.scryfallDecks?.unbans}"></textarea>
+      <button type="button" class="btn btn-outline-secondary btn-sm" data-copy-target="deck-unbans">Copy</button>
+    </div>
+    <div class="mb-4">
+      <h3>Current bans <span class="text-body-secondary" th:text="${format.cardCount(report.scryfallDecks?.currentBans)}"></span></h3>
+      <textarea class="form-control deck-list mb-2" id="deck-currentBans" readonly th:text="${report.scryfallDecks?.currentBans}"></textarea>
+      <button type="button" class="btn btn-outline-secondary btn-sm" data-copy-target="deck-currentBans">Copy</button>
+    </div>
+  </div>
+
+</th:block>
+
+</body>
+</html>

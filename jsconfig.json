@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "noImplicitAny": true
+  },
+  "include": [
+    "src/main/resources/static/js/**/*.js",
+    "src/main/resources/static/vendor/**/*.d.ts"
+  ],
+  "exclude": [
+    "src/main/resources/static/vendor/**/*.js",
+    "build"
+  ]
+}

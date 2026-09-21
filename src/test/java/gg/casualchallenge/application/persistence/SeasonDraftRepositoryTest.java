@@ -350,6 +350,7 @@ class SeasonDraftRepositoryTest {
         jdbcTemplate.update("DELETE FROM public.card_season_data");
         jdbcTemplate.update("DELETE FROM public.card");
         jdbcTemplate.update("DELETE FROM public.season");
+        jdbcTemplate.update("DELETE FROM public.databasechangelog"); // the real season 21 migrations ran as well, and those block the removal
 
         jdbcTemplate.update("INSERT INTO public.season (id, season_number, start_date, end_date, updated_at) VALUES (20, 20, '2026-04-05', ?, ?)", SEASON_20_END_DATE, SEASON_20_UPDATED_AT);
         jdbcTemplate.update("INSERT INTO public.card (oracle_id, name, normalized_name, added_at) VALUES (?, 'Ancestor''s Chosen', 'ancestors-chosen', ?)", ANCESTORS_CHOSEN, SEASON_20_ADDED_AT);

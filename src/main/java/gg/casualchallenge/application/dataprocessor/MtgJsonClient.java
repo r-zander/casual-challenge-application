@@ -546,7 +546,7 @@ public class MtgJsonClient {
         if (identity.getReleaseDate() == null) return true;
         int comparison = candidate.getReleaseDate().compareTo(identity.getReleaseDate());
         if (comparison != 0) return comparison < 0;
-        if (candidate.isMainSet() != identity.isMainSet()) return candidate.isMainSet(); // promos come out on the same day as their set, and PSOS < SOS
+        if (candidate.isMainSet() != identity.isMainSet()) return candidate.isMainSet(); // promos come out on the same day as their set, but should not take precedence over main sets
         comparison = candidate.getSetCode().compareTo(identity.getSetCode());
         if (comparison != 0) return comparison < 0;
         return compareCollectorNumbers(candidate.getNumber(), identity.getNumber()) < 0;

@@ -171,7 +171,7 @@
 
               <div class="d-flex justify-content-end gap-2 mt-4">
                 <button type="button" class="btn btn-outline-secondary d-none" id="cancelButton">Give up on it</button>
-                <button type="button" class="btn btn-primary" id="prepareButton">Prepare the season</button>
+                <button type="button" class="btn btn-primary" id="prepareButton">Prepare</button>
               </div>
 
               <div id="prepareError" class="alert alert-danger mt-3 d-none" role="alert"></div>
@@ -186,9 +186,8 @@
                 </ol>
                 <p class="text-body-secondary mb-0" id="preparationClock"></p>
                 <p class="text-body-secondary">
-                  This takes a few minutes, depending on the server's line: ~200 MB of MTGJSON, a minute
-                  of scraping (deliberately slow, they don't like bots), half a minute of calculating.
-                  Cancelling only bites between steps.
+                  This takes a few minutes.<br />
+                  Cancelling still finishes the current step before discarding the progress.
                 </p>
               </div>
             </div>
@@ -250,8 +249,9 @@
           <div id="step3Body" class="accordion-collapse collapse" data-bs-parent="#stepAccordion">
             <div class="accordion-body">
               <p>
-                This takes a second or two, the extension and <code>/v1/cards</code> just wait. Afterwards the
-                draft stays with its report - our only record of the season start.
+                Hot phase!<br />
+                This is not instant, as the caches will be warmed with the new season data.
+                Clients get the new season data as soon as you see the loading here finished.
               </p>
 
               <div class="mb-3">
@@ -281,7 +281,7 @@
                 <button type="button" class="btn btn-outline-secondary d-none" id="reloadCacheButton">Reload the card
                   cache
                 </button>
-                <button type="button" class="btn btn-primary" id="commitButton" disabled>Commit the season</button>
+                <button type="button" class="btn btn-danger" id="commitButton" disabled="disabled">Commit the season</button>
               </div>
 
               <div id="commitError" class="alert alert-danger mt-3 d-none" role="alert"></div>

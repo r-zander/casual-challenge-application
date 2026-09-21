@@ -3,6 +3,9 @@ on:
   pull_request:
     branches:
       - master
+  push:
+    branches:
+      - master
 jobs:
   check:
     name: Unit tests
@@ -17,3 +20,5 @@ jobs:
         uses: gradle/gradle-build-action@v2
       - name: Execute Gradle test
         run: ./gradlew check
+      - name: Type check the wizard js
+        run: npx -y -p typescript@5 tsc -p jsconfig.json

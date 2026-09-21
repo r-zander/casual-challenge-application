@@ -32,6 +32,8 @@ function renderPullRequest(pullRequestUrl) {
 }
 
 /**
+ * TODO take the report as a parameter? Only works because loadDraft sets the state before anything renders
+ *
  * @returns {boolean}
  */
 function hasPullRequest() {

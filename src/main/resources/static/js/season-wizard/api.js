@@ -41,6 +41,7 @@ export async function errorMessageOf(response) {
     // 400, 404 and 409 answer with Spring's error json, the security filters with plain text
     try {
         const parsed = JSON.parse(body);
+        // TODO json without a message ends up in the alert as it is
         return parsed.message !== undefined && parsed.message !== null ? parsed.message : body;
     } catch (error) {
         return body;

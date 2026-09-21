@@ -90,7 +90,7 @@ public class SeasonWizardFormat { // the season wizard fragments run through her
     public String cardCount(String deckList) {
         if (deckList == null || deckList.trim().isEmpty()) return "0 cards";
 
-        return deckList.trim().split("\n").length + " cards";
+        return deckList.trim().split("\n").length + " cards"; // TODO "1 cards"
     }
 
     public String joined(List<String> values) {

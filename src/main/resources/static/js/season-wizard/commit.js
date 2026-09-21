@@ -45,8 +45,9 @@ export async function commitSeason() {
     });
     if (!response.ok) {
         const message = await errorMessageOf(response);
-        showError('commitError', response.status === 409 ? message + ' Nothing was written.' : message);
+        showError('commitError', response.status === 409 ? message + ' Nothing was written to the database.' : message);
         // The one failure that leaves a committed season behind names its own fix
+        // TODO grepping the message for it is a hack, the commit should answer with something structured
         document.getElementById('reloadCacheButton').classList.toggle('d-none', message.indexOf('cards/reload') === -1);
         updateCommitButton();
         return false;

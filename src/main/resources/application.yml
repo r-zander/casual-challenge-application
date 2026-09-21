@@ -60,6 +60,11 @@ spring:
   datasource:
     url: jdbc:postgresql://postgresql_db:5432/casual_challenge?stringtype=unspecified
     password: ${postgres_password}
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          no-cache: true # without it Spring Security says no-store and Bootstrap + the fonts get downloaded again on every page view
 casual-challenge:
   season:
     archive-directory: /opt/app/seasons # ./seasons on the server, see docker-compose.prod.yml

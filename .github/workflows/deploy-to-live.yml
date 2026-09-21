@@ -1,4 +1,4 @@
-name: CI/CD
+name: Deploy to Live
 on:
   workflow_dispatch:
 #  push:

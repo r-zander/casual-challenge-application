@@ -26,10 +26,11 @@ import java.util.List;
  * The three migrations of a season start, as one commit on a branch of its own plus a pull request. The Git Data API rather
  * than the contents API, because that one writes a commit per file and the 02 file is four megabytes on its own:
  *
- *     GET  /repos/{repository}/git/ref/heads/{baseBranch}  --> the commit the branch starts from
- *     GET  /repos/{repository}/git/commits/{sha}           --> its tree
- *     POST /repos/{repository}/git/blobs                   --> one per file
- *     POST /repos/{repository}/git/trees                   --> the three files on top of that tree
+ *     GET  /repos/{repository}/git/matching-refs/heads/{branch} --> [] unless an earlier attempt left the branch behind
+ *     GET  /repos/{repository}/git/ref/heads/{baseBranch}       --> the commit the branch starts from
+ *     GET  /repos/{repository}/git/commits/{sha}                --> its tree
+ *     POST /repos/{repository}/git/blobs                        --> one per file
+ *     POST /repos/{repository}/git/trees                        --> the three files on top of that tree
  *     POST /repos/{repository}/git/commits
  *     POST /repos/{repository}/git/refs
  *     POST /repos/{repository}/pulls
@@ -92,6 +93,13 @@ public class GitHubClient {
     public PullRequestVO openPullRequest(String token, SeasonDraftVO draft, List<SeasonSqlFileVO> files) {
         int seasonNumber = draft.getSeasonNumber();
         String branch = branchName(seasonNumber);
+
+        // Checked up front, POST /git/refs only answers a bare 422 "Reference already exists" - and that after all the uploading
+        for (JsonNode existingReference : get("/git/matching-refs/heads/" + branch, token)) {
+            if (existingReference.path("ref").asText().equals("refs/heads/" + branch)) {
+                throw new IllegalStateException("Branch '" + branch + "' is already on GitHub, probably left over from an earlier attempt or a rehearsal - closing a pull request doesn't delete its branch. Delete it on https://github.com/" + repository + "/branches and commit again.");
+            }
+        }
 
         String baseSha = get("/git/ref/heads/" + baseBranch, token).path("object").path("sha").asText();
         String baseTreeSha = get("/git/commits/" + baseSha, token).path("tree").path("sha").asText();

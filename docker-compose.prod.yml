@@ -15,7 +15,7 @@ services:
       - jwt_private_key
       - key_store_password
   postgresql_db:
-    image: "postgres:17"
+    image: "postgres:17-trixie"
     restart: always
     ports:
       - "127.0.0.1:5434:5432"

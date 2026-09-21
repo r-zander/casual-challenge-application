@@ -90,7 +90,7 @@ class SeasonDraftServiceTest {
         assertEquals(0, report.getCounts().getPricesFixedByExchangeRateCount()); // the old name is gone, nothing to read it into
         assertNull(report.getDuplicateMetaShareNames());
         assertEquals(MtgSetType.EXPANSION, report.getSetsReleased().get(0).getType());
-        assertNull(report.getSetsReleased().get(0).getChildCodes());
+        assertNull(report.getSetsReleased().get(0).getChildSets());
         assertEquals(0, report.getSetsReleased().get(0).getNewCardCount());
         assertNull(report.getPreparedBy());
         assertNull(report.getCommittedAt());
@@ -168,7 +168,7 @@ class SeasonDraftServiceTest {
                 List.of(new SeasonDraftReportVO.OracleIdChangeVO("Joven and Chandler", JOVEN_OLD, JOVEN_NEW, "ATQ")),
                 List.of(new SeasonDraftReportVO.RenamedCardVO(JOVEN_NEW, "Joven", "joven", "Joven and Chandler", "joven-and-chandler")),
                 List.of(new SeasonDraftReportVO.RenamedCardVO(ANCESTORS_CHOSEN, "Ancestor's Chosen", "ancestor-s-chosen", "Ancestor's Chosen", "ancestors-chosen")),
-                List.of(new MtgSetVO("Secrets of Strixhaven", "SOS", LocalDate.of(2026, 4, 24), MtgSetType.EXPANSION, List.of("Lorehold Spirit"), List.of("SOC"), 3)),
+                List.of(new MtgSetVO("Secrets of Strixhaven", "SOS", LocalDate.of(2026, 4, 24), MtgSetType.EXPANSION, List.of("Lorehold Spirit"), List.of(new MtgSetVO.ChildSetVO("Secrets of Strixhaven Commander", "SOC", 1)), 3)),
                 new SeasonDraftReportVO.ScryfallDecksVO("Black Lotus\nBrainstorm", "Sol Ring", "Brainstorm"));
     }
 }

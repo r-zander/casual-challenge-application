@@ -138,7 +138,7 @@
       <td th:text="${format.date(mtgSet.releaseDate)}"></td>
       <td th:text="${mtgSet.type}"></td>
       <td class="text-end" th:text="${format.number(mtgSet.newCardCount)}"></td>
-      <td th:text="${format.joined(mtgSet.childCodes)}"></td>
+      <td th:text="${format.childCodes(mtgSet)}"></td>
       <td th:text="${format.joined(mtgSet.commanderDecks)}"></td>
     </tr>
     </tbody>

@@ -22,6 +22,14 @@
  * @property {string} code
  * @property {number} newCardCount
  * @property {string[] | null} commanderDecks
+ * @property {ChildSet[] | null} childSets
+ */
+
+/**
+ * @typedef {object} ChildSet
+ * @property {string} name
+ * @property {string} code
+ * @property {number} newCardCount
  */
 
 /**

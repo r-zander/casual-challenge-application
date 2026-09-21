@@ -141,6 +141,34 @@ class MtgJsonClientTest {
     }
 
     @Test
+    void testReadPrintings_withPromoSetOnReleaseDay() {
+        String allPrintings = """
+                {
+                  "meta": {"date": "2026-09-13", "version": "5.2.2+20260913"},
+                  "data": {
+                    "PSOS": {
+                      "cards": [
+                        {"availability": ["paper"], "borderColor": "black", "finishes": ["foil"], "identifiers": {"scryfallOracleId": "3e1a7c92-5b04-4d6f-a8e3-91c2f0b56d17"}, "legalities": {"vintage": "Legal"}, "name": "Sundering Archaic", "number": "3p", "uuid": "c41f8a26-7d3b-5e90-b2c5-6a8e1d07f394"},
+                        {"availability": ["paper"], "borderColor": "black", "finishes": ["foil"], "identifiers": {"scryfallOracleId": "a7d2e5f1-0c68-4b93-9e14-5f3b8c21d6a0"}, "legalities": {"vintage": "Legal"}, "name": "The Dawning Archaic", "number": "1", "uuid": "e62b0d93-4a15-5c78-8f06-d93a7b24c1e5"}
+                      ],
+                      "code": "PSOS", "isOnlineOnly": false, "name": "Secrets of Strixhaven Promos", "parentCode": "SOS", "releaseDate": "2026-04-24", "type": "promo"
+                    },
+                    "SOS": {
+                      "cards": [
+                        {"availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil", "foil"], "identifiers": {"scryfallOracleId": "3e1a7c92-5b04-4d6f-a8e3-91c2f0b56d17"}, "legalities": {"vintage": "Legal"}, "name": "Sundering Archaic", "number": "3", "uuid": "0b95c3e7-2f41-5a68-9d7c-4e10b8a6f253"}
+                      ],
+                      "code": "SOS", "isOnlineOnly": false, "name": "Secrets of Strixhaven", "releaseDate": "2026-04-24", "type": "expansion"
+                    }
+                  }
+                }""";
+
+        MtgJsonPrintingsVO printings = mtgJsonClient.readPrintings(toStream(allPrintings));
+
+        assertEquals("SOS", printings.getCardsByName().get("Sundering Archaic").getFirstSetCode());
+        assertEquals("PSOS", printings.getCardsByName().get("The Dawning Archaic").getFirstSetCode());
+    }
+
+    @Test
     void testReadPrices() {
         String allPrices = """
                 {

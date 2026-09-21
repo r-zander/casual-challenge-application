@@ -828,7 +828,11 @@ public class SeasonPreparationService {
 
             List<String> childCodes = childCodesByRootCode.get(mtgSet.getCode());
             childCodes.sort(Comparator.naturalOrder());
-            setsReleased.add(new MtgSetVO(mtgSet.getName(), mtgSet.getCode(), mtgSet.getReleaseDate(), mtgSet.getSetType(), commanderDecksByRootCode.get(mtgSet.getCode()), childCodes, newCardCount));
+            List<MtgSetVO.ChildSetVO> childSets = new ArrayList<>(childCodes.size());
+            for (String childCode : childCodes) {
+                childSets.add(new MtgSetVO.ChildSetVO(setsByCode.get(childCode).getName(), childCode, newCardCountsBySetCode.get(childCode)));
+            }
+            setsReleased.add(new MtgSetVO(mtgSet.getName(), mtgSet.getCode(), mtgSet.getReleaseDate(), mtgSet.getSetType(), commanderDecksByRootCode.get(mtgSet.getCode()), childSets, newCardCount));
         }
         setsReleased.sort(Comparator.comparing(MtgSetVO::getReleaseDate).thenComparing(MtgSetVO::getCode));
 

@@ -103,7 +103,7 @@ class SeasonWizardFormatTest {
     void testSetNames() {
         assertEquals(List.of("Secrets of Strixhaven (+ Commander Decks)", "The Hobbit", "Marvel Super Heroes"),
                 format.setNames(List.of(
-                        mtgSet("Secrets of Strixhaven", "SOS", List.of("Lorehold Spirit", "Prismari Artistry"), List.of("PSOS", "SOC")),
+                        mtgSet("Secrets of Strixhaven", "SOS", List.of("Lorehold Spirit", "Prismari Artistry"), List.of(new MtgSetVO.ChildSetVO("Secrets of Strixhaven Promos", "PSOS", 75), new MtgSetVO.ChildSetVO("Secrets of Strixhaven Commander", "SOC", 60))),
                         mtgSet("The Hobbit", "HOB", List.of(), List.of()),
                         mtgSet("Marvel Super Heroes", "MSH", null, null))));
         assertEquals(List.of(), format.setNames(List.of()));
@@ -114,18 +114,25 @@ class SeasonWizardFormatTest {
     void testSetCodes() {
         assertEquals(List.of("SOS", "PSOS", "SOC", "HOB", "MSH"),
                 format.setCodes(List.of(
-                        mtgSet("Secrets of Strixhaven", "SOS", List.of("Lorehold Spirit", "Prismari Artistry"), List.of("PSOS", "SOC")),
+                        mtgSet("Secrets of Strixhaven", "SOS", List.of("Lorehold Spirit", "Prismari Artistry"), List.of(new MtgSetVO.ChildSetVO("Secrets of Strixhaven Promos", "PSOS", 75), new MtgSetVO.ChildSetVO("Secrets of Strixhaven Commander", "SOC", 60))),
                         mtgSet("The Hobbit", "HOB", List.of(), List.of()),
                         mtgSet("Marvel Super Heroes", "MSH", null, null))));
         assertEquals(List.of(), format.setCodes(List.of()));
         assertEquals(List.of(), format.setCodes(null));
     }
 
+    @Test
+    void testChildCodes() {
+        assertEquals("PSOS, SOC", format.childCodes(mtgSet("Secrets of Strixhaven", "SOS", List.of(), List.of(new MtgSetVO.ChildSetVO("Secrets of Strixhaven Promos", "PSOS", 75), new MtgSetVO.ChildSetVO("Secrets of Strixhaven Commander", "SOC", 60)))));
+        assertEquals("", format.childCodes(mtgSet("The Hobbit", "HOB", List.of(), List.of())));
+        assertEquals("", format.childCodes(mtgSet("Marvel Super Heroes", "MSH", null, null)));
+    }
+
     private static SeasonDraftReportVO.BanChangeVO banChange(Map<MtgFormat, BigDecimal> metaShares, MtgFormat bannedIn, boolean isVintageRestricted) {
         return new SeasonDraftReportVO.BanChangeVO("Lightning Bolt", 100, metaShares, bannedIn, isVintageRestricted);
     }
 
-    private static MtgSetVO mtgSet(String name, String code, List<String> commanderDecks, List<String> childCodes) {
-        return new MtgSetVO(name, code, LocalDate.of(2026, 4, 24), MtgSetType.EXPANSION, commanderDecks, childCodes, 281);
+    private static MtgSetVO mtgSet(String name, String code, List<String> commanderDecks, List<MtgSetVO.ChildSetVO> childSets) {
+        return new MtgSetVO(name, code, LocalDate.of(2026, 4, 24), MtgSetType.EXPANSION, commanderDecks, childSets, 281);
     }
 }

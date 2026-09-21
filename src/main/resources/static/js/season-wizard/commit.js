@@ -1,10 +1,11 @@
 import {COMMIT_RESULT_STORAGE_KEY, state} from './state.js';
 import {errorMessageOf, request} from './api.js';
 import {buttonOf, completeStep, hideError, inputOf, setOutcome, showError} from './steps.js';
-import {formatDate, formatDateTime, formatNumber} from './format.js';
+import {formatDate, formatDateTime, formatGermanDate, formatGermanNumber, formatNumber, romanNumeral} from './format.js';
 import {loadCurrentSeason} from './preparation.js';
 
 /**
+ * @typedef {import('./types.js').ChildSet} ChildSet
  * @typedef {import('./types.js').CommittedSeason} CommittedSeason
  * @typedef {import('./types.js').MtgSet} MtgSet
  * @typedef {import('./types.js').SeasonDraftReport} SeasonDraftReport
@@ -161,31 +162,53 @@ export function renderAnnouncement(committed, newSets) {
     document.getElementById('step7Data').classList.remove('d-none');
 
     const lines = [
-        'Season ' + committed.seasonNumber + ' (' + committed.romanSeasonNumber + ')',
-        'Starts: ' + formatDate(committed.startDate),
-        'Finals Friday: ' + formatDate(committed.finalsFriday),
-        'Ends: ' + formatDate(committed.endDate),
-        'Next season starts: ' + formatDate(committed.nextSeasonStart),
+        '# WILLKOMMEN ZUR SEASON ' + committed.romanSeasonNumber,
+        '',
+        '@Casual Challengers',
+        '',
+        'Beginn: ' + formatGermanDate(committed.startDate),
+        'Finales Event: ' + formatGermanDate(committed.finalsFriday),
+        'Beginn Season ' + romanNumeral(committed.seasonNumber + 1) + ': ' + formatGermanDate(committed.nextSeasonStart),
         ''
     ];
 
     if (newSets.length === 0) {
-        lines.push('No new sets this season.');
+        lines.push('Keine neuen Sets diese Season.');
     } else {
-        lines.push('Newly playable sets:');
+        const newCardCount = newSets.reduce((sum, mtgSet) => sum + mtgSet.newCardCount, 0);
+        lines.push('**' + formatGermanNumber(newCardCount) + ' neue Karten insgesamt**');
+        lines.push('');
+        lines.push('Neu spielbare Sets:');
         newSets.forEach(mtgSet => {
-            lines.push('- ' + mtgSet.name + ' (' + mtgSet.code + '), ' + mtgSet.newCardCount + ' new cards');
-            if (mtgSet.commanderDecks !== null && mtgSet.commanderDecks.length > 0) {
-                lines.push('  Commander decks: ' + mtgSet.commanderDecks.join(', '));
-            }
+            const childSets = mtgSet.childSets !== null && mtgSet.childSets !== undefined ? mtgSet.childSets : []; // a report of an older build only has the total
+            const ownCardCount = childSets.reduce((count, childSet) => count - childSet.newCardCount, mtgSet.newCardCount);
+
+            // Only the sub-sets brought new cards, their main set came out before --> they move up a level
+            const childIndent = ownCardCount > 0 ? '  ' : '';
+            if (ownCardCount > 0) lines.push('- ' + scryfallLinkOf(mtgSet) + ', ' + formatGermanNumber(ownCardCount) + ' neue Karten');
+            childSets.forEach(childSet => lines.push(childIndent + '- ' + scryfallLinkOf(childSet) + ', ' + formatGermanNumber(childSet.newCardCount) + ' neue Karten'));
         });
     }
 
+    lines.push('');
+    lines.push('Ebenso haben sich die Bans und Unbans verändert, also schaut gerne in den Thread!');
+
     if (state.draftReport !== null && state.draftReport.metaSource === 'mtgtop8') {
         lines.push('');
-        lines.push('Staples from MTGTop8 this time - main deck only, so the numbers differ a bit.');
+        lines.push('Die Meta-Zahlen kommen diesmal von MTGTop8 (nur Main Deck), sie weichen also etwas ab.');
     }
 
+    lines.push('');
+    lines.push('<<Season Specials oder Regeländerungen kommen hier her.>>');
+
     /** @type {HTMLTextAreaElement} */ (document.getElementById('announcementText')).value = lines.join('\n');
-    setOutcome('step7Outcome', 'facts prepared');
+    setOutcome('step7Outcome', 'post prepared');
+}
+
+/**
+ * @param {MtgSet | ChildSet} mtgSet
+ * @returns {string}
+ */
+function scryfallLinkOf(mtgSet) {
+    return '[' + mtgSet.name + ' (' + mtgSet.code + ')](https://scryfall.com/sets/' + mtgSet.code.toLowerCase() + '?as=grid&order=set)';
 }

@@ -13,6 +13,14 @@ public class MtgSetVO {
     LocalDate releaseDate;
     MtgSetType type;
     List<String> commanderDecks;
-    List<String> childCodes; // commander set, promos etc. whose new cards are counted in here
+    List<ChildSetVO> childSets; // commander set, promos etc. whose new cards are counted in here
     int newCardCount;
+
+    @Value
+    public static class ChildSetVO {
+        String name;
+        String code;
+        int newCardCount;
+    }
+
 }

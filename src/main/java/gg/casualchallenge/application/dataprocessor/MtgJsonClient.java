@@ -318,6 +318,7 @@ public class MtgJsonClient {
             if (isIgnoredSetType && !candidate.isVintageLegal()) continue;
 
             candidate.setReleaseDate(releaseDate);
+            candidate.setMainSet(parentCode == null);
             IdentityCandidate identity = identitiesByName.get(candidate.getCardName());
             if (identity == null || isOlderPrinting(candidate, identity)) {
                 identitiesByName.put(candidate.getCardName(), candidate);
@@ -545,6 +546,7 @@ public class MtgJsonClient {
         if (identity.getReleaseDate() == null) return true;
         int comparison = candidate.getReleaseDate().compareTo(identity.getReleaseDate());
         if (comparison != 0) return comparison < 0;
+        if (candidate.isMainSet() != identity.isMainSet()) return candidate.isMainSet(); // promos come out on the same day as their set, and PSOS < SOS
         comparison = candidate.getSetCode().compareTo(identity.getSetCode());
         if (comparison != 0) return comparison < 0;
         return compareCollectorNumbers(candidate.getNumber(), identity.getNumber()) < 0;
@@ -582,6 +584,7 @@ public class MtgJsonClient {
         private boolean vintageRestricted;
         private MtgFormat bannedIn;
         private LocalDate releaseDate;
+        private boolean mainSet;
     }
 
 }

@@ -97,6 +97,17 @@ public class SeasonWizardFormat { // the season wizard fragments run through her
         return values == null ? "" : String.join(", ", values);
     }
 
+    public String childCodes(MtgSetVO mtgSet) {
+        if (mtgSet.getChildSets() == null) return "";
+
+        List<String> codes = new ArrayList<>(mtgSet.getChildSets().size());
+        for (MtgSetVO.ChildSetVO childSet : mtgSet.getChildSets()) {
+            codes.add(childSet.getCode());
+        }
+
+        return String.join(", ", codes);
+    }
+
     public List<String> setNames(List<MtgSetVO> sets) {
         if (sets == null) return List.of(); // a report an older build wrote has no sets in it at all
 
@@ -115,7 +126,11 @@ public class SeasonWizardFormat { // the season wizard fragments run through her
         List<String> codes = new ArrayList<>();
         for (MtgSetVO mtgSet : sets) {
             codes.add(mtgSet.getCode());
-            if (mtgSet.getChildCodes() != null) codes.addAll(mtgSet.getChildCodes());
+            if (mtgSet.getChildSets() == null) continue;
+
+            for (MtgSetVO.ChildSetVO childSet : mtgSet.getChildSets()) {
+                codes.add(childSet.getCode());
+            }
         }
 
         return codes;

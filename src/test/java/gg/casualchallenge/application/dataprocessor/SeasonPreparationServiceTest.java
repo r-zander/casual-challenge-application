@@ -425,11 +425,11 @@ class SeasonPreparationServiceTest {
         assertEquals(strixhavenRelease, setsReleased.get(0).getReleaseDate());
         assertEquals(MtgSetType.EXPANSION, setsReleased.get(0).getType());
         assertEquals(4, setsReleased.get(0).getNewCardCount());
-        assertEquals(List.of("PSOS", "SOC"), setsReleased.get(0).getChildCodes());
+        assertEquals(List.of(new MtgSetVO.ChildSetVO("Secrets of Strixhaven Promos", "PSOS", 1), new MtgSetVO.ChildSetVO("Secrets of Strixhaven Commander", "SOC", 1)), setsReleased.get(0).getChildSets());
         assertEquals(List.of("Lorehold Spirit", "Prismari Artistry"), setsReleased.get(0).getCommanderDecks());
         assertEquals("MSH", setsReleased.get(1).getCode());
         assertEquals(1, setsReleased.get(1).getNewCardCount());
-        assertEquals(List.of(), setsReleased.get(1).getChildCodes());
+        assertEquals(List.of(), setsReleased.get(1).getChildSets());
         assertEquals(List.of(), setsReleased.get(1).getCommanderDecks());
     }
 

@@ -12,6 +12,20 @@ const MONTH_NAMES = [
     'Nov',
     'Dec'
 ];
+const GERMAN_MONTH_NAMES = [
+    'Jan',
+    'Feb',
+    'Mär',
+    'Apr',
+    'Mai',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Okt',
+    'Nov',
+    'Dez'
+];
 // Seasons will not reach 90 before any of us is retired
 /** @type {[number, string][]} */
 const ROMAN_NUMERALS = [[50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
@@ -36,6 +50,16 @@ export function formatNumber(value) {
 }
 
 /**
+ * @param {number | null} value
+ * @returns {string}
+ */
+export function formatGermanNumber(value) {
+    if (value === null || value === undefined) return '';
+
+    return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+/**
  * @param {string | null} isoDate
  * @returns {string}
  */
@@ -45,6 +69,18 @@ export function formatDate(isoDate) {
     const parts = isoDate.split('-');
 
     return Number(parts[2]) + ' ' + MONTH_NAMES[Number(parts[1]) - 1] + ' ' + parts[0];
+}
+
+/**
+ * @param {string | null} isoDate
+ * @returns {string}
+ */
+export function formatGermanDate(isoDate) {
+    if (isoDate === null || isoDate === undefined) return '';
+
+    const parts = isoDate.split('-');
+
+    return Number(parts[2]) + '. ' + GERMAN_MONTH_NAMES[Number(parts[1]) - 1] + ' ' + parts[0];
 }
 
 /**

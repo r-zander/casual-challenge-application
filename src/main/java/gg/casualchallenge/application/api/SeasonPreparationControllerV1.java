@@ -13,6 +13,8 @@ import gg.casualchallenge.application.model.values.RebuiltPriceDetailsVO;
 import gg.casualchallenge.application.model.values.SeasonPreparationRequestVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
@@ -59,11 +61,27 @@ public class SeasonPreparationControllerV1 {
         this.objectMapper = objectMapper;
     }
 
-    @PostMapping(path = "/season/preparation", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE, MediaType.ALL_VALUE}) // multipart for the ban files, */* so a bodyless POST still works
+    // multipart for the ban files, */* so a bodyless POST still works
+    @PostMapping(path = "/season/preparation", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE, MediaType.ALL_VALUE})
     @ResponseStatus(HttpStatus.ACCEPTED)
     @Operation(
             summary = "Start preparing the next season",
-            description = "Answers right away with the status, the work happens in the background. 409 while another preparation or a rebuild of price details is still running. 400 when the dates don't work out, metaSource is none of the three or metaSource=files comes without the two files. Every parameter is optional, the defaults are with the parameters."
+            description = """
+                    Answers right away with the status, the work happens in the background.
+
+                    Every parameter is optional, the defaults are with the parameters.
+                    """
+    )
+    @ApiResponse(
+            responseCode = "400",
+            description = "The dates don't work out, `metaSource` is none of the three"
+                    + " or `metaSource=files` comes without the two files",
+            content = @Content
+    )
+    @ApiResponse(
+            responseCode = "409",
+            description = "Another preparation or a rebuild of price details is still running",
+            content = @Content
     )
     public SeasonPreparationStatusResponse prepareSeason(
             @Parameter(description = "First day of the new season, today (UTC) if you leave it out.")
@@ -122,16 +140,36 @@ public class SeasonPreparationControllerV1 {
     @PostMapping(path = "/season/{seasonNumber}/price-details")
     @Operation(
             summary = "Rebuild the price details of a season",
-            description = "Prices the season again from the MTGJSON files its preparation left in the archive and replaces all of the season's price details with the result, so it only works while the archive is still there. Synchronous and takes a few minutes - behind Cloudflare the answer may never arrive, the rebuild finishes anyway and logs the same numbers. mismatches are cards priced differently than their stored budget points, unmatchedCards ones with budget points but no card in the archive. 404 for a season that doesn't exist or has no archive. 409 while a preparation or another rebuild is running, and when the archive holds another run of the season than the one that was committed."
+            description = """
+                    Prices the season again from the MTGJSON files its preparation left in the archive \
+                    and replaces all of the season's price details with the result, \
+                    so it only works while the archive is still there.
+
+                    Synchronous and takes a few minutes - a proxy may cut the request off before the answer arrives, \
+                    the rebuild finishes anyway and its log line has the same numbers.
+
+                    - `mismatches` are cards priced differently than their stored budget points
+                    - `unmatchedCards` are the ones with budget points but no card in the archive
+                    """
+    )
+    @ApiResponse(responseCode = "200")
+    @ApiResponse(responseCode = "404", description = "The season doesn't exist or has no archive", content = @Content)
+    @ApiResponse(
+            responseCode = "409",
+            description = "A preparation or another rebuild is running,"
+                    + " or the archive holds another run of the season than the one that was committed",
+            content = @Content
     )
     public RebuiltPriceDetailsResponse rebuildPriceDetails(
-            @Parameter(description = "The season to rebuild, the number not the id - they happen to be the same.") @PathVariable("seasonNumber") int seasonNumber
+            @Parameter(description = "The season to rebuild, the number not the id - they happen to be the same.")
+            @PathVariable("seasonNumber") int seasonNumber
     ) {
         RebuiltPriceDetailsVO rebuiltPriceDetails;
         try {
             rebuiltPriceDetails = this.seasonPreparationService.rebuildPriceDetails(seasonNumber);
         } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage()); // the archive or a file in it is missing
+            // The archive or a file in it is missing
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
         }

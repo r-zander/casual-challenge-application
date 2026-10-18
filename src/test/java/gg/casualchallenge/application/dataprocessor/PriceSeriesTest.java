@@ -3,10 +3,10 @@ package gg.casualchallenge.application.dataprocessor;
 import gg.casualchallenge.application.dataprocessor.model.Cents;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrinting;
 import gg.casualchallenge.application.dataprocessor.model.PrintingPrices;
+import gg.casualchallenge.application.model.type.Finish;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -15,19 +15,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PriceSeriesTest {
 
-    private static final MtgJsonPrinting CHK_193 = new MtgJsonPrinting(UUID.fromString("740d74ee-384a-5bd5-8fd2-a80d018956c3"), "Through the Breach", "CHK", "193", true, true);
-    private static final MtgJsonPrinting UMA_152 =new MtgJsonPrinting(UUID.fromString("7adf1e71-2477-51ae-8350-ea498447e8b9"), "Through the Breach", "UMA", "152", true, true);
-    private static final MtgJsonPrinting INR_404 = new MtgJsonPrinting(UUID.fromString("a2d78b0c-a313-5e71-9a46-0c559aa97675"), "Through the Breach", "INR", "404", true, true);
-    private static final MtgJsonPrinting INR_175 = new MtgJsonPrinting(UUID.fromString("da86c63a-9f78-5e93-a8b8-ce39468f4826"), "Through the Breach", "INR", "175", true, true);
-    private static final MtgJsonPrinting MP2_49 = new MtgJsonPrinting(UUID.fromString("aaad4f98-a51b-5f96-9223-13cbbe0638b1"), "Through the Breach", "MP2", "49", true, false);
-    private static final MtgJsonPrinting DELVER_INR_60_BACK = new MtgJsonPrinting(UUID.fromString("2bae222c-f8ef-50ce-b41e-ce5583c11b12"), "Delver of Secrets // Insectile Aberration", "INR", "60", true, true);
-    private static final MtgJsonPrinting DELVER_INR_60_FRONT = new MtgJsonPrinting(UUID.fromString("be445963-f15f-5538-8a32-81e965409e65"), "Delver of Secrets // Insectile Aberration", "INR", "60", true, true);
+    private static final MtgJsonPrinting CHK_193 = new MtgJsonPrinting(null, null, "CHK", "193", true, true);
+    private static final MtgJsonPrinting UMA_152 = new MtgJsonPrinting(null, null, "UMA", "152", true, true);
+    private static final MtgJsonPrinting INR_404 = new MtgJsonPrinting(null, null, "INR", "404", true, true);
+    private static final MtgJsonPrinting INR_175 = new MtgJsonPrinting(null, null, "INR", "175", true, true);
+    private static final MtgJsonPrinting MP2_49 = new MtgJsonPrinting(null, null, "MP2", "49", true, false);
+    private static final MtgJsonPrinting DELVER_INR_60_BACK = new MtgJsonPrinting(null, null, "INR", "60", true, true);
+    private static final MtgJsonPrinting DELVER_INR_60_FRONT = new MtgJsonPrinting(null, null, "INR", "60", true, true);
 
     @Test
     void testSumOfCheapest() {
         PriceSeries priceSeries = new PriceSeries(4);
-        priceSeries.addPrinting(null, false, new Cents[]{Cents.of(100), Cents.of(400), null, null});
-        priceSeries.addPrinting(null, false, new Cents[]{Cents.of(200), Cents.of(300), Cents.of(500), null});
+        priceSeries.addPrinting(null, Finish.NONFOIL, new Cents[]{Cents.of(100), Cents.of(400), null, null});
+        priceSeries.addPrinting(null, Finish.NONFOIL, new Cents[]{Cents.of(200), Cents.of(300), Cents.of(500), null});
 
         assertEquals(2, priceSeries.getPrintingCount());
         assertEquals(0, priceSeries.getFlatPrintingCount());
@@ -38,8 +38,8 @@ class PriceSeriesTest {
     @Test
     void testSumOfCheapest_withFlatPrinting() {
         PriceSeries priceSeries = new PriceSeries(3);
-        priceSeries.addPrinting(null, false, new Cents[]{Cents.of(100), Cents.of(200), null});
-        priceSeries.addPrinting(null, false, new Cents[]{Cents.of(50), Cents.of(50), Cents.of(50)});
+        priceSeries.addPrinting(null, Finish.NONFOIL, new Cents[]{Cents.of(100), Cents.of(200), null});
+        priceSeries.addPrinting(null, Finish.NONFOIL, new Cents[]{Cents.of(50), Cents.of(50), Cents.of(50)});
 
         assertEquals(2, priceSeries.getPrintingCount());
         assertEquals(1, priceSeries.getFlatPrintingCount());
@@ -50,8 +50,8 @@ class PriceSeriesTest {
     @Test
     void testSumOfCheapest_withOnlyFlatPrintings() {
         PriceSeries priceSeries = new PriceSeries(3);
-        priceSeries.addPrinting(null, false, new Cents[]{Cents.of(200), Cents.of(200), null});
-        priceSeries.addPrinting(null, false, new Cents[]{null, Cents.of(100), Cents.of(100)});
+        priceSeries.addPrinting(null, Finish.NONFOIL, new Cents[]{Cents.of(200), Cents.of(200), null});
+        priceSeries.addPrinting(null, Finish.NONFOIL, new Cents[]{null, Cents.of(100), Cents.of(100)});
 
         assertEquals(2, priceSeries.getFlatPrintingCount());
         assertEquals(Cents.of(400), priceSeries.sumOfCheapest());
@@ -61,8 +61,8 @@ class PriceSeriesTest {
     @Test
     void testSumOfCheapest_withEmptyPrinting() {
         PriceSeries priceSeries = new PriceSeries(3);
-        priceSeries.addPrinting(null, false, new Cents[]{Cents.of(100), Cents.of(100), Cents.of(100)});
-        priceSeries.addPrinting(null, false, new Cents[]{null, null, null});
+        priceSeries.addPrinting(null, Finish.NONFOIL, new Cents[]{Cents.of(100), Cents.of(100), Cents.of(100)});
+        priceSeries.addPrinting(null, Finish.NONFOIL, new Cents[]{null, null, null});
 
         assertEquals(2, priceSeries.getPrintingCount());
         assertEquals(1, priceSeries.getFlatPrintingCount());
@@ -73,9 +73,9 @@ class PriceSeriesTest {
     @Test
     void testCheapestDays() {
         PriceSeries priceSeries = new PriceSeries(4);
-        priceSeries.addPrinting(UMA_152, false, new Cents[]{Cents.of(120), Cents.of(120), Cents.of(110), Cents.of(110)});
-        priceSeries.addPrinting(INR_404, false, new Cents[]{Cents.of(82), Cents.of(82), Cents.of(85), Cents.of(85)});
-        priceSeries.addPrinting(INR_175, false, new Cents[]{Cents.of(83), Cents.of(83), Cents.of(75), Cents.of(70)});
+        priceSeries.addPrinting(UMA_152, Finish.NONFOIL, cents(120, 120, 110, 110));
+        priceSeries.addPrinting(INR_404, Finish.NONFOIL, cents(82, 82, 85, 85));
+        priceSeries.addPrinting(INR_175, Finish.NONFOIL, cents(83, 83, 75, 70));
 
         List<PrintingPrices> printingPrices = priceSeries.printingPrices();
 
@@ -87,7 +87,7 @@ class PriceSeriesTest {
         assertEquals(83, printingPrices.get(2).getHighestCents());
         assertEquals(311, printingPrices.get(2).getSumOfCents());
         assertFalse(printingPrices.get(2).isFlat());
-        assertArrayEquals(new Cents[]{Cents.of(82), Cents.of(82), Cents.of(75), Cents.of(70)}, priceSeries.cheapestPriceOfEveryDay());
+        assertArrayEquals(cents(82, 82, 75, 70), priceSeries.cheapestPriceOfEveryDay());
         assertArrayEquals(new int[]{1, 1, 2, 2}, priceSeries.cheapestPrintingOfEveryDay());
         assertFalse(priceSeries.hasOnlyFlatPrintings());
     }
@@ -95,8 +95,8 @@ class PriceSeriesTest {
     @Test
     void testCheapestDays_withTie() {
         PriceSeries priceSeries = new PriceSeries(3);
-        priceSeries.addPrinting(DELVER_INR_60_BACK, false, new Cents[]{Cents.of(31), Cents.of(29), Cents.of(28)});
-        priceSeries.addPrinting(DELVER_INR_60_FRONT, false, new Cents[]{Cents.of(31), Cents.of(29), Cents.of(28)});
+        priceSeries.addPrinting(DELVER_INR_60_BACK, Finish.NONFOIL, cents(31, 29, 28));
+        priceSeries.addPrinting(DELVER_INR_60_FRONT, Finish.NONFOIL, cents(31, 29, 28));
 
         List<PrintingPrices> printingPrices = priceSeries.printingPrices();
 
@@ -108,13 +108,13 @@ class PriceSeriesTest {
     @Test
     void testCheapestDays_withFlatPrintings() {
         PriceSeries priceSeries = new PriceSeries(4);
-        priceSeries.addPrinting(UMA_152, false, new Cents[]{Cents.of(83), Cents.of(82), null, Cents.of(81)});
-        priceSeries.addPrinting(UMA_152, true, new Cents[]{Cents.of(5), Cents.of(5), null, Cents.of(5)});
-        priceSeries.addPrinting(INR_404, false, new Cents[]{Cents.of(99), Cents.of(99), null, Cents.of(99)});
-        priceSeries.addPrinting(INR_175, false, new Cents[]{Cents.of(74), Cents.of(74), null, Cents.of(73)});
+        priceSeries.addPrinting(UMA_152, Finish.NONFOIL, cents(83, 82, null, 81));
+        priceSeries.addPrinting(UMA_152, Finish.FOIL, cents(5, 5, null, 5));
+        priceSeries.addPrinting(INR_404, Finish.NONFOIL, cents(99, 99, null, 99));
+        priceSeries.addPrinting(INR_175, Finish.NONFOIL, cents(74, 74, null, 73));
         PriceSeries flatPriceSeries = new PriceSeries(4);
-        flatPriceSeries.addPrinting(CHK_193, true, new Cents[]{Cents.of(1360), Cents.of(1360), null, Cents.of(1360)});
-        flatPriceSeries.addPrinting(UMA_152, true, new Cents[]{Cents.of(5), Cents.of(5), null, Cents.of(5)});
+        flatPriceSeries.addPrinting(CHK_193, Finish.FOIL, cents(1360, 1360, null, 1360));
+        flatPriceSeries.addPrinting(UMA_152, Finish.FOIL, cents(5, 5, null, 5));
 
         List<PrintingPrices> printingPrices = priceSeries.printingPrices();
         List<PrintingPrices> flatPrintingPrices = flatPriceSeries.printingPrices();
@@ -124,14 +124,14 @@ class PriceSeriesTest {
         assertEquals(0, printingPrices.get(1).getCheapestDays());
         assertEquals(0, printingPrices.get(2).getCheapestDays());
         assertEquals(3, printingPrices.get(3).getCheapestDays());
-        assertArrayEquals(new Cents[]{Cents.of(74), Cents.of(74), null, Cents.of(73)}, priceSeries.cheapestPriceOfEveryDay());
+        assertArrayEquals(cents(74, 74, null, 73), priceSeries.cheapestPriceOfEveryDay());
         assertEquals(3, priceSeries.cheapestPrintingOfEveryDay()[0]);
         assertEquals(3, priceSeries.cheapestPrintingOfEveryDay()[3]);
         assertFalse(priceSeries.hasOnlyFlatPrintings());
 
         assertEquals(0, flatPrintingPrices.get(0).getCheapestDays());
         assertEquals(3, flatPrintingPrices.get(1).getCheapestDays());
-        assertArrayEquals(new Cents[]{Cents.of(5), Cents.of(5), null, Cents.of(5)}, flatPriceSeries.cheapestPriceOfEveryDay());
+        assertArrayEquals(cents(5, 5, null, 5), flatPriceSeries.cheapestPriceOfEveryDay());
         assertEquals(1, flatPriceSeries.cheapestPrintingOfEveryDay()[0]);
         assertEquals(1, flatPriceSeries.cheapestPrintingOfEveryDay()[3]);
         assertTrue(flatPriceSeries.hasOnlyFlatPrintings());
@@ -140,8 +140,8 @@ class PriceSeriesTest {
     @Test
     void testCheapestDays_withoutPriceInWindow() {
         PriceSeries priceSeries = new PriceSeries(3);
-        priceSeries.addPrinting(UMA_152, true, new Cents[]{Cents.of(5), Cents.of(5), Cents.of(5)});
-        priceSeries.addPrinting(MP2_49, true, new Cents[]{null, null, null});
+        priceSeries.addPrinting(UMA_152, Finish.FOIL, cents(5, 5, 5));
+        priceSeries.addPrinting(MP2_49, Finish.FOIL, cents(null, null, null));
 
         List<PrintingPrices> printingPrices = priceSeries.printingPrices();
 
@@ -152,7 +152,16 @@ class PriceSeriesTest {
         assertTrue(printingPrices.get(0).isFlat());
         assertEquals(0, printingPrices.get(0).getCheapestDays());
         assertFalse(priceSeries.hasOnlyFlatPrintings());
-        assertArrayEquals(new Cents[]{null, null, null}, priceSeries.cheapestPriceOfEveryDay());
+        assertArrayEquals(cents(null, null, null), priceSeries.cheapestPriceOfEveryDay());
+    }
+
+    private static Cents[] cents(Integer... amounts) {
+        Cents[] centsPerDay = new Cents[amounts.length];
+        for (int day = 0; day < amounts.length; day++) {
+            if (amounts[day] != null) centsPerDay[day] = Cents.of(amounts[day]);
+        }
+
+        return centsPerDay;
     }
 
 }

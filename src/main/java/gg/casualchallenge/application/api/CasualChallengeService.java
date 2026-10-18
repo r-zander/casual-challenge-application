@@ -144,36 +144,64 @@ public class CasualChallengeService {
         cacheLock.readLock().lock();
         try {
             Season season = getSeason(seasonNumber);
-            if (season == null) throw new IllegalArgumentException(seasonNumber != null ? "There is no season " + seasonNumber + "." : "There is no current season.");
+            if (season == null) {
+                if (seasonNumber == null) throw new IllegalArgumentException("There is no current season.");
+                throw new IllegalArgumentException("There is no season " + seasonNumber + ".");
+            }
 
             CardVO cardVO = cardCacheByNormalizedName.get(CardNameNormalizer.normalize(cardName));
             if (cardVO == null) throw new IllegalArgumentException("There is no card '" + cardName + "'.");
 
-            List<CardSeasonData> cardDataList = cardSeasonDataRepository.findAllBySeasonAndCardOracleIdIn(season, List.of(cardVO.getOracleId()));
-            if (cardDataList.isEmpty()) throw new IllegalArgumentException("'" + cardVO.getName() + "' has no data in season " + season.getSeasonNumber() + ".");
+            List<CardSeasonData> cardDataList =
+                    cardSeasonDataRepository.findAllBySeasonAndCardOracleIdIn(season, List.of(cardVO.getOracleId()));
+            if (cardDataList.isEmpty()) {
+                throw new IllegalArgumentException("'" + cardVO.getName() + "' has no data"
+                        + " in season " + season.getSeasonNumber() + ".");
+            }
 
-            if (isBasicLand(cardVO.getName())) throw new IllegalArgumentException("'" + cardVO.getName() + "' is a basic land, its budget points are always 0 - there are no prices to explain.");
+            if (isBasicLand(cardVO.getName())) {
+                throw new IllegalArgumentException("'" + cardVO.getName() + "' is a basic land,"
+                        + " its budget points are always 0 - there are no prices to explain.");
+            }
 
             CardSeasonData cardSeasonData = cardDataList.get(0);
             CardPriceDetailsVO priceDetails = seasonDraftRepository.findPriceDetails(cardSeasonData.getId());
-            if (priceDetails == null) throw new IllegalArgumentException("'" + cardVO.getName() + "' exists, but has no price details for season " + season.getSeasonNumber() + ". Try running POST /admin/v1/season/" + season.getSeasonNumber() + "/price-details to generate them.");
+            if (priceDetails == null) {
+                throw new IllegalArgumentException("'" + cardVO.getName() + "' exists,"
+                        + " but has no price details for season " + season.getSeasonNumber() + "."
+                        + " Try running POST /admin/v1/season/" + season.getSeasonNumber() + "/price-details"
+                        + " to generate them.");
+            }
 
-            return toExplanation(cardVO.getName(), cardVO.getOracleId(), season.getSeasonNumber(), cardSeasonData, priceDetails);
+            return toExplanation(
+                    cardVO.getName(),
+                    cardVO.getOracleId(),
+                    season.getSeasonNumber(),
+                    cardSeasonData,
+                    priceDetails
+            );
         } finally {
             cacheLock.readLock().unlock();
         }
     }
 
-    // The draft knows its new cards before the card cache does, so the draft card is all there is to go by
     public CardExplanationVO explainDraftCard(String cardName) {
         SeasonDraftVO draft = seasonDraftRepository.findUncommittedDraft();
         if (draft == null) throw new IllegalArgumentException("There is no draft to explain.");
 
-        SeasonDraftCardVO draftCard = seasonDraftRepository.findDraftCard(draft.getId(), CardNameNormalizer.normalize(cardName));
+        String normalizedName = CardNameNormalizer.normalize(cardName);
+        SeasonDraftCardVO draftCard = seasonDraftRepository.findDraftCard(draft.getId(), normalizedName);
         if (draftCard == null) throw new IllegalArgumentException("'" + cardName + "' is not in the draft.");
-        if (isBasicLand(draftCard.getName())) throw new IllegalArgumentException("'" + draftCard.getName() + "' is a basic land, its budget points are always 0 - there are no prices to explain.");
-        if (draftCard.getPriceDetails() == null) throw new IllegalArgumentException("'" + draftCard.getName() + "' is in the draft, but has no price details. Prepare the season again to get them.");
+        if (isBasicLand(draftCard.getName())) {
+            throw new IllegalArgumentException("'" + draftCard.getName() + "' is a basic land,"
+                    + " its budget points are always 0 - there are no prices to explain.");
+        }
+        if (draftCard.getPriceDetails() == null) {
+            throw new IllegalArgumentException("'" + draftCard.getName() + "' is in the draft,"
+                    + " but has no price details. Prepare the season again to get them.");
+        }
 
+        // The draft knows its new cards before the card cache does, so the draft card is all there is to go by
         CardSeasonData cardSeasonData = new CardSeasonData();
         cardSeasonData.setCardOracleId(draftCard.getOracleId());
         cardSeasonData.setBudgetPoints(draftCard.getBudgetPoints());
@@ -187,10 +215,22 @@ public class CasualChallengeService {
         cardSeasonData.setBannedIn(draftCard.getBannedIn());
         cardSeasonData.setVintageRestricted(draftCard.isVintageRestricted());
 
-        return toExplanation(draftCard.getName(), draftCard.getOracleId(), draft.getSeasonNumber(), cardSeasonData, draftCard.getPriceDetails());
+        return toExplanation(
+                draftCard.getName(),
+                draftCard.getOracleId(),
+                draft.getSeasonNumber(),
+                cardSeasonData,
+                draftCard.getPriceDetails()
+        );
     }
 
-    private CardExplanationVO toExplanation(String cardName, UUID oracleId, int seasonNumber, CardSeasonData cardSeasonData, CardPriceDetailsVO priceDetails) {
+    private CardExplanationVO toExplanation(
+            String cardName,
+            UUID oracleId,
+            int seasonNumber,
+            CardSeasonData cardSeasonData,
+            CardPriceDetailsVO priceDetails
+    ) {
         return new CardExplanationVO(
                 cardName,
                 oracleId,

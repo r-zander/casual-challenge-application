@@ -1,13 +1,16 @@
 package gg.casualchallenge.application.api.datamodel;
 
+import gg.casualchallenge.application.model.type.Finish;
 import gg.casualchallenge.application.model.type.Legality;
+import gg.casualchallenge.application.model.type.PriceProvider;
 import lombok.Value;
 
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-@Value // same field names as CardExplanationVO and CardPriceDetailsVO, only the stored day arrays come out as days
+/** Same field names as CardExplanationVO and CardPriceDetailsVO, only the stored day arrays come out as days. */
+@Value
 public class CardExplanationResponse {
     String name;
     UUID oracleId;
@@ -21,7 +24,7 @@ public class CardExplanationResponse {
     public static class PriceDetailsDTO {
         LocalDate priceWindowStart;
         LocalDate priceWindowEnd;
-        String pricedBy;
+        PriceProvider pricedBy;
         Double adjustedExchangeRate;
         MarketPricesDTO cardmarket;
         MarketPricesDTO tcgplayer;
@@ -42,7 +45,7 @@ public class CardExplanationResponse {
         String setCode;
         String setName;
         String number;
-        String finish;
+        Finish finish;
         int pricedDays;
         int cheapestDays;
         Integer lowestCents;
@@ -51,20 +54,21 @@ public class CardExplanationResponse {
         boolean flat;
     }
 
+    /** The price that went into the average that day and the printing it came from, all null without a price. */
     @Value
-    public static class DayPriceDTO { // the price that went into the average that day and the printing it came from, all null without a price
+    public static class DayPriceDTO {
         LocalDate date;
         Integer cents;
         String setCode;
         String number;
-        String finish;
+        Finish finish;
     }
 
     @Value
     public static class IgnoredPrintingDTO {
         String setCode;
         String number;
-        String finish;
+        Finish finish;
     }
 
 }

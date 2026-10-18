@@ -12,7 +12,8 @@ import java.util.UUID;
 public class MtgJsonPrintingsVO {
     Map<String, MtgJsonCard> cardsByName;
     Map<UUID, MtgJsonPrinting> printingsByUuid;
-    Map<String, List<MtgJsonPrinting>> ignoredPrintingsByCardName; // IgnoredPrices.json, foil and nonFoil are the finishes that never get a price
+    /** IgnoredPrices.json, foil and nonFoil are the finishes that never get a price */
+    Map<String, List<MtgJsonPrinting>> ignoredPrintingsByCardName;
     List<MtgJsonSet> sets;
     LocalDate metaDate;
     String metaVersion;

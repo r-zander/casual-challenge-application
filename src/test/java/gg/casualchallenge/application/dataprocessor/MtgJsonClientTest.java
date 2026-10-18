@@ -9,6 +9,7 @@ import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrintingsVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonSet;
 import gg.casualchallenge.application.dataprocessor.model.PriceWindowVO;
 import gg.casualchallenge.application.dataprocessor.model.PrintingPrices;
+import gg.casualchallenge.application.model.type.Finish;
 import gg.casualchallenge.application.model.type.MtgFormat;
 import gg.casualchallenge.application.model.type.MtgSetType;
 import org.junit.jupiter.api.Test;
@@ -126,8 +127,10 @@ class MtgJsonClientTest {
         assertEquals(MtgFormat.STANDARD, redHerring.getBannedIn());
         assertTrue(printings.getPrintingsByUuid().get(UUID.fromString("6b2f90d4-7c13-5e48-9a05-3d8b17e6c204")).isFoil());
         assertFalse(printings.getPrintingsByUuid().get(UUID.fromString("5a1e3c72-9d84-5b06-a1f3-7e2c48d905b1")).isFoil());
-        assertEquals("MKM", printings.getPrintingsByUuid().get(UUID.fromString("6b2f90d4-7c13-5e48-9a05-3d8b17e6c204")).getSetCode());
-        assertEquals("90", printings.getPrintingsByUuid().get(UUID.fromString("6b2f90d4-7c13-5e48-9a05-3d8b17e6c204")).getNumber());
+        MtgJsonPrinting redHerringPrinting =
+                printings.getPrintingsByUuid().get(UUID.fromString("6b2f90d4-7c13-5e48-9a05-3d8b17e6c204"));
+        assertEquals("MKM", redHerringPrinting.getSetCode());
+        assertEquals("90", redHerringPrinting.getNumber());
 
         assertEquals("SUM", printings.getCardsByName().get("Tundra").getFirstSetCode());
         assertEquals(Set.of("Tundra"), printings.getIgnoredPrintingsByCardName().keySet());
@@ -212,8 +215,10 @@ class MtgJsonClientTest {
                 }""";
 
         Map<UUID, MtgJsonPrinting> printingsByUuid = new HashMap<>();
-        printingsByUuid.put(SOL_RING_ALPHA, new MtgJsonPrinting(SOL_RING_ALPHA, "Sol Ring", "LEA", "258", false, true));
-        printingsByUuid.put(SOL_RING_COMMANDER, new MtgJsonPrinting(SOL_RING_COMMANDER, "Sol Ring", "C13", "254", true, true));
+        MtgJsonPrinting alpha = new MtgJsonPrinting(SOL_RING_ALPHA, "Sol Ring", "LEA", "258", false, true);
+        MtgJsonPrinting commander = new MtgJsonPrinting(SOL_RING_COMMANDER, "Sol Ring", "C13", "254", true, true);
+        printingsByUuid.put(SOL_RING_ALPHA, alpha);
+        printingsByUuid.put(SOL_RING_COMMANDER, commander);
         PriceWindowVO window = PriceWindowVO.of(LocalDate.of(2025, 6, 7), 3);
 
         Map<String, CardPrices> pricesByCardName = mtgJsonClient.readPrices(toStream(allPrices), printingsByUuid, window).getPricesByCardName();
@@ -226,11 +231,11 @@ class MtgJsonClientTest {
         assertEquals(2, solRing.getEur().pricedDays());
         List<PrintingPrices> printingPrices = solRing.getEur().printingPrices();
         assertEquals("LEA", printingPrices.get(0).getPrinting().getSetCode());
-        assertFalse(printingPrices.get(0).isFoil());
+        assertEquals(Finish.NONFOIL, printingPrices.get(0).getFinish());
         assertEquals("C13", printingPrices.get(1).getPrinting().getSetCode());
-        assertTrue(printingPrices.get(1).isFoil());
+        assertEquals(Finish.FOIL, printingPrices.get(1).getFinish());
         assertEquals("C13", printingPrices.get(2).getPrinting().getSetCode());
-        assertFalse(printingPrices.get(2).isFoil());
+        assertEquals(Finish.NONFOIL, printingPrices.get(2).getFinish());
         assertEquals(2, solRing.getUsd().getPrintingCount());
         assertEquals(Cents.of(0), solRing.getUsd().sumOfCheapest());
         assertEquals(0, solRing.getUsd().pricedDays());
@@ -245,15 +250,27 @@ class MtgJsonClientTest {
                   "data": {
                     "C13": {
                       "cards": [
-                        {"availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil", "foil"], "identifiers": {"scryfallOracleId": "6ad8011d-3471-4369-9d68-b264cc027487"}, "legalities": {"legacy": "Banned", "vintage": "Restricted"}, "name": "Sol Ring", "number": "254", "uuid": "8f6a9d1c-4b3e-5a7d-9c21-6e0f5a2b7d43"}
+                        {
+                          "availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil", "foil"],
+                          "identifiers": {"scryfallOracleId": "6ad8011d-3471-4369-9d68-b264cc027487"},
+                          "legalities": {"legacy": "Banned", "vintage": "Restricted"},
+                          "name": "Sol Ring", "number": "254", "uuid": "8f6a9d1c-4b3e-5a7d-9c21-6e0f5a2b7d43"
+                        }
                       ],
-                      "code": "C13", "isOnlineOnly": false, "name": "Commander 2013", "releaseDate": "2013-11-01", "type": "commander"
+                      "code": "C13", "isOnlineOnly": false, "name": "Commander 2013", "releaseDate": "2013-11-01",
+                      "type": "commander"
                     },
                     "LEA": {
                       "cards": [
-                        {"availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil"], "identifiers": {"scryfallOracleId": "6ad8011d-3471-4369-9d68-b264cc027487"}, "legalities": {"legacy": "Banned", "vintage": "Restricted"}, "name": "Sol Ring", "number": "258", "uuid": "1f3c8b2a-6e45-59d7-8c10-b4a2e76f3d09"}
+                        {
+                          "availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil"],
+                          "identifiers": {"scryfallOracleId": "6ad8011d-3471-4369-9d68-b264cc027487"},
+                          "legalities": {"legacy": "Banned", "vintage": "Restricted"},
+                          "name": "Sol Ring", "number": "258", "uuid": "1f3c8b2a-6e45-59d7-8c10-b4a2e76f3d09"
+                        }
                       ],
-                      "code": "LEA", "isOnlineOnly": false, "name": "Limited Edition Alpha", "releaseDate": "1993-08-05", "tokens": [], "type": "core"
+                      "code": "LEA", "isOnlineOnly": false, "name": "Limited Edition Alpha",
+                      "releaseDate": "1993-08-05", "tokens": [], "type": "core"
                     }
                   }
                 }""");
@@ -261,17 +278,35 @@ class MtgJsonClientTest {
                 {
                   "meta": {"date": "2025-06-07", "version": "5.2.2+20250607"},
                   "data": {
-                    "1f3c8b2a-6e45-59d7-8c10-b4a2e76f3d09": {"paper": {"cardmarket": {"retail": {"normal": {"2025-06-04": 1.0, "2025-06-05": null, "2025-06-06": 3.0}}}}},
-                    "8f6a9d1c-4b3e-5a7d-9c21-6e0f5a2b7d43": {"paper": {"cardmarket": {"retail": {"foil": {"2025-06-04": 0.1, "2025-06-05": 0.1, "2025-06-06": 0.2}, "normal": {"2025-06-04": 0.5, "2025-06-06": 0.6}}}}}
+                    "1f3c8b2a-6e45-59d7-8c10-b4a2e76f3d09": {
+                      "paper": {
+                        "cardmarket": {"retail": {"normal": {"2025-06-04": 1.0, "2025-06-05": null, "2025-06-06": 3.0}}}
+                      }
+                    },
+                    "8f6a9d1c-4b3e-5a7d-9c21-6e0f5a2b7d43": {
+                      "paper": {
+                        "cardmarket": {
+                          "retail": {
+                            "foil": {"2025-06-04": 0.1, "2025-06-05": 0.1, "2025-06-06": 0.2},
+                            "normal": {"2025-06-04": 0.5, "2025-06-06": 0.6}
+                          }
+                        }
+                      }
+                    }
                   }
                 }""");
         Files.writeString(seasonDirectory.resolve("IgnoredPrices.json"), """
                 {"Sol Ring": [{"set": "C13", "number": "254", "finish": "foil"}, {"set": "LEA", "number": "257"}]}""");
         Path missingDirectory = seasonDirectory.resolve("season-19");
+        PriceWindowVO window = PriceWindowVO.of(LocalDate.of(2025, 6, 7), 3);
 
         MtgJsonPrintingsVO printings = mtgJsonClient.readArchivedPrintings(seasonDirectory);
-        MtgJsonPricesVO prices = mtgJsonClient.readArchivedPrices(printings.getPrintingsByUuid(), PriceWindowVO.of(LocalDate.of(2025, 6, 7), 3), seasonDirectory);
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> mtgJsonClient.readArchivedPrintings(missingDirectory));
+        Map<UUID, MtgJsonPrinting> printingsByUuid = printings.getPrintingsByUuid();
+        MtgJsonPricesVO prices = mtgJsonClient.readArchivedPrices(printingsByUuid, window, seasonDirectory);
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> mtgJsonClient.readArchivedPrintings(missingDirectory)
+        );
 
         assertEquals(Set.of(SOL_RING_ALPHA, SOL_RING_COMMANDER), printings.getPrintingsByUuid().keySet());
         assertFalse(printings.getPrintingsByUuid().get(SOL_RING_COMMANDER).isFoil());
@@ -296,6 +331,8 @@ class MtgJsonClientTest {
         assertThrows(RuntimeException.class, () -> readArchivedPrintings(seasonDirectory, """
                 {"Sol Ring": [{"set": "C13", "number": "254", "finish": "etched"}]}"""));
         assertThrows(RuntimeException.class, () -> readArchivedPrintings(seasonDirectory, """
+                {"Sol Ring": [{"set": "C13", "number": "254", "finish": 1}]}"""));
+        assertThrows(RuntimeException.class, () -> readArchivedPrintings(seasonDirectory, """
                 {"Sol Ring": [{"set": "C13", "number": "254", "finsh": "foil"}]}"""));
         assertThrows(RuntimeException.class, () -> readArchivedPrintings(seasonDirectory, """
                 {"Sol Ring": [{"number": "254"}]}"""));
@@ -303,7 +340,10 @@ class MtgJsonClientTest {
                 {"Sol Ring": ["C13"]}"""));
     }
 
-    private MtgJsonPrintingsVO readArchivedPrintings(Path seasonDirectory, String ignoredPricesJson) throws IOException {
+    private MtgJsonPrintingsVO readArchivedPrintings(
+            Path seasonDirectory,
+            String ignoredPricesJson
+    ) throws IOException {
         Files.writeString(seasonDirectory.resolve("IgnoredPrices.json"), ignoredPricesJson);
         return mtgJsonClient.readArchivedPrintings(seasonDirectory);
     }

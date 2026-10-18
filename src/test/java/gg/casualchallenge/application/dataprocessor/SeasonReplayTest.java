@@ -18,6 +18,8 @@ import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrinting;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPricesVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrintingsVO;
 import gg.casualchallenge.application.dataprocessor.model.PriceWindowVO;
+import gg.casualchallenge.application.model.type.Finish;
+import gg.casualchallenge.application.model.type.PriceProvider;
 import gg.casualchallenge.application.model.values.CardPriceDetailsVO;
 import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
 import gg.casualchallenge.application.model.values.SeasonPreparationRequestVO;
@@ -46,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -83,8 +86,9 @@ class SeasonReplayTest {
 
     private static final LocalDateTime ADDED_AT = LocalDateTime.of(2026, 9, 15, 12, 0);
 
-    // What IgnoredPrices.json said when seasons 18 to 21 were priced, the file has moved on since
-    private static final Map<String, List<IgnoredPriceVO>> IGNORED_PRICES_BY_CARD_NAME = Map.of("Tundra", List.of(new IgnoredPriceVO("SUM", null, null)));
+    /** What IgnoredPrices.json said when seasons 18 to 21 were priced, the file has moved on since. */
+    private static final Map<String, List<IgnoredPriceVO>> IGNORED_PRICES_BY_CARD_NAME =
+            Map.of("Tundra", List.of(new IgnoredPriceVO("SUM", null, null)));
 
     private final MtgJsonClient mtgJsonClient = new MtgJsonClient("https://mtgjson.com/api/v5", System.getProperty("java.io.tmpdir"));
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new ParameterNamesModule()); // the ban files map onto constructors, just like they do in the controller
@@ -194,7 +198,8 @@ class SeasonReplayTest {
             assertTrue(budgetPointDiff.unknownToUs.size() + budgetPointDiff.pricedByUsOnly.size() <= 10);
             assertTrue(budgetPointDiff.droppedByIdentityRule.size() <= 1000);
 
-            // Cardmarket's price trend for the UMA foil was stuck at 2 and 5 cents the whole window, that's where the 4 budget points come from
+            // Cardmarket's price trend for the UMA foil was stuck at 2 and 5 cents the whole window,
+            // that's where the 4 budget points come from
             SeasonDraftCardVO throughTheBreach = findCard(cards, "Through the Breach");
             CardPriceDetailsVO.MarketPricesVO cardmarket = throughTheBreach.getPriceDetails().getCardmarket();
             CardPriceDetailsVO.MarketPricesVO tcgplayer = throughTheBreach.getPriceDetails().getTcgplayer();
@@ -202,12 +207,12 @@ class SeasonReplayTest {
             printPriceDetails(cards);
 
             assertEquals(4, throughTheBreach.getBudgetPoints());
-            assertEquals("cardmarket", throughTheBreach.getPriceDetails().getPricedBy());
+            assertEquals(PriceProvider.CARDMARKET, throughTheBreach.getPriceDetails().getPricedBy());
             assertEquals(65, cardmarket.getPricedDays());
             assertEquals(4, cardmarket.getAverageCents());
             assertEquals("UMA", cardmarket.getPrintings().get(0).getSetCode());
             assertEquals("152", cardmarket.getPrintings().get(0).getNumber());
-            assertEquals("foil", cardmarket.getPrintings().get(0).getFinish());
+            assertEquals(Finish.FOIL, cardmarket.getPrintings().get(0).getFinish());
             assertEquals(65, cardmarket.getPrintings().get(0).getPricedDays());
             assertEquals(65, cardmarket.getPrintings().get(0).getCheapestDays());
             assertEquals(4, cardmarket.getPrintings().get(0).getAverageCents());
@@ -215,12 +220,13 @@ class SeasonReplayTest {
             assertEquals(0, cardmarket.getCheapestPrintingPerDay().get(july6));
             assertEquals("INR", tcgplayer.getPrintings().get(0).getSetCode());
             assertEquals("175", tcgplayer.getPrintings().get(0).getNumber());
-            assertEquals("nonfoil", tcgplayer.getPrintings().get(0).getFinish());
+            assertEquals(Finish.NONFOIL, tcgplayer.getPrintings().get(0).getFinish());
             assertEquals(68, tcgplayer.getPrintings().get(0).getCheapestDays());
             assertEquals(44, tcgplayer.getPrintings().get(0).getAverageCents());
             assertNull(findCard(cards, "Island").getPriceDetails());
 
-            // A rebuild matches the season's rows by oracle id instead of assembling a draft --> on the same input it has to come to the very same documents
+            // A rebuild matches the season's rows by oracle id instead of assembling a draft
+            // --> on the same input it has to come to the very same documents
             List<CardSeasonData> seasonData = new ArrayList<>(cards.size());
             for (SeasonDraftCardVO card : cards) {
                 if (card.getSkipReason() != null) continue;
@@ -230,11 +236,17 @@ class SeasonReplayTest {
                 cardSeasonData.setBudgetPoints(card.getBudgetPoints());
                 seasonData.add(cardSeasonData);
             }
-            MatchedPriceDetailsVO matchedPriceDetails = SeasonPreparationService.matchPriceDetails(printings, new MtgJsonPricesVO(pricesByCardName, PRICE_WINDOW_DAYS), List.of(), seasonData, PriceWindowVO.of(startDate, PRICE_WINDOW_DAYS));
+            MtgJsonPricesVO prices = new MtgJsonPricesVO(pricesByCardName, PRICE_WINDOW_DAYS);
+            PriceWindowVO window = PriceWindowVO.of(startDate, PRICE_WINDOW_DAYS);
+            MatchedPriceDetailsVO matchedPriceDetails =
+                    SeasonPreparationService.matchPriceDetails(printings, prices, List.of(), seasonData, window);
+            Map<UUID, CardPriceDetailsVO> priceDetailsByOracleId = matchedPriceDetails.getPriceDetailsByOracleId();
             int differentDocuments = 0;
             for (SeasonDraftCardVO card : cards) {
                 if (card.getSkipReason() != null) continue;
-                if (!Objects.equals(card.getPriceDetails(), matchedPriceDetails.getPriceDetailsByOracleId().get(card.getOracleId()))) differentDocuments++;
+
+                CardPriceDetailsVO matchedDocument = priceDetailsByOracleId.get(card.getOracleId());
+                if (!Objects.equals(card.getPriceDetails(), matchedDocument)) differentDocuments++;
             }
 
             assertEquals(0, matchedPriceDetails.getMismatches().size());
@@ -340,7 +352,8 @@ class SeasonReplayTest {
         Map<String, CardPrices> pricesByCardName = new HashMap<>(budgetPointsByCardName.size());
         for (Map.Entry<String, Integer> entry : budgetPointsByCardName.entrySet()) {
             CardPrices cardPrices = new CardPrices(1);
-            cardPrices.getEur().addPrinting(new MtgJsonPrinting(null, entry.getKey(), null, null, false, true), false, new Cents[]{Cents.of(entry.getValue())});
+            MtgJsonPrinting printing = new MtgJsonPrinting(null, entry.getKey(), null, null, false, true);
+            cardPrices.getEur().addPrinting(printing, Finish.NONFOIL, new Cents[]{Cents.of(entry.getValue())});
             pricesByCardName.put(entry.getKey(), cardPrices);
         }
 
@@ -590,9 +603,12 @@ class SeasonReplayTest {
         }
     }
 
-    // What the commit writes into card_season_price_details, before Postgres compresses it
+    /** What the commit writes into card_season_price_details, before Postgres compresses it. */
     private static void printPriceDetails(List<SeasonDraftCardVO> cards) throws JsonProcessingException {
-        ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json().featuresToDisable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS).build(); // the dates like Spring Boot writes them
+        // The dates like Spring Boot writes them
+        ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json()
+                .featuresToDisable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .build();
         long characters = 0;
         int documents = 0;
         for (SeasonDraftCardVO card : cards) {
@@ -602,7 +618,9 @@ class SeasonReplayTest {
             documents++;
         }
 
-        System.out.println("  Price details: " + documents + " documents, " + characters / documents + " characters on average, " + characters / (1024 * 1024) + " MB in all.");
+        System.out.println("  Price details: " + documents + " documents, "
+                + characters / documents + " characters on average, "
+                + characters / (1024 * 1024) + " MB in all.");
     }
 
     private static void printHeap() {

@@ -23,8 +23,10 @@ import gg.casualchallenge.application.dataprocessor.model.PrintingPrices;
 import gg.casualchallenge.application.dataprocessor.model.SeasonPreparationState;
 import gg.casualchallenge.application.dataprocessor.model.SeasonPreparationStep;
 import gg.casualchallenge.application.dataprocessor.model.Staple;
+import gg.casualchallenge.application.model.type.Finish;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
+import gg.casualchallenge.application.model.type.PriceProvider;
 import gg.casualchallenge.application.model.values.CardPriceDetailsVO;
 import gg.casualchallenge.application.model.values.MtgSetVO;
 import gg.casualchallenge.application.model.values.RebuiltPriceDetailsVO;
@@ -90,7 +92,8 @@ public class SeasonPreparationService {
     private static final String REQUEST_FILE = "request.json";
     private static final String STAPLES_FILE = "staples.json";
 
-    private static final CardPriceDetailsVO.MarketPricesVO NO_MARKET_PRICES = new CardPriceDetailsVO.MarketPricesVO(0, 0, false, List.of(), List.of(), List.of());
+    private static final CardPriceDetailsVO.MarketPricesVO NO_MARKET_PRICES =
+            new CardPriceDetailsVO.MarketPricesVO(0, 0, false, List.of(), List.of(), List.of());
 
     private final MtgJsonClient mtgJsonClient;
     private final MtgGoldfishClient mtgGoldfishClient;
@@ -112,7 +115,8 @@ public class SeasonPreparationService {
         }
     });
     private final AtomicBoolean cancelRequested = new AtomicBoolean(false);
-    private final AtomicBoolean rebuildRunning = new AtomicBoolean(false); // a rebuild and a preparation never read MTGJSON at the same time
+    /** A rebuild and a preparation never read MTGJSON at the same time. */
+    private final AtomicBoolean rebuildRunning = new AtomicBoolean(false);
 
     private volatile SeasonPreparationStatusVO preparation = new SeasonPreparationStatusVO(SeasonPreparationState.IDLE, null, null, null, null, null);
 
@@ -165,7 +169,8 @@ public class SeasonPreparationService {
             throw new IllegalStateException("A season is already being prepared since " + preparation.getStartedAt() + ".");
         }
         if (rebuildRunning.get()) {
-            throw new IllegalStateException("The price details of a season are being rebuilt, prepare once that is done.");
+            throw new IllegalStateException("The price details of a season are being rebuilt,"
+                    + " prepare once that is done.");
         }
 
         cancelRequested.set(false);
@@ -193,40 +198,81 @@ public class SeasonPreparationService {
             Path seasonDirectory = archiveDirectory.resolve(SEASON_DIRECTORY_PREFIX + seasonNumber);
             Path requestFile = seasonDirectory.resolve(REQUEST_FILE);
             if (!Files.isRegularFile(requestFile)) {
-                throw new IllegalArgumentException("Season " + seasonNumber + " has no archive to rebuild the price details from, there is no '" + requestFile + "'.");
+                throw new IllegalArgumentException("Season " + seasonNumber + " has no archive"
+                        + " to rebuild the price details from, there is no '" + requestFile + "'.");
             }
+
             PriceWindowVO window;
             try {
-                window = objectMapper.readValue(requestFile.toFile(), SeasonPreparationRequestVO.class).getPriceWindow();
+                window = objectMapper.readValue(requestFile.toFile(), SeasonPreparationRequestVO.class)
+                        .getPriceWindow();
             } catch (IOException e) {
                 throw new RuntimeException("Couldn't read '" + requestFile + "'.", e);
             }
 
-            // A preparation that failed after the draft was made still overwrote the archive --> it has to be the run that was committed
+            // A preparation that failed after the draft was made still overwrote the archive
+            // --> it has to be the run that was committed
             SeasonDraftVO committedDraft = seasonDraftRepository.findCommittedDraft(seasonNumber);
-            if (committedDraft != null && !window.equals(new PriceWindowVO(committedDraft.getPriceWindowStart(), committedDraft.getPriceWindowEnd()))) {
-                throw new IllegalStateException("The archive of season " + seasonNumber + " prices " + window.getStart() + " to " + window.getEnd()
-                        + ", but the season was committed with the prices of " + committedDraft.getPriceWindowStart() + " to " + committedDraft.getPriceWindowEnd() + ".");
+            if (committedDraft != null) {
+                LocalDate committedStart = committedDraft.getPriceWindowStart();
+                LocalDate committedEnd = committedDraft.getPriceWindowEnd();
+                if (!window.equals(new PriceWindowVO(committedStart, committedEnd))) {
+                    throw new IllegalStateException("The archive of season " + seasonNumber
+                            + " prices " + window.getStart() + " to " + window.getEnd()
+                            + ", but the season was committed"
+                            + " with the prices of " + committedStart + " to " + committedEnd + ".");
+                }
             }
+
             MtgJsonPrintingsVO printings = mtgJsonClient.readArchivedPrintings(seasonDirectory);
-            String mtgJsonDate = printings.getMetaDate() != null ? printings.getMetaDate().toString() : null;
-            if (committedDraft != null && !Objects.equals(mtgJsonDate, committedDraft.getMtgJsonDate())) {
-                throw new IllegalStateException("The archive of season " + seasonNumber + " holds MTGJSON of " + mtgJsonDate + ", but the season was committed with MTGJSON of " + committedDraft.getMtgJsonDate() + ".");
+            String mtgJsonDate = null;
+            if (printings.getMetaDate() != null) mtgJsonDate = printings.getMetaDate().toString();
+            if (committedDraft != null) {
+                String committedMtgJsonDate = committedDraft.getMtgJsonDate();
+                if (!Objects.equals(mtgJsonDate, committedMtgJsonDate)) {
+                    throw new IllegalStateException("The archive of season " + seasonNumber
+                            + " holds MTGJSON of " + mtgJsonDate
+                            + ", but the season was committed with MTGJSON of " + committedMtgJsonDate + ".");
+                }
             }
 
-            MtgJsonPricesVO prices = mtgJsonClient.readArchivedPrices(printings.getPrintingsByUuid(), window, seasonDirectory);
-            MatchedPriceDetailsVO matchedPriceDetails = matchPriceDetails(printings, prices, cardRepository.findAll(), cardSeasonDataRepository.findAllBySeason(season), window);
-            int storedCount = seasonDraftRepository.replacePriceDetails(season.getId(), matchedPriceDetails.getPriceDetailsByOracleId());
+            Map<UUID, MtgJsonPrinting> printingsByUuid = printings.getPrintingsByUuid();
+            MtgJsonPricesVO prices = mtgJsonClient.readArchivedPrices(printingsByUuid, window, seasonDirectory);
+            MatchedPriceDetailsVO matchedPriceDetails = matchPriceDetails(
+                    printings,
+                    prices,
+                    cardRepository.findAll(),
+                    cardSeasonDataRepository.findAllBySeason(season),
+                    window
+            );
+            Map<UUID, CardPriceDetailsVO> priceDetailsByOracleId = matchedPriceDetails.getPriceDetailsByOracleId();
+            int storedCount = seasonDraftRepository.replacePriceDetails(season.getId(), priceDetailsByOracleId);
 
-            List<String> mismatches = matchedPriceDetails.getMismatches();
-            List<String> unmatchedCards = matchedPriceDetails.getUnmatchedCards();
-            List<String> firstMismatches = new ArrayList<>(mismatches.subList(0, Math.min(TOP_CHANGES, mismatches.size())));
-            List<String> firstUnmatchedCards = new ArrayList<>(unmatchedCards.subList(0, Math.min(TOP_CHANGES, unmatchedCards.size())));
-            // The answer may never make it through Cloudflare, so the log has to tell the story as well
-            log.info("Rebuilt the price details of season {}. {} cards stored, {} priced differently than their budget points {}, {} with budget points but no card in the archive {}.",
-                    seasonNumber, storedCount, mismatches.size(), firstMismatches, unmatchedCards.size(), firstUnmatchedCards);
+            List<RebuiltPriceDetailsVO.MismatchVO> mismatches = matchedPriceDetails.getMismatches();
+            List<RebuiltPriceDetailsVO.UnmatchedCardVO> unmatchedCards = matchedPriceDetails.getUnmatchedCards();
+            List<RebuiltPriceDetailsVO.MismatchVO> firstMismatches =
+                    new ArrayList<>(mismatches.subList(0, Math.min(TOP_CHANGES, mismatches.size())));
+            List<RebuiltPriceDetailsVO.UnmatchedCardVO> firstUnmatchedCards =
+                    new ArrayList<>(unmatchedCards.subList(0, Math.min(TOP_CHANGES, unmatchedCards.size())));
+            // A slow synchronous request might get canceled by edge servers, so we also simply log it
+            log.info("Rebuilt the price details of season {}. {} cards stored,"
+                            + " {} priced differently than their budget points {},"
+                            + " {} with budget points but no card in the archive {}.",
+                    seasonNumber,
+                    storedCount,
+                    mismatches.size(),
+                    firstMismatches,
+                    unmatchedCards.size(),
+                    firstUnmatchedCards);
 
-            return new RebuiltPriceDetailsVO(seasonNumber, storedCount, mismatches.size(), firstMismatches, unmatchedCards.size(), firstUnmatchedCards);
+            return new RebuiltPriceDetailsVO(
+                    seasonNumber,
+                    storedCount,
+                    mismatches.size(),
+                    firstMismatches,
+                    unmatchedCards.size(),
+                    firstUnmatchedCards
+            );
         } finally {
             rebuildRunning.set(false);
         }
@@ -234,7 +280,8 @@ public class SeasonPreparationService {
 
     private synchronized void startRebuild() {
         if (preparation.getState() == SeasonPreparationState.RUNNING) {
-            throw new IllegalStateException("A season is being prepared since " + preparation.getStartedAt() + ", the price details have to wait until it is done.");
+            throw new IllegalStateException("A season is being prepared since " + preparation.getStartedAt()
+                    + ", the price details have to wait until it is done.");
         }
         if (!rebuildRunning.compareAndSet(false, true)) {
             throw new IllegalStateException("The price details of a season are being rebuilt already.");
@@ -504,7 +551,8 @@ public class SeasonPreparationService {
             Season currentSeason,
             SeasonDates seasonDates
     ) {
-        BudgetPointsVO budgetPoints = calculateBudgetPoints(printings, prices.getPricesByCardName(), request.getPriceWindow());
+        BudgetPointsVO budgetPoints =
+                calculateBudgetPoints(printings, prices.getPricesByCardName(), request.getPriceWindow());
 
         Map<String, Card> existingCardsByName = new HashMap<>(existingCards.size());
         Map<String, Card> existingCardsByNormalizedName = new HashMap<>(existingCards.size());
@@ -536,7 +584,11 @@ public class SeasonPreparationService {
             String normalizedName = CardNameNormalizer.normalize(cardName);
             String skipReason = findSkipReason(card, normalizedName, cardWithSameName, cardWithSameOracleId, existingCardsByNormalizedName, namesByNormalizedName, namesByOracleId, legalNamesByNormalizedName);
             // skip_reason is a varchar(255) and card names can be silly long
-            if (skipReason != null && skipReason.length() > MAX_SKIP_REASON_LENGTH) skipReason = skipReason.substring(0, MAX_SKIP_REASON_LENGTH);
+            if (skipReason != null) {
+                if (skipReason.length() > MAX_SKIP_REASON_LENGTH) {
+                    skipReason = skipReason.substring(0, MAX_SKIP_REASON_LENGTH);
+                }
+            }
             if (skipReason == null) {
                 namesByNormalizedName.put(normalizedName, cardName);
                 namesByOracleId.put(card.getOracleId(), cardName);
@@ -610,7 +662,10 @@ public class SeasonPreparationService {
         return new AssembledDraftVO(cards, buildReport(cards, existingCardsByOracleId, previousSeasonData, printings, metaShares, budgetPoints, prices, request, currentSeason, seasonDates));
     }
 
-    // A season row is matched by its oracle id, the card name behind it is whatever that season's MTGJSON called the card
+    /**
+     * A season row is matched by its oracle id,
+     * the card name behind it is whatever that season's MTGJSON called the card.
+     */
     public static MatchedPriceDetailsVO matchPriceDetails(
             MtgJsonPrintingsVO printings,
             MtgJsonPricesVO prices,
@@ -622,7 +677,8 @@ public class SeasonPreparationService {
 
         Map<UUID, String> cardNamesByOracleId = new HashMap<>(printings.getCardsByName().size());
         for (MtgJsonCard card : printings.getCardsByName().values()) {
-            if (card.getOracleId() == null || CasualChallengeRules.isFlipStyleName(card.getName())) continue;
+            if (card.getOracleId() == null) continue;
+            if (CasualChallengeRules.isFlipStyleName(card.getName())) continue;
 
             cardNamesByOracleId.putIfAbsent(card.getOracleId(), card.getName());
         }
@@ -632,39 +688,58 @@ public class SeasonPreparationService {
         }
 
         Map<UUID, CardPriceDetailsVO> priceDetailsByOracleId = new HashMap<>(seasonData.size());
-        List<String> mismatches = new ArrayList<>();
-        List<String> unmatchedCards = new ArrayList<>();
+        List<RebuiltPriceDetailsVO.MismatchVO> mismatches = new ArrayList<>();
+        List<RebuiltPriceDetailsVO.UnmatchedCardVO> unmatchedCards = new ArrayList<>();
         for (CardSeasonData cardSeasonData : seasonData) {
             UUID oracleId = cardSeasonData.getCardOracleId();
             Integer storedBudgetPoints = cardSeasonData.getBudgetPoints();
             String cardName = cardNamesByOracleId.get(oracleId);
             String existingName = existingNamesByOracleId.get(oracleId);
-            // A later season gave the card a new oracle id and took this row along, the archive only knows the old one --> by name, like assemble() does
-            if (cardName == null && existingName != null && printings.getCardsByName().containsKey(existingName)) cardName = existingName;
+            // A later season gave the card a new oracle id and took this row along, the archive only knows the old one
+            // --> by name, like assemble() does
+            if (cardName == null) cardName = findArchivedName(existingName, printings);
             if (cardName == null) {
-                // 0 budget points without a printing is a card the commit kept as not legal, anything else is worth a look
-                if (storedBudgetPoints == null || storedBudgetPoints == 0) {
-                    priceDetailsByOracleId.put(oracleId, noPriceDetails(window, List.of()));
-                } else {
-                    unmatchedCards.add(existingName + " (stored " + storedBudgetPoints + ")");
+                // 0 budget points without a printing is a card the commit kept as not legal,
+                // anything else is worth a look
+                int budgetPointsOrZero = storedBudgetPoints != null ? storedBudgetPoints : 0;
+                if (budgetPointsOrZero != 0) {
+                    unmatchedCards.add(new RebuiltPriceDetailsVO.UnmatchedCardVO(existingName, storedBudgetPoints));
+                    continue;
                 }
+                priceDetailsByOracleId.put(oracleId, noPriceDetails(window, List.of()));
                 continue;
             }
 
             int recalculatedBudgetPoints = budgetPoints.getPricesByCardName().get(cardName).toBudgetPoints();
-            if (storedBudgetPoints == null || storedBudgetPoints != recalculatedBudgetPoints) {
-                mismatches.add(cardName + " (stored " + storedBudgetPoints + ", now " + recalculatedBudgetPoints + ")");
+            if (!Objects.equals(storedBudgetPoints, recalculatedBudgetPoints)) {
+                mismatches.add(new RebuiltPriceDetailsVO.MismatchVO(
+                        cardName,
+                        storedBudgetPoints,
+                        recalculatedBudgetPoints
+                ));
             }
             CardPriceDetailsVO priceDetails = budgetPoints.getPriceDetailsByCardName().get(cardName);
-            if (priceDetails != null) priceDetailsByOracleId.put(oracleId, priceDetails); // basics have none
+            // Basics have none
+            if (priceDetails != null) priceDetailsByOracleId.put(oracleId, priceDetails);
         }
-        mismatches.sort(Comparator.naturalOrder());
-        unmatchedCards.sort(Comparator.naturalOrder());
+        mismatches.sort(Comparator.comparing(RebuiltPriceDetailsVO.MismatchVO::getName));
+        unmatchedCards.sort(Comparator.comparing(RebuiltPriceDetailsVO.UnmatchedCardVO::getName));
 
         return new MatchedPriceDetailsVO(priceDetailsByOracleId, mismatches, unmatchedCards);
     }
 
-    private static BudgetPointsVO calculateBudgetPoints(MtgJsonPrintingsVO printings, Map<String, CardPrices> pricesByCardName, PriceWindowVO window) {
+    private static String findArchivedName(String existingName, MtgJsonPrintingsVO printings) {
+        if (existingName == null) return null;
+        if (!printings.getCardsByName().containsKey(existingName)) return null;
+
+        return existingName;
+    }
+
+    private static BudgetPointsVO calculateBudgetPoints(
+            MtgJsonPrintingsVO printings,
+            Map<String, CardPrices> pricesByCardName,
+            PriceWindowVO window
+    ) {
         Map<String, Cents> eurPricesByCardName = new HashMap<>(printings.getCardsByName().size());
         Map<String, Cents> usdPricesByCardName = new HashMap<>(printings.getCardsByName().size());
         Map<String, CardPriceDetailsVO> priceDetailsByCardName = new HashMap<>(printings.getCardsByName().size());
@@ -674,24 +749,30 @@ public class SeasonPreparationService {
 
         for (String cardName : printings.getCardsByName().keySet()) {
             CardPrices cardPrices = pricesByCardName.get(cardName);
-            List<CardPriceDetailsVO.IgnoredPrintingVO> ignoredPrintings = toIgnoredPrintings(printings.getIgnoredPrintingsByCardName().get(cardName));
+            List<CardPriceDetailsVO.IgnoredPrintingVO> ignoredPrintings =
+                    toIgnoredPrintings(printings.getIgnoredPrintingsByCardName().get(cardName));
             // Basics are free and their prices would only spoil the exchange rate
-            if (CasualChallengeRules.isBasicLand(cardName) || cardPrices == null) {
+            if (CasualChallengeRules.isBasicLand(cardName)) {
                 eurPricesByCardName.put(cardName, Cents.of(0));
                 usdPricesByCardName.put(cardName, Cents.of(0));
-                if (!CasualChallengeRules.isBasicLand(cardName)) {
-                    priceDetailsByCardName.put(cardName, noPriceDetails(window, ignoredPrintings));
-                }
+                continue;
+            }
+            if (cardPrices == null) {
+                eurPricesByCardName.put(cardName, Cents.of(0));
+                usdPricesByCardName.put(cardName, Cents.of(0));
+                priceDetailsByCardName.put(cardName, noPriceDetails(window, ignoredPrintings));
                 continue;
             }
 
             Cents eurPrice = BudgetPointsUtil.fromSeries(cardPrices.getEur());
             eurPricesByCardName.put(cardName, eurPrice);
             usdPricesByCardName.put(cardName, BudgetPointsUtil.fromSeries(cardPrices.getUsd()));
+            // The USD fallback below takes over the rest
+            PriceProvider pricedBy = eurPrice.getAmount() != 0 ? PriceProvider.CARDMARKET : null;
             priceDetailsByCardName.put(cardName, new CardPriceDetailsVO(
                     window.getStart(),
                     window.getEnd(),
-                    eurPrice.getAmount() != 0 ? "cardmarket" : null, // the USD fallback below takes over the rest
+                    pricedBy,
                     null,
                     toMarketPrices(cardPrices.getEur(), setNamesByCode),
                     toMarketPrices(cardPrices.getUsd(), setNamesByCode),
@@ -716,30 +797,51 @@ public class SeasonPreparationService {
             if (usdPrice.getAmount() == 0) continue;
 
             entry.setValue(BudgetPointsUtil.fromUsd(usdPrice, adjustedExchangeRate));
-            priceDetailsByCardName.put(entry.getKey(), priceDetailsByCardName.get(entry.getKey()).withPricedBy("tcgplayer").withAdjustedExchangeRate(adjustedExchangeRate));
+            CardPriceDetailsVO priceDetails = priceDetailsByCardName.get(entry.getKey())
+                    .withPricedBy(PriceProvider.TCGPLAYER)
+                    .withAdjustedExchangeRate(adjustedExchangeRate);
+            priceDetailsByCardName.put(entry.getKey(), priceDetails);
             pricesFixedByExchangeRateCount++;
         }
         log.info("Fixed {} card prices with the exchange rate.", pricesFixedByExchangeRateCount);
 
-        return new BudgetPointsVO(eurPricesByCardName, priceDetailsByCardName, exchangeRate, adjustedExchangeRate, pricesFixedByExchangeRateCount);
+        return new BudgetPointsVO(
+                eurPricesByCardName,
+                priceDetailsByCardName,
+                exchangeRate,
+                adjustedExchangeRate,
+                pricesFixedByExchangeRateCount
+        );
     }
 
-    private static CardPriceDetailsVO.MarketPricesVO toMarketPrices(PriceSeries series, Map<String, String> setNamesByCode) {
+    private static CardPriceDetailsVO.MarketPricesVO toMarketPrices(
+            PriceSeries series,
+            Map<String, String> setNamesByCode
+    ) {
         if (series.getPrintingCount() == 0) return NO_MARKET_PRICES;
 
-        // Both faces of a double faced, split or adventure card are priced on a uuid of their own --> one row per set, number and finish
+        // Both faces of a double faced, split or adventure card are priced on a uuid of their own
+        // --> one row per set, number and finish
         Map<String, CardPriceDetailsVO.PrintingPriceVO> printingsByKey = new LinkedHashMap<>(series.getPrintingCount());
         List<String> printingKeys = new ArrayList<>(series.getPrintingCount());
         for (PrintingPrices printingPrices : series.printingPrices()) {
             CardPriceDetailsVO.PrintingPriceVO printing = toPrintingPrice(printingPrices, setNamesByCode);
             String printingKey = printing.getSetCode() + " " + printing.getNumber() + " " + printing.getFinish();
             CardPriceDetailsVO.PrintingPriceVO otherFace = printingsByKey.get(printingKey);
-            printingsByKey.put(printingKey, otherFace != null ? otherFace.withCheapestDays(otherFace.getCheapestDays() + printing.getCheapestDays()) : printing);
+            if (otherFace != null) {
+                printing = otherFace.withCheapestDays(otherFace.getCheapestDays() + printing.getCheapestDays());
+            }
+            printingsByKey.put(printingKey, printing);
             printingKeys.add(printingKey);
         }
         List<CardPriceDetailsVO.PrintingPriceVO> printings = new ArrayList<>(printingsByKey.values());
-        printings.sort(Comparator.comparingInt(CardPriceDetailsVO.PrintingPriceVO::getCheapestDays).reversed()
-                .thenComparing(CardPriceDetailsVO.PrintingPriceVO::getAverageCents, Comparator.nullsLast(Comparator.naturalOrder()))); // stable --> on a tie AllPrices.json's order stays
+        // Stable --> on a tie AllPrices.json's order stays
+        printings.sort(Comparator.comparingInt(CardPriceDetailsVO.PrintingPriceVO::getCheapestDays)
+                .reversed()
+                .thenComparing(
+                        CardPriceDetailsVO.PrintingPriceVO::getAverageCents,
+                        Comparator.nullsLast(Comparator.naturalOrder())
+                ));
 
         Cents[] cheapestPriceOfEveryDay = series.cheapestPriceOfEveryDay();
         int[] cheapestPrintingOfEveryDay = series.cheapestPrintingOfEveryDay();
@@ -747,8 +849,15 @@ public class SeasonPreparationService {
         List<Integer> cheapestPrintingPerDay = new ArrayList<>(cheapestPriceOfEveryDay.length);
         for (int day = 0; day < cheapestPriceOfEveryDay.length; day++) {
             Cents price = cheapestPriceOfEveryDay[day];
-            cheapestCentsPerDay.add(price != null ? Math.toIntExact(price.getAmount()) : null);
-            cheapestPrintingPerDay.add(price != null ? printings.indexOf(printingsByKey.get(printingKeys.get(cheapestPrintingOfEveryDay[day]))) : null);
+            if (price == null) {
+                cheapestCentsPerDay.add(null);
+                cheapestPrintingPerDay.add(null);
+                continue;
+            }
+
+            String printingKey = printingKeys.get(cheapestPrintingOfEveryDay[day]);
+            cheapestCentsPerDay.add(Math.toIntExact(price.getAmount()));
+            cheapestPrintingPerDay.add(printings.indexOf(printingsByKey.get(printingKey)));
         }
 
         return new CardPriceDetailsVO.MarketPricesVO(
@@ -761,26 +870,48 @@ public class SeasonPreparationService {
         );
     }
 
-    private static CardPriceDetailsVO.PrintingPriceVO toPrintingPrice(PrintingPrices printingPrices, Map<String, String> setNamesByCode) {
+    private static CardPriceDetailsVO.PrintingPriceVO toPrintingPrice(
+            PrintingPrices printingPrices,
+            Map<String, String> setNamesByCode
+    ) {
         MtgJsonPrinting printing = printingPrices.getPrinting();
-        boolean hasPrice = printingPrices.getPricedDays() > 0;
+        Integer lowestCents = null;
+        Integer highestCents = null;
+        Integer averageCents = null;
+        if (printingPrices.getPricedDays() > 0) {
+            Cents average = Cents.of(printingPrices.getSumOfCents()).average(printingPrices.getPricedDays());
+            lowestCents = Math.toIntExact(printingPrices.getLowestCents());
+            highestCents = Math.toIntExact(printingPrices.getHighestCents());
+            averageCents = Math.toIntExact(average.getAmount());
+        }
 
         return new CardPriceDetailsVO.PrintingPriceVO(
                 printing.getSetCode(),
                 setNamesByCode.get(printing.getSetCode()),
                 printing.getNumber(),
-                printingPrices.isFoil() ? "foil" : "nonfoil", // MTGJSON's finishes say nonfoil, only its prices call it normal
+                printingPrices.getFinish(),
                 printingPrices.getPricedDays(),
                 printingPrices.getCheapestDays(),
-                hasPrice ? Math.toIntExact(printingPrices.getLowestCents()) : null,
-                hasPrice ? Math.toIntExact(printingPrices.getHighestCents()) : null,
-                hasPrice ? Math.toIntExact(Cents.of(printingPrices.getSumOfCents()).average(printingPrices.getPricedDays()).getAmount()) : null,
+                lowestCents,
+                highestCents,
+                averageCents,
                 printingPrices.isFlat()
         );
     }
 
-    private static CardPriceDetailsVO noPriceDetails(PriceWindowVO window, List<CardPriceDetailsVO.IgnoredPrintingVO> ignoredPrintings) {
-        return new CardPriceDetailsVO(window.getStart(), window.getEnd(), null, null, NO_MARKET_PRICES, NO_MARKET_PRICES, ignoredPrintings);
+    private static CardPriceDetailsVO noPriceDetails(
+            PriceWindowVO window,
+            List<CardPriceDetailsVO.IgnoredPrintingVO> ignoredPrintings
+    ) {
+        return new CardPriceDetailsVO(
+                window.getStart(),
+                window.getEnd(),
+                null,
+                null,
+                NO_MARKET_PRICES,
+                NO_MARKET_PRICES,
+                ignoredPrintings
+        );
     }
 
     private static List<CardPriceDetailsVO.IgnoredPrintingVO> toIgnoredPrintings(List<MtgJsonPrinting> printings) {
@@ -788,12 +919,14 @@ public class SeasonPreparationService {
 
         List<CardPriceDetailsVO.IgnoredPrintingVO> ignoredPrintings = new ArrayList<>(printings.size());
         for (MtgJsonPrinting printing : printings) {
-            List<String> finishes = new ArrayList<>(2);
-            if (printing.isNonFoil()) finishes.add("nonfoil");
-            if (printing.isFoil()) finishes.add("foil");
-            for (String finish : finishes) {
-                CardPriceDetailsVO.IgnoredPrintingVO ignoredPrinting = new CardPriceDetailsVO.IgnoredPrintingVO(printing.getSetCode(), printing.getNumber(), finish);
-                if (!ignoredPrintings.contains(ignoredPrinting)) ignoredPrintings.add(ignoredPrinting); // the faces of a card share their number
+            List<Finish> finishes = new ArrayList<>(2);
+            if (printing.isNonFoil()) finishes.add(Finish.NONFOIL);
+            if (printing.isFoil()) finishes.add(Finish.FOIL);
+            for (Finish finish : finishes) {
+                CardPriceDetailsVO.IgnoredPrintingVO ignoredPrinting =
+                        new CardPriceDetailsVO.IgnoredPrintingVO(printing.getSetCode(), printing.getNumber(), finish);
+                // The faces of a card share their number
+                if (!ignoredPrintings.contains(ignoredPrinting)) ignoredPrintings.add(ignoredPrinting);
             }
         }
 
@@ -1015,7 +1148,8 @@ public class SeasonPreparationService {
             MtgJsonCard mtgJsonCard = printings.getCardsByName().get(card.getName());
             if (mtgJsonCard == null) continue; // kept from the card table, no printing this season
             // An old card whose price only came back this season is no news
-            if (mtgJsonCard.getFirstReleaseDate() == null || mtgJsonCard.getFirstReleaseDate().isBefore(currentSeason.getStartDate())) continue;
+            if (mtgJsonCard.getFirstReleaseDate() == null) continue;
+            if (mtgJsonCard.getFirstReleaseDate().isBefore(currentSeason.getStartDate())) continue;
 
             newCardCountsBySetCode.merge(mtgJsonCard.getFirstSetCode(), 1, Integer::sum);
         }
@@ -1037,7 +1171,8 @@ public class SeasonPreparationService {
 
             List<String> commanderDecks = commanderDecksByRootCode.computeIfAbsent(rootCode, code -> new ArrayList<>());
             for (MtgJsonSet.MtgJsonDeck deck : mtgSet.getDecks()) {
-                if (deck.getDeckType() != null && deck.getDeckType().contains("Commander")) commanderDecks.add(deck.getName());
+                if (deck.getDeckType() == null) continue;
+                if (deck.getDeckType().contains("Commander")) commanderDecks.add(deck.getName());
             }
         }
 
@@ -1121,10 +1256,14 @@ public class SeasonPreparationService {
 
         // A card MTGJSON knows no vintage legality for never takes the name away from one it does, whichever of the two comes first
         String legalCardName = card.isVintageLegal() ? null : legalNamesByNormalizedName.get(normalizedName);
-        if (legalCardName != null) return "duplicate normalized name '" + normalizedName + "' (first: '" + legalCardName + "')";
+        if (legalCardName != null) {
+            return "duplicate normalized name '" + normalizedName + "' (first: '" + legalCardName + "')";
+        }
 
         String firstCardName = namesByNormalizedName.get(normalizedName);
-        if (firstCardName != null) return "duplicate normalized name '" + normalizedName + "' (first: '" + firstCardName + "')";
+        if (firstCardName != null) {
+            return "duplicate normalized name '" + normalizedName + "' (first: '" + firstCardName + "')";
+        }
 
         firstCardName = namesByOracleId.get(oracleId);
         if (firstCardName != null) return "duplicate oracle id '" + oracleId + "' (first: '" + firstCardName + "')";

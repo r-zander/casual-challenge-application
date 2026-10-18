@@ -9,7 +9,21 @@ public class RebuiltPriceDetailsResponse {
     int seasonNumber;
     int storedCount;
     int mismatchCount;
-    List<String> mismatches;
+    List<MismatchDTO> mismatches;
     int unmatchedCount;
-    List<String> unmatchedCards;
+    List<UnmatchedCardDTO> unmatchedCards;
+
+    @Value
+    public static class MismatchDTO {
+        String name;
+        Integer storedBudgetPoints;
+        int recalculatedBudgetPoints;
+    }
+
+    @Value
+    public static class UnmatchedCardDTO {
+        String name;
+        Integer storedBudgetPoints;
+    }
+
 }

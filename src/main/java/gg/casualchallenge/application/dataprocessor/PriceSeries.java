@@ -3,6 +3,7 @@ package gg.casualchallenge.application.dataprocessor;
 import gg.casualchallenge.application.dataprocessor.model.Cents;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrinting;
 import gg.casualchallenge.application.dataprocessor.model.PrintingPrices;
+import gg.casualchallenge.application.model.type.Finish;
 import lombok.Getter;
 
 import java.util.ArrayList;
@@ -20,7 +21,8 @@ public class PriceSeries {
     private int flatPrintingCount;
     private final long[] cheapestPerDay; // 33k cards hold four of these, so the running minimums stay primitive
     private final long[] cheapestFlatPerDay;
-    private final int[] cheapestPrintingPerDay; // index into printingPrices, only means something on a day with a price
+    /** Index into {@code printingPrices}, only means something on a day with a price */
+    private final int[] cheapestPrintingPerDay;
     private final int[] cheapestFlatPrintingPerDay;
     private final List<PrintingPrices> printingPrices = new ArrayList<>();
 
@@ -33,7 +35,7 @@ public class PriceSeries {
         Arrays.fill(this.cheapestFlatPerDay, NO_PRICE);
     }
 
-    public void addPrinting(MtgJsonPrinting printing, boolean foil, Cents[] centsPerDay) {
+    public void addPrinting(MtgJsonPrinting printing, Finish finish, Cents[] centsPerDay) {
         printingCount++;
 
         Cents knownPrice = null;
@@ -47,8 +49,10 @@ public class PriceSeries {
                 break;
             }
         }
+        boolean isFlat = areAllPricesEqual;
+        if (knownPrice == null) isFlat = false;
         int printingIndex = printingPrices.size();
-        printingPrices.add(PrintingPrices.of(printing, foil, centsPerDay, knownPrice != null && areAllPricesEqual));
+        printingPrices.add(PrintingPrices.of(printing, finish, centsPerDay, isFlat));
         // A printing without a single price in our window is not an anomaly, it just doesn't count for anything
         if (knownPrice == null) return;
 
@@ -85,7 +89,10 @@ public class PriceSeries {
         return dayCount;
     }
 
-    // The cheapest days are counted on the days that make the price, so a flat printing only gets some when every printing is flat
+    /**
+     * The cheapest days are counted on the days that make the price,
+     * so a flat printing only gets some when every printing is flat.
+     */
     public List<PrintingPrices> printingPrices() {
         long[] cheapestOfEveryDay = cheapestOfEveryDay();
         int[] cheapestPrintingOfEveryDay = cheapestPrintingOfEveryDay();
@@ -97,7 +104,8 @@ public class PriceSeries {
 
         List<PrintingPrices> printingPricesWithCheapestDays = new ArrayList<>(printingPrices.size());
         for (int printingIndex = 0; printingIndex < printingPrices.size(); printingIndex++) {
-            printingPricesWithCheapestDays.add(printingPrices.get(printingIndex).withCheapestDays(cheapestDays[printingIndex]));
+            PrintingPrices printing = printingPrices.get(printingIndex);
+            printingPricesWithCheapestDays.add(printing.withCheapestDays(cheapestDays[printingIndex]));
         }
 
         return printingPricesWithCheapestDays;
@@ -119,7 +127,9 @@ public class PriceSeries {
     }
 
     public boolean hasOnlyFlatPrintings() {
-        return printingCount > 0 && flatPrintingCount == printingCount;
+        if (printingCount == 0) return false;
+
+        return flatPrintingCount == printingCount;
     }
 
     // A price that never moves is an anomaly, so the flat printings only count when there is no other printing to fall back on

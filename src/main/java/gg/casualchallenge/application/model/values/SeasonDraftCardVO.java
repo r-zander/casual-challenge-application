@@ -26,6 +26,7 @@ public class SeasonDraftCardVO {
     boolean vintageRestricted;
     boolean isNewCard;
     String skipReason;
+    /** {@code findDraftCards()} leaves it out, the migrations don't need 33k documents */
     @With
-    CardPriceDetailsVO priceDetails; // findDraftCards() leaves it out, the migrations don't need 33k documents
+    CardPriceDetailsVO priceDetails;
 }

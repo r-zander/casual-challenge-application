@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import gg.casualchallenge.application.dataprocessor.model.CardPrices;
@@ -15,6 +16,7 @@ import gg.casualchallenge.application.dataprocessor.model.MtgJsonPricesVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrintingsVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonSet;
 import gg.casualchallenge.application.dataprocessor.model.PriceWindowVO;
+import gg.casualchallenge.application.model.type.Finish;
 import gg.casualchallenge.application.model.type.MtgFormat;
 import gg.casualchallenge.application.model.type.MtgSetType;
 import lombok.Data;
@@ -130,7 +132,7 @@ public class MtgJsonClient {
             try (InputStream ignoredPricesJson = Files.newInputStream(ignoredPrices)) {
                 seasonIgnoredPricesByCardName = readIgnoredPrices(ignoredPricesJson, ignoredPrices.toString());
             } catch (IOException e) {
-                throw new RuntimeException("Couldn't read '" + ignoredPrices + "'.", e);
+                throw new RuntimeException("Couldn't read '" + ignoredPrices + "': " + e.getMessage(), e);
             }
         }
 
@@ -142,7 +144,11 @@ public class MtgJsonClient {
         }
     }
 
-    public MtgJsonPricesVO readArchivedPrices(Map<UUID, MtgJsonPrinting> printingsByUuid, PriceWindowVO window, Path seasonDirectory) {
+    public MtgJsonPricesVO readArchivedPrices(
+            Map<UUID, MtgJsonPrinting> printingsByUuid,
+            PriceWindowVO window,
+            Path seasonDirectory
+    ) {
         Path zip = seasonDirectory.resolve(PRICES_ZIP);
         if (!Files.isRegularFile(zip)) throw new IllegalArgumentException("The season archive has no '" + zip + "'.");
 
@@ -158,7 +164,10 @@ public class MtgJsonClient {
         return readPrintings(allPrintingsJson, ignoredPricesByCardName);
     }
 
-    public MtgJsonPrintingsVO readPrintings(InputStream allPrintingsJson, Map<String, List<IgnoredPriceVO>> ignoredPricesByCardName) {
+    public MtgJsonPrintingsVO readPrintings(
+            InputStream allPrintingsJson,
+            Map<String, List<IgnoredPriceVO>> ignoredPricesByCardName
+    ) {
         Map<UUID, MtgJsonPrinting> printingsByUuid = new HashMap<>();
         Map<String, List<MtgJsonPrinting>> ignoredPrintingsByCardName = new HashMap<>();
         Map<String, IdentityCandidate> identitiesByName = new LinkedHashMap<>();
@@ -189,7 +198,14 @@ public class MtgJsonClient {
                         while (parser.nextToken() != JsonToken.END_OBJECT) {
                             String setCode = parser.currentName();
                             parser.nextToken();
-                            sets.add(readSet(parser, setCode, identitiesByName, printingsByUuid, ignoredPrintingsByCardName, ignoredPricesByCardName));
+                            sets.add(readSet(
+                                    parser,
+                                    setCode,
+                                    identitiesByName,
+                                    printingsByUuid,
+                                    ignoredPrintingsByCardName,
+                                    ignoredPricesByCardName
+                            ));
                         }
                         break;
                     default:
@@ -206,7 +222,14 @@ public class MtgJsonClient {
         }
 
         log.info("Read {} sets with {} cards and {} printings.", sets.size(), cardsByName.size(), printingsByUuid.size());
-        return new MtgJsonPrintingsVO(cardsByName, printingsByUuid, ignoredPrintingsByCardName, sets, metaDate, metaVersion);
+        return new MtgJsonPrintingsVO(
+                cardsByName,
+                printingsByUuid,
+                ignoredPrintingsByCardName,
+                sets,
+                metaDate,
+                metaVersion
+        );
     }
 
     public MtgJsonPricesVO readPrices(InputStream allPricesJson, Map<UUID, MtgJsonPrinting> printingsByUuid, PriceWindowVO window) {
@@ -343,7 +366,14 @@ public class MtgJsonClient {
                     break;
                 case "cards":
                     while (parser.nextToken() != JsonToken.END_ARRAY) {
-                        readCard(parser, setCode, identityCandidates, printingsByUuid, ignoredPrintingsByCardName, ignoredPricesByCardName);
+                        readCard(
+                                parser,
+                                setCode,
+                                identityCandidates,
+                                printingsByUuid,
+                                ignoredPrintingsByCardName,
+                                ignoredPricesByCardName
+                        );
                     }
                     break;
                 case "decks":
@@ -457,15 +487,31 @@ public class MtgJsonClient {
 
         UUID printingUuid = UUID.fromString(uuid);
         MtgJsonPrinting printing = new MtgJsonPrinting(printingUuid, cardName, setCode, number, foil, nonFoil);
-        boolean isFoilIgnored = foil && isIgnoredForPrices(cardName, setCode, number, "foil", ignoredPricesByCardName);
-        boolean isNonFoilIgnored = nonFoil && isIgnoredForPrices(cardName, setCode, number, "nonfoil", ignoredPricesByCardName);
-        if (isFoilIgnored || isNonFoilIgnored) {
-            ignoredPrintingsByCardName.computeIfAbsent(cardName, name -> new ArrayList<>()).add(new MtgJsonPrinting(printingUuid, cardName, setCode, number, isFoilIgnored, isNonFoilIgnored));
-            if (foil && !isFoilIgnored || nonFoil && !isNonFoilIgnored) {
-                printingsByUuid.put(printingUuid, new MtgJsonPrinting(printingUuid, cardName, setCode, number, foil && !isFoilIgnored, nonFoil && !isNonFoilIgnored));
+        Set<Finish> finishes = EnumSet.noneOf(Finish.class);
+        if (foil) finishes.add(Finish.FOIL);
+        if (nonFoil) finishes.add(Finish.NONFOIL);
+        Set<Finish> ignoredFinishes = EnumSet.noneOf(Finish.class);
+        for (Finish finish : finishes) {
+            if (isIgnoredForPrices(cardName, setCode, number, finish, ignoredPricesByCardName)) {
+                ignoredFinishes.add(finish);
             }
-        } else {
+        }
+        if (ignoredFinishes.isEmpty()) {
             printingsByUuid.put(printingUuid, printing);
+        } else {
+            boolean isFoilIgnored = ignoredFinishes.contains(Finish.FOIL);
+            boolean isNonFoilIgnored = ignoredFinishes.contains(Finish.NONFOIL);
+            MtgJsonPrinting ignoredPrinting =
+                    new MtgJsonPrinting(printingUuid, cardName, setCode, number, isFoilIgnored, isNonFoilIgnored);
+            ignoredPrintingsByCardName.computeIfAbsent(cardName, name -> new ArrayList<>()).add(ignoredPrinting);
+            finishes.removeAll(ignoredFinishes);
+            if (!finishes.isEmpty()) {
+                boolean isFoilPriced = finishes.contains(Finish.FOIL);
+                boolean isNonFoilPriced = finishes.contains(Finish.NONFOIL);
+                MtgJsonPrinting pricedPrinting =
+                        new MtgJsonPrinting(printingUuid, cardName, setCode, number, isFoilPriced, isNonFoilPriced);
+                printingsByUuid.put(printingUuid, pricedPrinting);
+            }
         }
         if (isRebalanced) return;
         if (isFunny && !legalities.containsKey(MtgFormat.VINTAGE)) return; // MTGJSON flags every Unfinity card as funny, but the eternal legal ones are real cards
@@ -548,7 +594,12 @@ public class MtgJsonClient {
                 parser.nextToken();
                 // Foil and non-foil are two separate "printings" for the price calculation
                 if ("normal".equals(finish) && printing.isNonFoil() || "foil".equals(finish) && printing.isFoil()) {
-                    series.addPrinting(printing, "foil".equals(finish), readPricesPerDay(parser, window, pricedDays));
+                    // MTGJSON's finishes say nonfoil, only its prices call it normal
+                    series.addPrinting(
+                            printing,
+                            "foil".equals(finish) ? Finish.FOIL : Finish.NONFOIL,
+                            readPricesPerDay(parser, window, pricedDays)
+                    );
                 } else {
                     parser.skipChildren();
                 }
@@ -589,44 +640,75 @@ public class MtgJsonClient {
         );
     }
 
-    private static boolean isIgnoredForPrices(String cardName, String setCode, String number, String finish, Map<String, List<IgnoredPriceVO>> ignoredPricesByCardName) {
+    private static boolean isIgnoredForPrices(
+            String cardName,
+            String setCode,
+            String number,
+            Finish finish,
+            Map<String, List<IgnoredPriceVO>> ignoredPricesByCardName
+    ) {
         List<IgnoredPriceVO> ignoredPrices = ignoredPricesByCardName.get(cardName);
         if (ignoredPrices == null) return false;
 
         for (IgnoredPriceVO ignoredPrice : ignoredPrices) {
-            if (ignoredPrice.getSet().equals(setCode)
-                    && (ignoredPrice.getNumber() == null || ignoredPrice.getNumber().equals(number))
-                    && (ignoredPrice.getFinish() == null || ignoredPrice.getFinish().equals(finish))) {
-                return true;
+            if (!ignoredPrice.getSet().equals(setCode)) continue;
+            if (ignoredPrice.getNumber() != null) {
+                if (!ignoredPrice.getNumber().equals(number)) continue;
             }
+            if (ignoredPrice.getFinish() != null) {
+                if (ignoredPrice.getFinish() != finish) continue;
+            }
+
+            return true;
         }
 
         return false;
     }
 
-    // Not Spring's ObjectMapper: this one refuses unknown keys, so a typo like "finsh" can't quietly ignore the whole printing
-    private static Map<String, List<IgnoredPriceVO>> readIgnoredPrices(InputStream ignoredPricesJson, String fileName) throws IOException {
-        ObjectMapper objectMapper = new ObjectMapper().registerModule(new ParameterNamesModule());
-        Map<String, List<IgnoredPriceVO>> ignoredPricesByCardName = objectMapper.readValue(ignoredPricesJson, new TypeReference<Map<String, List<IgnoredPriceVO>>>() {});
+    private static Map<String, List<IgnoredPriceVO>> readIgnoredPrices(
+            InputStream ignoredPricesJson,
+            String fileName
+    ) throws IOException {
+        /*
+         * Not Spring's ObjectMapper: this one refuses unknown keys and finishes given as numbers,
+         * so a typo like "finsh" can't quietly ignore the whole printing.
+         */
+        ObjectMapper objectMapper = new ObjectMapper()
+                .registerModule(new ParameterNamesModule())
+                .enable(DeserializationFeature.FAIL_ON_NUMBERS_FOR_ENUMS);
+        Map<String, List<IgnoredPriceVO>> ignoredPricesByCardName =
+                objectMapper.readValue(ignoredPricesJson, new TypeReference<Map<String, List<IgnoredPriceVO>>>() {});
         for (Map.Entry<String, List<IgnoredPriceVO>> entry : ignoredPricesByCardName.entrySet()) {
             String cardName = entry.getKey();
             for (IgnoredPriceVO ignoredPrice : entry.getValue()) {
-                String finish = ignoredPrice.getFinish();
-                if (ignoredPrice.getSet() == null) throw new RuntimeException("'" + cardName + "' has an entry without a set in '" + fileName + "': " + ignoredPrice + ".");
-                if (finish != null && ignoredPrice.getNumber() == null) throw new RuntimeException("'" + cardName + "' has an entry with a finish, but without a number in '" + fileName + "': " + ignoredPrice + ". A finish only works for one printing.");
-                if (finish != null && !"foil".equals(finish) && !"nonfoil".equals(finish)) throw new RuntimeException("'" + cardName + "' has an entry with the finish '" + finish + "' in '" + fileName + "': " + ignoredPrice + ". It's either foil or nonfoil.");
+                if (ignoredPrice.getSet() == null) {
+                    throw new RuntimeException("'" + cardName + "' has an entry without a set"
+                            + " in '" + fileName + "': " + ignoredPrice + ".");
+                }
+                if (ignoredPrice.getFinish() != null) {
+                    if (ignoredPrice.getNumber() == null) {
+                        throw new RuntimeException("'" + cardName + "' has an entry with a finish,"
+                                + " but without a number in '" + fileName + "': " + ignoredPrice + "."
+                                + " A finish only works for one printing.");
+                    }
+                }
             }
         }
 
         return ignoredPricesByCardName;
     }
 
-    // A rebuild of the season's price details has to ignore the very same prices, whatever IgnoredPrices.json says by then
+    /**
+     * A rebuild of the season's price details has to ignore the very same prices,
+     * whatever IgnoredPrices.json says by then.
+     */
     private static void archiveIgnoredPrices(Path seasonDirectory) {
         try (InputStream ignoredPrices = new ClassPathResource(IGNORED_PRICES_FILE).getInputStream()) {
-            Files.copy(ignoredPrices, seasonDirectory.resolve(IGNORED_PRICES_FILE), StandardCopyOption.REPLACE_EXISTING);
+            Path target = seasonDirectory.resolve(IGNORED_PRICES_FILE);
+            Files.copy(ignoredPrices, target, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
-            throw new RuntimeException("Couldn't copy '" + IGNORED_PRICES_FILE + "' into '" + seasonDirectory + "'.", e);
+            throw new RuntimeException("Couldn't copy '" + IGNORED_PRICES_FILE + "'"
+                    + " into '" + seasonDirectory + "'.", e);
         }
     }
 

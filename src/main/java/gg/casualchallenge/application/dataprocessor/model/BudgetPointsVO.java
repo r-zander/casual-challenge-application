@@ -8,7 +8,8 @@ import java.util.Map;
 @Value
 public class BudgetPointsVO {
     Map<String, Cents> pricesByCardName;
-    Map<String, CardPriceDetailsVO> priceDetailsByCardName; // no basics in here
+    /** No basics in here */
+    Map<String, CardPriceDetailsVO> priceDetailsByCardName;
     double exchangeRate;
     double adjustedExchangeRate;
     int pricesFixedByExchangeRateCount;

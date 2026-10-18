@@ -15,8 +15,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+/** The season wizard fragments run through here, so the browser's locale never gets a say. */
 @Component
-public class SeasonWizardFormat { // the season wizard fragments run through here, so the browser's locale never gets a say
+public class SeasonWizardFormat {
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH);
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm", Locale.ENGLISH);
@@ -34,7 +35,7 @@ public class SeasonWizardFormat { // the season wizard fragments run through her
         return DATE_FORMAT.format(dateTime) + ", " + TIME_FORMAT.format(dateTime);
     }
 
-    // The Season History table writes them German style
+    /** The Season History table writes them German style. */
     public String docDate(LocalDate date) {
         if (date == null) return "";
 
@@ -48,26 +49,33 @@ public class SeasonWizardFormat { // the season wizard fragments run through her
     }
 
     public String budgetPoints(Integer budgetPoints) {
-        return budgetPoints == null ? "-" : number(budgetPoints);
+        if (budgetPoints == null) return "-";
+
+        return number(budgetPoints);
     }
 
     public String change(int change) {
-        return change > 0 ? "+" + number(change) : number(change);
+        if (change > 0) return "+" + number(change);
+
+        return number(change);
     }
 
-    // Same reasons as the ban list page, in the same order
+    /** Same reasons as the ban list page, in the same order */
     public String banReasons(SeasonDraftReportVO.BanChangeVO card) {
         List<String> reasons = new ArrayList<>();
         Map<MtgFormat, BigDecimal> metaShares = card.getMetaShares();
         for (MtgFormat mtgFormat : MtgFormat.values()) {
             BigDecimal metaShare = metaShares != null ? metaShares.get(mtgFormat) : null;
             if (metaShare == null) continue;
-            if (metaShare.signum() == 0) { // MtgGoldfish rounds down to full percent --> a card at the end of the list has a share of 0
+
+            // MtgGoldfish rounds down to full percent --> a card at the end of the list has a share of 0
+            if (metaShare.signum() == 0) {
                 reasons.add(mtgFormat.getDisplayName() + " (< 1%)");
                 continue;
             }
 
-            reasons.add(mtgFormat.getDisplayName() + " (" + metaShare.movePointRight(2).stripTrailingZeros().toPlainString() + "%)");
+            String percentage = metaShare.movePointRight(2).stripTrailingZeros().toPlainString();
+            reasons.add(mtgFormat.getDisplayName() + " (" + percentage + "%)");
         }
         if (card.getBannedIn() != null) reasons.add("banned in " + card.getBannedIn().getDisplayName());
         if (card.isVintageRestricted()) reasons.add("restricted in Vintage");
@@ -82,19 +90,25 @@ public class SeasonWizardFormat { // the season wizard fragments run through her
                 .toUriString();
     }
 
-    // Drafts from before the admin name was tracked have neither prepared_by nor committed_by
+    /** Drafts from before the admin name was tracked have neither prepared_by nor committed_by. */
     public String byLine(String name) {
-        return name == null ? "" : " by " + name;
+        if (name == null) return "";
+
+        return " by " + name;
     }
 
     public String cardCount(String deckList) {
-        if (deckList == null || deckList.trim().isEmpty()) return "0 cards";
+        if (deckList == null) return "0 cards";
+        if (deckList.trim().isEmpty()) return "0 cards";
 
-        return deckList.trim().split("\n").length + " cards"; // TODO "1 cards"
+        // TODO "1 cards"
+        return deckList.trim().split("\n").length + " cards";
     }
 
     public String joined(List<String> values) {
-        return values == null ? "" : String.join(", ", values);
+        if (values == null) return "";
+
+        return String.join(", ", values);
     }
 
     public String childCodes(MtgSetVO mtgSet) {
@@ -109,12 +123,16 @@ public class SeasonWizardFormat { // the season wizard fragments run through her
     }
 
     public List<String> setNames(List<MtgSetVO> sets) {
-        if (sets == null) return List.of(); // a report an older build wrote has no sets in it at all
+        // A report an older build wrote has no sets in it at all
+        if (sets == null) return List.of();
 
         List<String> names = new ArrayList<>(sets.size());
         for (MtgSetVO mtgSet : sets) {
-            names.add(mtgSet.getName()
-                    + (mtgSet.getCommanderDecks() != null && !mtgSet.getCommanderDecks().isEmpty() ? " (+ Commander Decks)" : ""));
+            String commanderDecksSuffix = "";
+            if (mtgSet.getCommanderDecks() != null) {
+                if (!mtgSet.getCommanderDecks().isEmpty()) commanderDecksSuffix = " (+ Commander Decks)";
+            }
+            names.add(mtgSet.getName() + commanderDecksSuffix);
         }
 
         return names;

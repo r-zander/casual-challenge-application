@@ -28,9 +28,13 @@ public class JwtService {
     }
 
     public String generateToken(String username, boolean isAdmin) {
-        LocalDateTime expiration = isAdmin
-                ? LocalDateTime.now().plusYears(1) // an admin token can't be revoked, so don't let it live until 2031
-                : LocalDateTime.now().plusYears(5);
+        LocalDateTime expiration;
+        if (isAdmin) {
+            // An admin token can't be revoked, so don't let it live until 2031
+            expiration = LocalDateTime.now().plusYears(1);
+        } else {
+            expiration = LocalDateTime.now().plusYears(5);
+        }
 
         return Jwts.builder()
                 .setSubject(username)
@@ -50,13 +54,15 @@ public class JwtService {
     }
 
     public boolean isAdmin(Claims claims) {
-        return Boolean.TRUE.equals(claims.get(CLAIM_ADMIN, Boolean.class)); // no claim --> not an admin, so old tokens keep working
+        // No claim --> not an admin, so old tokens keep working
+        return Boolean.TRUE.equals(claims.get(CLAIM_ADMIN, Boolean.class));
     }
 
     public boolean validateToken(String token) {
         try {
             return extractClaims(token).getExpiration().after(new Date());
-        } catch (JwtException | IllegalArgumentException e) { // garbage, wrong signature, expired, empty --> the filters answer 401
+        } catch (JwtException | IllegalArgumentException e) {
+            // Garbage, wrong signature, expired, empty --> the filters answer 401
             return false;
         }
     }

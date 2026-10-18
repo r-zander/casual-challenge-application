@@ -13,7 +13,8 @@ public interface CardPricesResponseMapper {
 
     default Map<String, Integer> toResponse(List<CardBudgetPointsVO> cardBudgetPointsVOs) {
         return cardBudgetPointsVOs.stream()
-                .filter(vo -> vo.getCardName() != null && vo.getBudgetPoints() != null)
+                .filter(vo -> vo.getCardName() != null)
+                .filter(vo -> vo.getBudgetPoints() != null)
                 .collect(java.util.stream.Collectors.toMap(
                         CardBudgetPointsVO::getCardName,
                         CardBudgetPointsVO::getBudgetPoints,

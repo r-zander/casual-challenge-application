@@ -29,7 +29,8 @@ public class BanListService {
     public BanListVO getCurrentBanList() {
         Season currentSeason = this.seasonRepository.findCurrentSeason();
         List<BanListCardVO> bans = this.cardSeasonDataRepository.findAllForBanList(currentSeason, Legality.BANNED);
-        List<BanListCardVO> extendedBans = this.cardSeasonDataRepository.findAllForBanList(currentSeason, Legality.EXTENDED);
+        List<BanListCardVO> extendedBans =
+                this.cardSeasonDataRepository.findAllForBanList(currentSeason, Legality.EXTENDED);
 
         return new BanListVO(
                 currentSeason.getSeasonNumber(),

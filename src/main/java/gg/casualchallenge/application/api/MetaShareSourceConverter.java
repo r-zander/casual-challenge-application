@@ -4,8 +4,9 @@ import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.stereotype.Component;
 
+/** The parameter is written 'mtggoldfish' everywhere, but Spring only binds the constant itself. */
 @Component
-public class MetaShareSourceConverter implements Converter<String, MetaShareSource> { // the parameter is written 'mtggoldfish' everywhere, but Spring only binds the constant itself
+public class MetaShareSourceConverter implements Converter<String, MetaShareSource> {
 
     @Override
     public MetaShareSource convert(String metaSource) {

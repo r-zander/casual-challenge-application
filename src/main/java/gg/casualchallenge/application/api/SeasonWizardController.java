@@ -36,7 +36,7 @@ public class SeasonWizardController {
         return "season-wizard";
     }
 
-    // The wizard reads the report as json for its own bookkeeping and picks up the rendered sections here
+    /** The wizard reads the report as json for its own bookkeeping and picks up the rendered sections here. */
     @GetMapping(path = "/admin/season-wizard/draft")
     public String getDraftSections(Model model) {
         SeasonDraftReportVO report = this.seasonDraftService.report();

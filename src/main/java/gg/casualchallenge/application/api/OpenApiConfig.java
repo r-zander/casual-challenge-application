@@ -36,7 +36,8 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("Casual Challenge API")
                         .version("v1"))
-                .addSecurityItem(new SecurityRequirement().addList(BEARER_TOKEN)) // every group needs a token, so it sits on the whole document
+                // Every group needs a token, so it sits on the whole document
+                .addSecurityItem(new SecurityRequirement().addList(BEARER_TOKEN))
                 .components(new Components()
                         .addSecuritySchemes(BEARER_TOKEN, new SecurityScheme()
                                 .type(SecurityScheme.Type.HTTP)

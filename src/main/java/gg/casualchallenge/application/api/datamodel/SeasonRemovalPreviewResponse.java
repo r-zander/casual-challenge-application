@@ -6,7 +6,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Value // same field names as SeasonRemovalPreviewVO
+/** Same field names as {@code SeasonRemovalPreviewVO} */
+@Value
 public class SeasonRemovalPreviewResponse {
     int seasonNumber;
     LocalDate startDate;

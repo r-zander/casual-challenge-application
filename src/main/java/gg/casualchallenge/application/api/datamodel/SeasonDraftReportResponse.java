@@ -12,8 +12,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/** Same field names as {@code SeasonDraftReportVO}, so this and the report in season_draft stay diffable. */
 @Value
-public class SeasonDraftReportResponse { // same field names as SeasonDraftReportVO, so this and the report in season_draft stay diffable
+public class SeasonDraftReportResponse {
     int seasonNumber;
     String romanSeasonNumber;
     LocalDate startDate;

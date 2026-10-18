@@ -40,10 +40,13 @@ public class SecurityConfig {
                 .authorizeHttpRequests((authorize) -> authorize
                         .requestMatchers("/admin/**").hasRole("ADMIN") // season management needs an admin token
                         .requestMatchers("/v1/**").authenticated() // API itself needs authentication
-                        .anyRequest().permitAll() // everything else (documentation, swagger-ui, landing page, error pages etc can be access freely)
+                        // Everything else (documentation, swagger-ui, landing page, error pages etc
+                        // can be access freely)
+                        .anyRequest().permitAll()
                 )
                 .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(
-                        (request, response, authenticationException) -> response.sendError(HttpStatus.UNAUTHORIZED.value(), "No bearer token.")
+                        (request, response, authenticationException) ->
+                                response.sendError(HttpStatus.UNAUTHORIZED.value(), "No bearer token.")
                 ))
 
                 .addFilterBefore(jwtAuthenticationFilter, LogoutFilter.class)

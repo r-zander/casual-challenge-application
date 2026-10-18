@@ -36,7 +36,13 @@ import java.security.Principal;
 
 @RestController
 @RequestMapping("/admin/v1")
-@Tag(name = "Season draft", description = "The stored result of a preparation. Read the report, download the three migrations, then commit the draft or throw it away. There is only ever one open draft, a new preparation replaces it. Committed ones stay in the table, they are the only record of a season start.")
+@Tag(
+        name = "Season draft",
+        description = "The stored result of a preparation."
+                + " Read the report, download the three migrations, then commit the draft or throw it away."
+                + " There is only ever one open draft, a new preparation replaces it."
+                + " Committed ones stay in the table, they are the only record of a season start."
+)
 public class SeasonDraftControllerV1 {
 
     private final SeasonDraftService seasonDraftService;
@@ -53,8 +59,22 @@ public class SeasonDraftControllerV1 {
     @GetMapping(path = "/season/draft")
     @Operation(
             summary = "Read the review report of the draft",
-            description = "Everything you need to decide whether the draft is good enough to commit: the dates, the counts, the ban and budget point changes, the cards that got left out, the sets that made new cards playable since the current season started and the three Scryfall lists. A committed draft stays, with committedAt and committedBy set - after a DELETE of the open draft you get the last committed one again, if there is one. 404 when there is no draft at all."
+            description = """
+                    Everything you need to decide whether the draft is good enough to commit:
+
+                    - the dates
+                    - the counts
+                    - the ban and budget point changes
+                    - the cards that got left out
+                    - the sets that made new cards playable since the current season started
+                    - the three Scryfall lists
+
+                    A committed draft stays, with `committedAt` and `committedBy` set - \
+                    after a DELETE of the open draft you get the last committed one again, if there is one.
+                    """
     )
+    @ApiResponse(responseCode = "200")
+    @ApiResponse(responseCode = "404", description = "There is no draft at all", content = @Content)
     public SeasonDraftReportResponse getSeasonDraft() {
         SeasonDraftReportVO report = this.seasonDraftService.report();
         if (report == null) {
@@ -94,15 +114,37 @@ public class SeasonDraftControllerV1 {
     @GetMapping(path = "/season/draft/sql/{part}", produces = "text/plain;charset=utf-8")
     @Operation(
             summary = "Download one of the three season migrations",
-            description = "Comes as an attachment: 20260913_1042_00_add_season_21.sql, _01_insert_cards.sql, _02_insert_card_season_data_for_season_21.sql. All three share the timestamp, so 00_add_season is applied before the data it needs. The changeset author is the name in the admin token that prepared the draft - or the one that committed it, once it is committed. 404 for a part that doesn't exist or when there is no draft, 409 for a draft an older build prepared."
+            description = """
+                    Comes as an attachment: 20260913_1042_00_add_season_21.sql, _01_insert_cards.sql, \
+                    _02_insert_card_season_data_for_season_21.sql.
+
+                    - All three share the timestamp, so 00_add_season is applied before the data it needs
+                    - The changeset author is the name in the admin token that prepared the draft - \
+                    or the one that committed it, once it is committed
+                    """
     )
+    @ApiResponse(responseCode = "200")
+    @ApiResponse(
+            responseCode = "404",
+            description = "A part that doesn't exist, or there is no draft",
+            content = @Content
+    )
+    @ApiResponse(responseCode = "409", description = "A draft an older build prepared", content = @Content)
     public ResponseEntity<String> getSeasonDraftSql(
-            @Parameter(description = "Which of the three migrations to download.", schema = @Schema(allowableValues = {"00_add_season", "01_insert_cards", "02_insert_card_season_data"}))
+            @Parameter(
+                    description = "Which of the three migrations to download.",
+                    schema = @Schema(
+                            allowableValues = {"00_add_season", "01_insert_cards", "02_insert_card_season_data"}
+                    )
+            )
             @PathVariable("part") String part
     ) {
         SeasonSqlFile seasonSqlFile = SeasonSqlFile.fromPart(part);
         if (seasonSqlFile == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "There is no season migration named '" + part + "'.");
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "There is no season migration named '" + part + "'."
+            );
         }
 
         SeasonSqlFileVO sqlFile;
@@ -123,16 +165,40 @@ public class SeasonDraftControllerV1 {
     @PostMapping(path = "/season/commit")
     @Operation(
             summary = "Commit the draft",
-            description = "Writes the season, the new cards and their season data in one transaction, remaps the oracle ids that changed and reloads the card cache. Answers with the facts for the season announcement. 409 when there is no draft, when it was committed already, when a sanity check says the numbers are wrong (commitAnyway goes ahead regardless) or when the current season was touched since the preparation ran - prepare again in that case.\n\n"
-                    + "Pass a GitHub token and the three migrations go onto a branch of their own and into a pull request against master before anything is written - so a token that GitHub doesn't like means the season is not committed either and you simply try again. Without a token nothing changes, the migrations stay downloads."
+            description = """
+                    Writes the season, the new cards and their season data in one transaction, \
+                    remaps the oracle ids that changed and reloads the card cache. \
+                    Answers with the facts for the season announcement.
+
+                    Pass a GitHub token and the three migrations go onto a branch of their own \
+                    and into a pull request against master before anything is written - \
+                    so a token that GitHub doesn't like means the season is not committed either \
+                    and you simply try again. Without a token nothing changes, the migrations stay downloads.
+                    """
+    )
+    @ApiResponse(responseCode = "200")
+    @ApiResponse(
+            responseCode = "409",
+            description = "There is no draft, it was committed already,"
+                    + " a sanity check says the numbers are wrong (`commitAnyway` goes ahead regardless)"
+                    + " or the current season was touched since the preparation ran - prepare again in that case",
+            content = @Content
     )
     public CommittedSeasonResponse commitSeason(
             @RequestBody(required = false) SeasonCommitRequest request,
             Principal principal
     ) {
+        String githubToken = null;
+        boolean commitAnyway = false;
+        if (request != null) {
+            githubToken = request.getGithubToken();
+            commitAnyway = request.isCommitAnyway();
+        }
+
         try {
             return CommittedSeasonMapper.INSTANCE.toResponse(
-                    this.seasonDraftService.commit(principal.getName(), request != null ? request.getGithubToken() : null, request != null && request.isCommitAnyway()));
+                    this.seasonDraftService.commit(principal.getName(), githubToken, commitAnyway)
+            );
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
         }
@@ -142,7 +208,16 @@ public class SeasonDraftControllerV1 {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(
             summary = "Throw the draft away",
-            description = "Nothing that is live gets touched, only the open draft is gone - a GET afterwards shows the last committed draft, if there is one. Refuses with 409 if there is no draft, or if it was committed already - a committed draft stays, it is the only record of a season start."
+            description = """
+                    Nothing that is live gets touched, only the open draft is gone - \
+                    a GET afterwards shows the last committed draft, if there is one.
+                    """
+    )
+    @ApiResponse(
+            responseCode = "409",
+            description = "There is no draft, or it was committed already"
+                    + " - a committed draft stays, it is the only record of a season start",
+            content = @Content
     )
     public void discardSeasonDraft() {
         try {

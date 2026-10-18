@@ -45,7 +45,7 @@ public class CasualChallengeService {
     private final CardSeasonDataRepository cardSeasonDataRepository;
     private final SeasonDraftRepository seasonDraftRepository;
 
-    // Requests wait for a season commit instead of answering from a cache without the new cards
+    /** Requests wait for a season commit instead of answering from a cache without the new cards. */
     private final ReentrantReadWriteLock cacheLock = new ReentrantReadWriteLock();
 
     private final Map<String, CardVO> cardCacheByNormalizedName = new HashMap<>();
@@ -112,7 +112,8 @@ public class CasualChallengeService {
                 }
             }
 
-            List<CardSeasonData> cardDataList = cardSeasonDataRepository.findAllBySeasonAndCardOracleIdIn(season, foundCards.keySet());
+            List<CardSeasonData> cardDataList =
+                    cardSeasonDataRepository.findAllBySeasonAndCardOracleIdIn(season, foundCards.keySet());
 
             return new CardDataBatchVO(
                     buildCardWithDataVOs(displayExtended, cardDataList, foundCards),
@@ -242,11 +243,18 @@ public class CasualChallengeService {
         );
     }
 
-    private List<CardWithDataVO> buildCardWithDataVOs(boolean displayExtended, List<CardSeasonData> cardDataList, Map<UUID, CardVO> cardCacheByOracleId) {
+    private List<CardWithDataVO> buildCardWithDataVOs(
+            boolean displayExtended,
+            List<CardSeasonData> cardDataList,
+            Map<UUID, CardVO> cardCacheByOracleId
+    ) {
         List<CardWithDataVO> cardWithDataVOs = new ArrayList<>(cardDataList.size());
         for (CardSeasonData cardSeasonData : cardDataList) {
             CardVO cardVO = cardCacheByOracleId.get(cardSeasonData.getCardOracleId());
-            if (cardVO == null) throw new IllegalStateException("Card '" + cardSeasonData.getCardOracleId() + "' has season data but isn't in the card cache. Call POST /admin/v1/cards/reload.");
+            if (cardVO == null) {
+                throw new IllegalStateException("Card '" + cardSeasonData.getCardOracleId() + "' has season data"
+                        + " but isn't in the card cache. Call POST /admin/v1/cards/reload.");
+            }
             cardWithDataVOs.add(new CardWithDataVO(
                     cardVO.getId(),
                     cardVO.getOracleId(),
@@ -273,14 +281,20 @@ public class CasualChallengeService {
     }
 
     private Legality filterLegality(Legality legality, boolean displayExtended) {
-        if (!displayExtended && legality == Legality.EXTENDED) {
-            return Legality.LEGAL;
+        if (!displayExtended) {
+            if (legality == Legality.EXTENDED) {
+                return Legality.LEGAL;
+            }
         }
 
         return legality;
     }
 
-    private CardWithDataVO.ReasonVO determineReason(String cardName, CardSeasonData cardSeasonData, boolean displayExtended) {
+    private CardWithDataVO.ReasonVO determineReason(
+            String cardName,
+            CardSeasonData cardSeasonData,
+            boolean displayExtended
+    ) {
         Map<MtgFormat, BigDecimal> metaShares = new HashMap<>();
         if (cardSeasonData.getMetaShareStandard() != null) {
             metaShares.put(MtgFormat.STANDARD, cardSeasonData.getMetaShareStandard());
@@ -335,9 +349,15 @@ public class CasualChallengeService {
             return EnumSet.of(AppliedRule.NONSNOW_BASIC);
         }
 
-        if (budgetPoints == null || budgetPoints == 0) {
+        if (budgetPoints == null) {
             return EnumSet.of(AppliedRule.MISSING_BUDGET_POINTS);
-        } else if (legality == Legality.NOT_LEGAL) {
+        }
+
+        if (budgetPoints == 0) {
+            return EnumSet.of(AppliedRule.MISSING_BUDGET_POINTS);
+        }
+
+        if (legality == Legality.NOT_LEGAL) {
             return EnumSet.of(AppliedRule.NOT_VINTAGE_LEGAL);
         }
 
@@ -353,8 +373,10 @@ public class CasualChallengeService {
             return EnumSet.of(AppliedRule.PAPER_BAN);
         }
 
-        if (displayExtended && legality == Legality.EXTENDED) {
-            return EnumSet.of(AppliedRule.TOURNAMENT_STAPLE);
+        if (displayExtended) {
+            if (legality == Legality.EXTENDED) {
+                return EnumSet.of(AppliedRule.TOURNAMENT_STAPLE);
+            }
         }
 
         return EnumSet.of(AppliedRule.NO_BANS, AppliedRule.VINTAGE_LEGAL);

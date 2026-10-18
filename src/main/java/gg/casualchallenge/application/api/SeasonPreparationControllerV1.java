@@ -41,13 +41,22 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/admin/v1")
-@Tag(name = "Season preparation", description = "Preparing a season calculates the next one from scratch - both MTGJSON dumps, the prices of the whole price window, the tournament staples - so it runs in the background. A draft is the finished next season, parked in the season_draft table; nothing live changes before the commit.\n\n"
-        + "- POST here to start it\n"
-        + "- GET here until the state is DONE\n"
-        + "- GET /admin/v1/season/draft for the report\n"
-        + "- download the three sql files\n"
-        + "- POST /admin/v1/season/commit\n"
-        + "- DELETE here to give up on a running preparation, DELETE the draft to throw a finished one away")
+@Tag(
+        name = "Season preparation",
+        description = """
+                Preparing a season calculates the next one from scratch \
+                - both MTGJSON dumps, the prices of the whole price window, the tournament staples \
+                - so it runs in the background. \
+                A draft is the finished next season, parked in the season_draft table; \
+                nothing live changes before the commit.
+
+                - POST here to start it
+                - GET here until the state is DONE
+                - GET /admin/v1/season/draft for the report
+                - download the three sql files
+                - POST /admin/v1/season/commit
+                - DELETE here to give up on a running preparation, DELETE the draft to throw a finished one away"""
+)
 public class SeasonPreparationControllerV1 {
 
     private final SeasonPreparationService seasonPreparationService;
@@ -61,7 +70,7 @@ public class SeasonPreparationControllerV1 {
         this.objectMapper = objectMapper;
     }
 
-    // multipart for the ban files, */* so a bodyless POST still works
+    // Multipart for the ban files, */* so a bodyless POST still works
     @PostMapping(path = "/season/preparation", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE, MediaType.ALL_VALUE})
     @ResponseStatus(HttpStatus.ACCEPTED)
     @Operation(
@@ -86,27 +95,39 @@ public class SeasonPreparationControllerV1 {
     public SeasonPreparationStatusResponse prepareSeason(
             @Parameter(description = "First day of the new season, today (UTC) if you leave it out.")
             @RequestParam(required = false) LocalDate startDate,
-            @Parameter(description = "Last day of the new season. Defaults to the end of the current season plus casual-challenge.season.length-in-weeks (10 weeks).")
+            @Parameter(description = "Last day of the new season."
+                    + " Defaults to the end of the current season"
+                    + " plus casual-challenge.season.length-in-weeks (10 weeks).")
             @RequestParam(required = false) LocalDate endDate,
-            @Parameter(description = "First day whose prices count. Defaults to casual-challenge.season.price-window-days (70) before the start date.")
+            @Parameter(description = "First day whose prices count."
+                    + " Defaults to casual-challenge.season.price-window-days (70) before the start date.")
             @RequestParam(required = false) LocalDate priceWindowStart,
             @Parameter(description = "Exclusive end of the price window, the start date if you leave it out.")
             @RequestParam(required = false) LocalDate priceWindowEnd,
-            @Parameter(description = "Where the tournament staples come from - mtggoldfish, mtgtop8 or files. Defaults to mtggoldfish.")
+            @Parameter(description = "Where the tournament staples come from - mtggoldfish, mtgtop8 or files."
+                    + " Defaults to mtggoldfish.")
             @RequestParam(required = false) MetaShareSource metaSource,
-            @Parameter(description = "bans.json, only used with metaSource=files. A JSON array of {name, formats}, the shape /legacy/season/{season}/bans.json answers with.")
+            @Parameter(description = "bans.json, only used with `metaSource=files`."
+                    + " A JSON array of {name, formats}, the shape /legacy/season/{season}/bans.json answers with.")
             @RequestParam(required = false) MultipartFile bans,
-            @Parameter(description = "extended-bans.json, only used with metaSource=files. Same shape as bans.")
+            @Parameter(description = "extended-bans.json, only used with `metaSource=files`. Same shape as `bans`.")
             @RequestParam(required = false) MultipartFile extendedBans,
             Principal principal
     ) {
+        List<BanDTO> banDTOs = null;
+        List<BanDTO> extendedBanDTOs = null;
+        if (metaSource == MetaShareSource.FILES) {
+            banDTOs = readBanFile(bans, "bans");
+            extendedBanDTOs = readBanFile(extendedBans, "extendedBans");
+        }
+
         SeasonPreparationRequestVO request = new SeasonPreparationRequestVO(
                 startDate,
                 endDate,
                 new PriceWindowVO(priceWindowStart, priceWindowEnd),
                 metaSource,
-                metaSource == MetaShareSource.FILES ? readBanFile(bans, "bans") : null,
-                metaSource == MetaShareSource.FILES ? readBanFile(extendedBans, "extendedBans") : null,
+                banDTOs,
+                extendedBanDTOs,
                 principal.getName()
         );
         try {
@@ -121,8 +142,13 @@ public class SeasonPreparationControllerV1 {
     @GetMapping(path = "/season/preparation")
     @Operation(
             summary = "Status of the preparation",
-            description = "IDLE until the first one was started, after that RUNNING, DONE, FAILED or CANCELLED, with the step it is on (stepId and stepNumber name it, step is the sentence) and the error message if it failed."
+            description = """
+                    IDLE until the first one was started, after that RUNNING, DONE, FAILED or CANCELLED, \
+                    with the step it is on (`stepId` and `stepNumber` name it, `step` is the sentence) \
+                    and the error message if it failed.
+                    """
     )
+    @ApiResponse(responseCode = "200")
     public SeasonPreparationStatusResponse getSeasonPreparationStatus() {
         return SeasonPreparationStatusMapper.INSTANCE.toResponse(this.seasonPreparationService.status());
     }
@@ -131,8 +157,13 @@ public class SeasonPreparationControllerV1 {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(
             summary = "Cancel the running preparation",
-            description = "The preparation only gives up between steps, so this is not instant. Nothing lands in the database, so there is nothing to clean up - the downloaded MTGJSON files stay in the archive. Answers 204 even when nothing is running."
+            description = """
+                    The preparation only gives up between steps, so this is not instant. \
+                    Nothing lands in the database, so there is nothing to clean up - \
+                    the downloaded MTGJSON files stay in the archive.
+                    """
     )
+    @ApiResponse(responseCode = "204", description = "Also when nothing is running")
     public void cancelSeasonPreparation() {
         this.seasonPreparationService.cancel();
     }
@@ -182,17 +213,28 @@ public class SeasonPreparationControllerV1 {
 
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    private void handleUnknownParameterValue(MethodArgumentTypeMismatchException e, HttpServletResponse response) throws IOException {
-        response.sendError(HttpStatus.BAD_REQUEST.value(), "'" + e.getValue() + "' is not a valid value for '" + e.getName() + "'."); // the exception's own message carries the class name of the enum
+    private void handleUnknownParameterValue(
+            MethodArgumentTypeMismatchException e,
+            HttpServletResponse response
+    ) throws IOException {
+        // The exception's own message carries the class name of the enum
+        response.sendError(
+                HttpStatus.BAD_REQUEST.value(),
+                "'" + e.getValue() + "' is not a valid value for '" + e.getName() + "'."
+        );
     }
 
     private List<BanDTO> readBanFile(MultipartFile banFile, String parameterName) {
-        if (banFile == null || banFile.isEmpty()) return null;
+        if (banFile == null) return null;
+        if (banFile.isEmpty()) return null;
 
         try {
             return Arrays.asList(this.objectMapper.readValue(banFile.getInputStream(), BanDTO[].class));
         } catch (IOException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Couldn't read the uploaded '" + parameterName + "' file: " + e.getMessage());
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Couldn't read the uploaded '" + parameterName + "' file: " + e.getMessage()
+            );
         }
     }
 }

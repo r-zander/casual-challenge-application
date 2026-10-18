@@ -24,7 +24,11 @@ import static gg.casualchallenge.library.api.ParameterUtil.getPresenceBoolean;
 
 @RestController
 @RequestMapping("/v1")
-@Tag(name = "Cards", description = "What the extension asks for - the cards of the current season with their budget points and legality.")
+@Tag(
+        name = "Cards",
+        description = "What the extension asks for"
+                + " - the cards of the current season with their budget points and legality."
+)
 public class ApiControllerV1 {
 
     private final CasualChallengeService casualChallengeService;
@@ -43,7 +47,10 @@ public class ApiControllerV1 {
                 .limit(100)
                 .toList();
         if (nameList.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The 'names' parameter is required and must contain at least one card name.");
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "The 'names' parameter is required and must contain at least one card name."
+            );
         }
         return CardsResponseMapper.INSTANCE.toResponse(
                 this.casualChallengeService.getCardData(null, nameList, getPresenceBoolean(displayExtended))

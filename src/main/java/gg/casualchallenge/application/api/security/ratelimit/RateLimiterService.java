@@ -37,6 +37,6 @@ public class RateLimiterService {
 
     public boolean consumeToken(String token) {
         Bucket bucket = resolveBucket(token);
-        return bucket.tryConsume(1); // Consume 1 token
+        return bucket.tryConsume(1);
     }
 }

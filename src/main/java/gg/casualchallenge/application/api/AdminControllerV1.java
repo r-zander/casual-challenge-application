@@ -24,7 +24,10 @@ public class AdminControllerV1 {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(
             summary = "Reload the card cache",
-            description = "The cache is built at startup and again after every commit. This is for the case where a commit got through but the reload behind it didn't."
+            description = """
+                    The cache is built at startup and again after every commit. \
+                    This is for the case where a commit got through but the reload behind it didn't.
+                    """
     )
     public void reloadCards() {
         this.casualChallengeService.preloadCards();

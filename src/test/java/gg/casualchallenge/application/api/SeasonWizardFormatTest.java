@@ -69,8 +69,11 @@ class SeasonWizardFormatTest {
     @Test
     void testBanReasons() {
         assertEquals("Standard (< 1%), Pauper (5.25%)",
-                format.banReasons(banChange(Map.of(MtgFormat.STANDARD, new BigDecimal("0.000"), MtgFormat.PAUPER, new BigDecimal("0.0525")), null, false)));
-        assertEquals("Standard (16%), Pioneer (5%), Pauper (< 1%), Modern (12.5%), Legacy (7%), Vintage (0.2%), banned in Modern, restricted in Vintage",
+                format.banReasons(banChange(Map.of(
+                        MtgFormat.STANDARD, new BigDecimal("0.000"),
+                        MtgFormat.PAUPER, new BigDecimal("0.0525")), null, false)));
+        assertEquals("Standard (16%), Pioneer (5%), Pauper (< 1%), Modern (12.5%), Legacy (7%), Vintage (0.2%),"
+                        + " banned in Modern, restricted in Vintage",
                 format.banReasons(banChange(Map.of(
                         MtgFormat.STANDARD, new BigDecimal("0.160"),
                         MtgFormat.PIONEER, new BigDecimal("0.050"),
@@ -78,16 +81,25 @@ class SeasonWizardFormatTest {
                         MtgFormat.MODERN, new BigDecimal("0.125"),
                         MtgFormat.LEGACY, new BigDecimal("0.070"),
                         MtgFormat.VINTAGE, new BigDecimal("0.002")), MtgFormat.MODERN, true)));
-        assertEquals("banned in Legacy, restricted in Vintage", format.banReasons(banChange(Map.of(), MtgFormat.LEGACY, true)));
+        assertEquals(
+                "banned in Legacy, restricted in Vintage",
+                format.banReasons(banChange(Map.of(), MtgFormat.LEGACY, true))
+        );
         assertEquals("", format.banReasons(banChange(Map.of(), null, false)));
         assertEquals("", format.banReasons(banChange(null, null, false)));
     }
 
     @Test
     void testScryfallUrl() {
-        assertEquals("https://scryfall.com/search?q=!%22Ajani's%20Pridemate%22", format.scryfallUrl("Ajani's Pridemate"));
+        assertEquals(
+                "https://scryfall.com/search?q=!%22Ajani's%20Pridemate%22",
+                format.scryfallUrl("Ajani's Pridemate")
+        );
         assertEquals("https://scryfall.com/search?q=!%22Fire%20//%20Ice%22", format.scryfallUrl("Fire // Ice"));
-        assertEquals("https://scryfall.com/search?q=!%22Tamiyo%EA%9E%89s%20Journal%22", format.scryfallUrl("Tamiyo꞉s Journal"));
+        assertEquals(
+                "https://scryfall.com/search?q=!%22Tamiyo%EA%9E%89s%20Journal%22",
+                format.scryfallUrl("Tamiyo꞉s Journal")
+        );
         assertEquals("https://scryfall.com/search?q=!%22Lightning%20Bolt%22", format.scryfallUrl("Lightning Bolt"));
     }
 
@@ -103,7 +115,15 @@ class SeasonWizardFormatTest {
     void testSetNames() {
         assertEquals(List.of("Secrets of Strixhaven (+ Commander Decks)", "The Hobbit", "Marvel Super Heroes"),
                 format.setNames(List.of(
-                        mtgSet("Secrets of Strixhaven", "SOS", List.of("Lorehold Spirit", "Prismari Artistry"), List.of(new MtgSetVO.ChildSetVO("Secrets of Strixhaven Promos", "PSOS", 75), new MtgSetVO.ChildSetVO("Secrets of Strixhaven Commander", "SOC", 60))),
+                        mtgSet(
+                                "Secrets of Strixhaven",
+                                "SOS",
+                                List.of("Lorehold Spirit", "Prismari Artistry"),
+                                List.of(
+                                        new MtgSetVO.ChildSetVO("Secrets of Strixhaven Promos", "PSOS", 75),
+                                        new MtgSetVO.ChildSetVO("Secrets of Strixhaven Commander", "SOC", 60)
+                                )
+                        ),
                         mtgSet("The Hobbit", "HOB", List.of(), List.of()),
                         mtgSet("Marvel Super Heroes", "MSH", null, null))));
         assertEquals(List.of(), format.setNames(List.of()));
@@ -114,7 +134,15 @@ class SeasonWizardFormatTest {
     void testSetCodes() {
         assertEquals(List.of("SOS", "PSOS", "SOC", "HOB", "MSH"),
                 format.setCodes(List.of(
-                        mtgSet("Secrets of Strixhaven", "SOS", List.of("Lorehold Spirit", "Prismari Artistry"), List.of(new MtgSetVO.ChildSetVO("Secrets of Strixhaven Promos", "PSOS", 75), new MtgSetVO.ChildSetVO("Secrets of Strixhaven Commander", "SOC", 60))),
+                        mtgSet(
+                                "Secrets of Strixhaven",
+                                "SOS",
+                                List.of("Lorehold Spirit", "Prismari Artistry"),
+                                List.of(
+                                        new MtgSetVO.ChildSetVO("Secrets of Strixhaven Promos", "PSOS", 75),
+                                        new MtgSetVO.ChildSetVO("Secrets of Strixhaven Commander", "SOC", 60)
+                                )
+                        ),
                         mtgSet("The Hobbit", "HOB", List.of(), List.of()),
                         mtgSet("Marvel Super Heroes", "MSH", null, null))));
         assertEquals(List.of(), format.setCodes(List.of()));
@@ -123,16 +151,41 @@ class SeasonWizardFormatTest {
 
     @Test
     void testChildCodes() {
-        assertEquals("PSOS, SOC", format.childCodes(mtgSet("Secrets of Strixhaven", "SOS", List.of(), List.of(new MtgSetVO.ChildSetVO("Secrets of Strixhaven Promos", "PSOS", 75), new MtgSetVO.ChildSetVO("Secrets of Strixhaven Commander", "SOC", 60)))));
+        assertEquals("PSOS, SOC", format.childCodes(mtgSet(
+                "Secrets of Strixhaven",
+                "SOS",
+                List.of(),
+                List.of(
+                        new MtgSetVO.ChildSetVO("Secrets of Strixhaven Promos", "PSOS", 75),
+                        new MtgSetVO.ChildSetVO("Secrets of Strixhaven Commander", "SOC", 60)
+                )
+        )));
         assertEquals("", format.childCodes(mtgSet("The Hobbit", "HOB", List.of(), List.of())));
         assertEquals("", format.childCodes(mtgSet("Marvel Super Heroes", "MSH", null, null)));
     }
 
-    private static SeasonDraftReportVO.BanChangeVO banChange(Map<MtgFormat, BigDecimal> metaShares, MtgFormat bannedIn, boolean isVintageRestricted) {
+    private static SeasonDraftReportVO.BanChangeVO banChange(
+            Map<MtgFormat, BigDecimal> metaShares,
+            MtgFormat bannedIn,
+            boolean isVintageRestricted
+    ) {
         return new SeasonDraftReportVO.BanChangeVO("Lightning Bolt", 100, metaShares, bannedIn, isVintageRestricted);
     }
 
-    private static MtgSetVO mtgSet(String name, String code, List<String> commanderDecks, List<MtgSetVO.ChildSetVO> childSets) {
-        return new MtgSetVO(name, code, LocalDate.of(2026, 4, 24), MtgSetType.EXPANSION, commanderDecks, childSets, 281);
+    private static MtgSetVO mtgSet(
+            String name,
+            String code,
+            List<String> commanderDecks,
+            List<MtgSetVO.ChildSetVO> childSets
+    ) {
+        return new MtgSetVO(
+                name,
+                code,
+                LocalDate.of(2026, 4, 24),
+                MtgSetType.EXPANSION,
+                commanderDecks,
+                childSets,
+                281
+        );
     }
 }

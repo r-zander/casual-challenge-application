@@ -29,13 +29,13 @@ public class RateLimitingFilter extends OncePerRequestFilter {
 
         String authorizationHeader = request.getHeader("Authorization");
 
-        if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
+        if (hasBearerToken(authorizationHeader)) {
             String token = authorizationHeader.substring(7);
 
             try {
                 Claims claims = jwtService.extractClaims(token);
-                String username = claims.getSubject(); // Extract username from JWT
-                if (!jwtService.isAdmin(claims) && !rateLimiterService.consumeToken(username)) { // admins are not rate limited
+                String username = claims.getSubject();
+                if (!tryConsumeToken(claims, username)) {
                     response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
                     response.getWriter().write("Rate limit exceeded for user: " + username);
                     return;
@@ -48,5 +48,18 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         }
 
         chain.doFilter(request, response);
+    }
+
+    private boolean hasBearerToken(String authorizationHeader) {
+        if (authorizationHeader == null) return false;
+
+        return authorizationHeader.startsWith("Bearer ");
+    }
+
+    private boolean tryConsumeToken(Claims claims, String username) {
+        // Admins are not rate limited
+        if (jwtService.isAdmin(claims)) return true;
+
+        return rateLimiterService.consumeToken(username);
     }
 }

@@ -44,7 +44,9 @@ class JwtServiceTest {
     void testValidateToken_withBrokenToken() {
         assertFalse(jwtService.validateToken(""));
         assertFalse(jwtService.validateToken("garbage"));
-        assertFalse(jwtService.validateToken(new JwtService("another-secret-key-that-is-also-long-enough").generateToken("discord-bot")));
+        assertFalse(jwtService.validateToken(
+                new JwtService("another-secret-key-that-is-also-long-enough").generateToken("discord-bot")
+        ));
         assertFalse(jwtService.validateToken(expiredToken()));
     }
 

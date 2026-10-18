@@ -4,13 +4,23 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
 import lombok.Setter;
 
+// No @Value and no @Data: the token has no business showing up in a toString
 @Getter
-@Setter // no @Value and no @Data: the token has no business showing up in a toString
+@Setter
 public class SeasonCommitRequest {
 
-    @Schema(description = "A GitHub token with write access to contents and pull requests. Leave it out and the commit works as it always did, with the three migrations as downloads. It is used for this one call and stored nowhere.", example = "github_pat_...")
+    @Schema(
+            description = "A GitHub token with write access to contents and pull requests."
+                    + " Leave it out and the commit works as it always did, with the three migrations as downloads."
+                    + " It is used for this one call and stored nowhere.",
+            example = "github_pat_..."
+    )
     private String githubToken;
 
-    @Schema(description = "true commits a draft that fails the sanity checks anyway. Leave it out and a blocked draft answers 409.", example = "false")
+    @Schema(
+            description = "true commits a draft that fails the sanity checks anyway."
+                    + " Leave it out and a blocked draft answers 409.",
+            example = "false"
+    )
     private boolean commitAnyway;
 }

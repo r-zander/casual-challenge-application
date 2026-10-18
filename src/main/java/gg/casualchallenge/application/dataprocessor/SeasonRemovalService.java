@@ -22,9 +22,11 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-/*
- * Undoing a season start, for the rehearsal before the real one. The hard stop is Liquibase: once a migration for the season
- * has run here, the season is part of the repository and the next deployment would write it straight back.
+/**
+ * Undoing a season start, for the rehearsal before the real one.
+ * <p>
+ * The hard stop is Liquibase: once a migration for the season has run here, the season is part of the repository
+ * and the next deployment would write it straight back.
  */
 @Service
 @Slf4j
@@ -64,6 +66,17 @@ public class SeasonRemovalService {
         SeasonDraftVO draft = seasonDraftRepository.findCommittedDraft(seasonNumber);
         List<String> refusals = refusals(seasonNumber, draft);
         SeasonDraftReportVO report = draft != null ? toReport(draft) : null;
+        int cardSeasonDataRows = seasonDraftRepository.countCardSeasonData(season.getId());
+        int cardsAddedBySeason = 0;
+        if (draft != null) {
+            cardsAddedBySeason = seasonDraftRepository.countCardsAddedAt(draft.getPreparedAt(), season.getId());
+        }
+        int oracleIdRemaps = 0;
+        int renamedCards = 0;
+        if (report != null) {
+            oracleIdRemaps = report.getOracleIdChanges().size();
+            renamedCards = report.getRenamedCards().size() + report.getNormalizedNameFixes().size();
+        }
 
         return new SeasonRemovalPreviewVO(
                 seasonNumber,
@@ -73,14 +86,15 @@ public class SeasonRemovalService {
                 draft != null ? draft.getCommittedBy() : null,
                 refusals.isEmpty(),
                 refusals,
-                seasonDraftRepository.countCardSeasonData(season.getId()),
-                draft != null ? seasonDraftRepository.countCardsAddedAt(draft.getPreparedAt(), season.getId()) : 0,
-                report != null ? report.getOracleIdChanges().size() : 0,
-                report != null ? report.getRenamedCards().size() + report.getNormalizedNameFixes().size() : 0,
+                cardSeasonDataRows,
+                cardsAddedBySeason,
+                oracleIdRemaps,
+                renamedCards,
                 report != null ? report.getPreviousSeasonNumber() : null,
                 draft != null ? draft.getPreviousSeasonEndDate() : null,
                 draft != null ? draft.getPullRequestUrl() : null,
-                archiveDirectory.resolve("season-" + seasonNumber).toString());
+                archiveDirectory.resolve("season-" + seasonNumber).toString()
+        );
     }
 
     /** @param githubToken only needed when the commit opened a pull request */
@@ -96,16 +110,25 @@ public class SeasonRemovalService {
         // GitHub first, same as the commit: while the branch is still up there, nothing in the database has moved
         String closedPullRequestUrl = null;
         if (draft.getPullRequestUrl() != null) {
-            if (githubToken == null || githubToken.isEmpty()) {
-                throw new IllegalStateException("The migrations of season " + seasonNumber + " went to " + draft.getPullRequestUrl()
-                        + " --> pass a GitHub token and branch '" + draft.getMigrationBranch() + "' goes away with the season.");
+            if (githubToken == null) {
+                throw new IllegalStateException("The migrations of season " + seasonNumber
+                        + " went to " + draft.getPullRequestUrl()
+                        + " --> pass a GitHub token and branch '" + draft.getMigrationBranch() + "'"
+                        + " goes away with the season.");
+            }
+            if (githubToken.isEmpty()) {
+                throw new IllegalStateException("The migrations of season " + seasonNumber
+                        + " went to " + draft.getPullRequestUrl()
+                        + " --> pass a GitHub token and branch '" + draft.getMigrationBranch() + "'"
+                        + " goes away with the season.");
             }
             gitHubClient.deleteBranch(githubToken, draft.getMigrationBranch());
             closedPullRequestUrl = draft.getPullRequestUrl();
         }
 
         // The repaired normalized names were written by the same commit, so they go back the same way
-        List<SeasonDraftReportVO.RenamedCardVO> renamedCards = new ArrayList<>(report.getRenamedCards().size() + report.getNormalizedNameFixes().size());
+        List<SeasonDraftReportVO.RenamedCardVO> renamedCards =
+                new ArrayList<>(report.getRenamedCards().size() + report.getNormalizedNameFixes().size());
         renamedCards.addAll(report.getRenamedCards());
         renamedCards.addAll(report.getNormalizedNameFixes());
 
@@ -117,11 +140,14 @@ public class SeasonRemovalService {
                     report.getOracleIdChanges(),
                     renamedCards,
                     LocalDateTime.now(Constants.TIMEZONE),
-                    removedBy);
+                    removedBy
+            );
             try {
                 casualChallengeService.preloadCards();
             } catch (RuntimeException e) {
-                throw new RuntimeException("Season " + seasonNumber + " is removed, but reloading the card cache failed: " + e.getMessage() + " Call POST /admin/v1/cards/reload.", e);
+                throw new RuntimeException("Season " + seasonNumber + " is removed,"
+                        + " but reloading the card cache failed: " + e.getMessage()
+                        + " Call POST /admin/v1/cards/reload.", e);
             }
         } finally {
             casualChallengeService.unlockCards();
@@ -129,9 +155,16 @@ public class SeasonRemovalService {
 
         boolean archiveDeleted = SeasonPreparationService.deleteArchive(archiveDirectory, seasonNumber);
 
-        log.info("Removed season {}. {} season data rows and {} cards are gone, {} renames and {} oracle ids went back, season {} ends {} again.",
-                seasonNumber, counts.getCardSeasonDataRows(), counts.getDeletedCards(), counts.getUndoneRenames(), counts.getUndoneRemaps(),
-                report.getPreviousSeasonNumber(), draft.getPreviousSeasonEndDate());
+        log.info("Removed season {}. {} season data rows and {} cards are gone,"
+                        + " {} renames and {} oracle ids went back, season {} ends {} again.",
+                seasonNumber,
+                counts.getCardSeasonDataRows(),
+                counts.getDeletedCards(),
+                counts.getUndoneRenames(),
+                counts.getUndoneRemaps(),
+                report.getPreviousSeasonNumber(),
+                draft.getPreviousSeasonEndDate()
+        );
 
         return new RemovedSeasonVO(
                 seasonNumber,
@@ -139,25 +172,34 @@ public class SeasonRemovalService {
                 draft.getPreviousSeasonEndDate(),
                 closedPullRequestUrl,
                 archiveDeleted,
-                counts);
+                counts
+        );
     }
 
     private List<String> refusals(int seasonNumber, SeasonDraftVO draft) {
         List<String> refusals = new ArrayList<>();
 
         if (seasonDraftRepository.hasAppliedSeasonMigration(seasonNumber)) {
-            refusals.add("A migration for season " + seasonNumber + " has run on this database --> the season is part of the repository and the next deployment would write it again.");
+            refusals.add("A migration for season " + seasonNumber + " has run on this database"
+                    + " --> the season is part of the repository and the next deployment would write it again.");
         }
 
         Season currentSeason = seasonRepository.findCurrentSeason();
-        if (currentSeason == null || currentSeason.getSeasonNumber() != seasonNumber) {
-            refusals.add("Season " + seasonNumber + " is not the current season, and only the newest one can be removed.");
+        if (currentSeason == null) {
+            refusals.add("Season " + seasonNumber + " is not the current season,"
+                    + " and only the newest one can be removed.");
+        } else if (currentSeason.getSeasonNumber() != seasonNumber) {
+            refusals.add("Season " + seasonNumber + " is not the current season,"
+                    + " and only the newest one can be removed.");
         }
 
         if (draft == null) {
-            refusals.add("Season " + seasonNumber + " was not committed by the season wizard, so there is no record of what its commit did and nothing to undo it with.");
+            refusals.add("Season " + seasonNumber + " was not committed by the season wizard,"
+                    + " so there is no record of what its commit did and nothing to undo it with.");
         } else if (draft.getPreviousSeasonEndDate() == null) {
-            refusals.add("The draft for season " + seasonNumber + " was prepared by an older build, it never stored the end date season " + draft.getPreviousSeasonId() + " had before the commit.");
+            refusals.add("The draft for season " + seasonNumber + " was prepared by an older build,"
+                    + " it never stored the end date season " + draft.getPreviousSeasonId()
+                    + " had before the commit.");
         }
 
         return refusals;
@@ -167,7 +209,8 @@ public class SeasonRemovalService {
         try {
             return objectMapper.readValue(draft.getReport(), SeasonDraftReportVO.class);
         } catch (JsonProcessingException e) {
-            throw new RuntimeException("Couldn't read the report of the draft for season " + draft.getSeasonNumber() + ".", e);
+            throw new RuntimeException("Couldn't read the report of the draft"
+                    + " for season " + draft.getSeasonNumber() + ".", e);
         }
     }
 }

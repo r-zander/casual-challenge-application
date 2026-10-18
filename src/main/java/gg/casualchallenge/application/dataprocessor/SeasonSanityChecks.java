@@ -21,7 +21,8 @@ public final class SeasonSanityChecks {
     public static final int PLAUSIBLE_CARD_COUNT_MAXIMUM = 45000;
     public static final double PLAUSIBLE_EXCHANGE_RATE_MINIMUM = 1.0;
     public static final double PLAUSIBLE_EXCHANGE_RATE_MAXIMUM = 2.5;
-    public static final int ALLOWED_MISSING_PRICE_DAYS = 3; // MTGJSON drops the odd day, 68 of 70 is a normal window
+    /** MTGJSON drops the odd day, 68 of 70 is a normal window. */
+    public static final int ALLOWED_MISSING_PRICE_DAYS = 3;
 
     private SeasonSanityChecks() {}
 
@@ -45,11 +46,16 @@ public final class SeasonSanityChecks {
                 "Cards",
                 grouped(cards) + ", " + grouped(newCards) + " of them new",
                 "around 33k",
-                cards >= PLAUSIBLE_CARD_COUNT_MINIMUM && cards <= PLAUSIBLE_CARD_COUNT_MAXIMUM,
-                false);
+                isPlausibleCardCount(cards),
+                false
+        );
     }
 
-    public static SeasonSanityChecksVO.SanityCheckVO pricedDays(int pricedDays, LocalDate priceWindowStart, LocalDate priceWindowEnd) {
+    public static SeasonSanityChecksVO.SanityCheckVO pricedDays(
+            int pricedDays,
+            LocalDate priceWindowStart,
+            LocalDate priceWindowEnd
+    ) {
         long windowDays = ChronoUnit.DAYS.between(priceWindowStart, priceWindowEnd);
 
         return new SeasonSanityChecksVO.SanityCheckVO(
@@ -57,33 +63,45 @@ public final class SeasonSanityChecks {
                 pricedDays + " of " + windowDays,
                 "the whole window, give or take a day",
                 pricedDays >= windowDays - ALLOWED_MISSING_PRICE_DAYS,
-                false);
+                false
+        );
     }
 
-    public static SeasonSanityChecksVO.SanityCheckVO topRows(String label, Map<MtgFormat, Integer> rowCounts, int expectedRows) {
+    public static SeasonSanityChecksVO.SanityCheckVO topRows(
+            String label,
+            Map<MtgFormat, Integer> rowCounts,
+            int expectedRows
+    ) {
         List<String> offenders = new ArrayList<>();
         for (Map.Entry<MtgFormat, Integer> rowCount : rowCounts.entrySet()) {
-            if (rowCount.getValue() != expectedRows) offenders.add(rowCount.getKey().getDisplayName() + " " + rowCount.getValue());
+            if (rowCount.getValue() != expectedRows) {
+                offenders.add(rowCount.getKey().getDisplayName() + " " + rowCount.getValue());
+            }
         }
+
+        String expectation = expectedRows + " per format";
 
         return new SeasonSanityChecksVO.SanityCheckVO(
                 label,
-                offenders.isEmpty() ? expectedRows + " per format" : String.join(", ", offenders),
-                expectedRows + " per format",
+                offenders.isEmpty() ? expectation : String.join(", ", offenders),
+                expectation,
                 offenders.isEmpty(),
-                true);
+                true
+        );
     }
 
     /** @param names null = the report was written before the duplicates were tracked */
     public static SeasonSanityChecksVO.SanityCheckVO duplicateMetaShareNames(List<String> names) {
-        boolean isPassing = names == null || names.isEmpty();
+        if (names == null) names = List.of();
+        boolean isPassing = names.isEmpty();
 
         return new SeasonSanityChecksVO.SanityCheckVO(
                 "Cards counted twice",
                 isPassing ? "none" : String.join(", ", names),
                 "none",
                 isPassing,
-                true);
+                true
+        );
     }
 
     public static SeasonSanityChecksVO.SanityCheckVO exchangeRate(double exchangeRate, double adjustedExchangeRate) {
@@ -91,12 +109,31 @@ public final class SeasonSanityChecks {
                 "Exchange rate",
                 twoDecimals(exchangeRate) + " USD per EUR, adjusted " + twoDecimals(adjustedExchangeRate),
                 "somewhere between 1 and 2.5",
-                exchangeRate > PLAUSIBLE_EXCHANGE_RATE_MINIMUM && exchangeRate < PLAUSIBLE_EXCHANGE_RATE_MAXIMUM,
-                false);
+                isPlausibleExchangeRate(exchangeRate),
+                false
+        );
     }
 
     public static SeasonSanityChecksVO.SanityCheckVO cardsWithoutPrice(int cardsWithoutPrice) {
-        return new SeasonSanityChecksVO.SanityCheckVO("Cards without a price", grouped(cardsWithoutPrice), "", true, false);
+        return new SeasonSanityChecksVO.SanityCheckVO(
+                "Cards without a price",
+                grouped(cardsWithoutPrice),
+                "",
+                true,
+                false
+        );
+    }
+
+    private static boolean isPlausibleCardCount(int cards) {
+        if (cards < PLAUSIBLE_CARD_COUNT_MINIMUM) return false;
+
+        return cards <= PLAUSIBLE_CARD_COUNT_MAXIMUM;
+    }
+
+    private static boolean isPlausibleExchangeRate(double exchangeRate) {
+        if (exchangeRate <= PLAUSIBLE_EXCHANGE_RATE_MINIMUM) return false;
+
+        return exchangeRate < PLAUSIBLE_EXCHANGE_RATE_MAXIMUM;
     }
 
     private static String grouped(int value) {
@@ -104,6 +141,7 @@ public final class SeasonSanityChecks {
     }
 
     private static String twoDecimals(double value) {
-        return new BigDecimal(value).setScale(2, RoundingMode.HALF_UP).toPlainString(); // the exact double, the way toFixed(2) rounded it in the browser
+        // The exact double, the way toFixed(2) rounded it in the browser
+        return new BigDecimal(value).setScale(2, RoundingMode.HALF_UP).toPlainString();
     }
 }

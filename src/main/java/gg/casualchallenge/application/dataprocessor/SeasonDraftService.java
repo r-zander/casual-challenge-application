@@ -77,24 +77,32 @@ public class SeasonDraftService {
         if (!commitAnyway) {
             SeasonSanityChecksVO sanityChecks = SeasonSanityChecks.of(toReport(draft));
             if (sanityChecks.isCommitBlocked()) {
-                throw new IllegalStateException("Sanity check is off for season " + draft.getSeasonNumber() + ": " + String.join(", ", sanityChecks.getBlockingLabels()) + ". Usually MtgGoldfish changed their page or blocked half the requests --> prepare again, or commit anyway.");
+                throw new IllegalStateException("Sanity check is off for season " + draft.getSeasonNumber() + ": "
+                        + String.join(", ", sanityChecks.getBlockingLabels()) + "."
+                        + " Usually MtgGoldfish changed their page or blocked half the requests"
+                        + " --> prepare again, or commit anyway.");
             }
         }
 
-        LocalDateTime committedAt = LocalDateTime.now(Constants.TIMEZONE); // names the migration files as well, so GitHub and the database have to share one value
+        // Names the migration files as well, so GitHub and the database have to share one value
+        LocalDateTime committedAt = LocalDateTime.now(Constants.TIMEZONE);
 
-        // GitHub goes first. It is the part that fails, and as long as nothing is written the draft is simply still there to commit again.
+        // GitHub goes first. It is the part that fails,
+        // and as long as nothing is written the draft is simply still there to commit again.
         PullRequestVO pullRequest = null;
-        if (githubToken != null && !githubToken.isEmpty()) {
-            SeasonDraftVO asCommitted = draft.withCommittedAt(committedAt).withCommittedBy(committedBy);
-            pullRequest = gitHubClient.openPullRequest(githubToken, asCommitted, sqlFiles(asCommitted));
+        if (githubToken != null) {
+            if (!githubToken.isEmpty()) {
+                SeasonDraftVO asCommitted = draft.withCommittedAt(committedAt).withCommittedBy(committedBy);
+                pullRequest = gitHubClient.openPullRequest(githubToken, asCommitted, sqlFiles(asCommitted));
+            }
         }
 
         CommittedSeasonCountsVO counts;
         casualChallengeService.lockCards();
         try {
             try {
-                // prepared_at is what the exported migration writes into card.added_at, so the database gets the very same value
+                // prepared_at is what the exported migration writes into card.added_at,
+                // so the database gets the very same value
                 counts = seasonDraftRepository.commit(
                         draft.getId(),
                         draft.getPreparedAt(),
@@ -102,7 +110,8 @@ public class SeasonDraftService {
                         committedBy,
                         pullRequest != null ? pullRequest.getBranch() : null,
                         pullRequest != null ? pullRequest.getUrl() : null,
-                        priceDetailsSeasons);
+                        priceDetailsSeasons
+                );
             } catch (RuntimeException e) {
                 if (pullRequest == null) throw e;
 
@@ -110,7 +119,8 @@ public class SeasonDraftService {
                 try {
                     gitHubClient.deleteBranch(githubToken, pullRequest.getBranch());
                 } catch (RuntimeException cleanUpFailure) {
-                    throw new IllegalStateException(e.getMessage() + " Branch '" + pullRequest.getBranch() + "' is still on GitHub on top of that, delete it before the next attempt.", e);
+                    throw new IllegalStateException(e.getMessage() + " Branch '" + pullRequest.getBranch() + "'"
+                            + " is still on GitHub on top of that, delete it before the next attempt.", e);
                 }
 
                 throw e;
@@ -119,21 +129,32 @@ public class SeasonDraftService {
             try {
                 casualChallengeService.preloadCards();
             } catch (RuntimeException e) {
-                throw new RuntimeException("Season " + draft.getSeasonNumber() + " is committed, but reloading the card cache failed: " + e.getMessage() + " Call POST /admin/v1/cards/reload.", e);
+                throw new RuntimeException("Season " + draft.getSeasonNumber() + " is committed,"
+                        + " but reloading the card cache failed: " + e.getMessage()
+                        + " Call POST /admin/v1/cards/reload.", e);
             }
         } finally {
             casualChallengeService.unlockCards();
         }
 
-        log.info("Committed season {}. {} cards added, {} names or normalized names updated, {} remapped, {} season data rows written.",
-                draft.getSeasonNumber(), counts.getInsertedCards(), counts.getUpdatedCardNames(), counts.getRemappedCards(), counts.getUpsertedCardSeasonData());
+        log.info("Committed season {}. {} cards added, {} names or normalized names updated, {} remapped,"
+                        + " {} season data rows written.",
+                draft.getSeasonNumber(),
+                counts.getInsertedCards(),
+                counts.getUpdatedCardNames(),
+                counts.getRemappedCards(),
+                counts.getUpsertedCardSeasonData()
+        );
 
-        SeasonDraftVO committedDraft = draft.withCommittedAt(committedAt).withCommittedBy(committedBy); // committed_at decides the migration file names, and it is the row that was just written - no reason to read it back
+        // committed_at decides the migration file names,
+        // and it is the row that was just written - no reason to read it back
+        SeasonDraftVO committedDraft = draft.withCommittedAt(committedAt).withCommittedBy(committedBy);
         if (!exportDirectory.isEmpty()) {
             try {
                 writeSqlFiles(committedDraft);
             } catch (IOException e) {
-                throw new RuntimeException("Season " + committedDraft.getSeasonNumber() + " is committed, but writing the migration files failed: " + e.getMessage(), e);
+                throw new RuntimeException("Season " + committedDraft.getSeasonNumber() + " is committed,"
+                        + " but writing the migration files failed: " + e.getMessage(), e);
             }
         }
 
@@ -176,11 +197,12 @@ public class SeasonDraftService {
         return fileName + ".sql";
     }
 
-    // Same switch as sqlFileName
+    /** Same switch as {@code sqlFileName} */
     public static String migrationAuthor(SeasonDraftVO draft) {
         String author = draft.getCommittedAt() != null ? draft.getCommittedBy() : draft.getPreparedBy();
         if (author == null) {
-            throw new IllegalStateException("The draft for season " + draft.getSeasonNumber() + " was prepared by an older build, prepare it again.");
+            throw new IllegalStateException("The draft for season " + draft.getSeasonNumber()
+                    + " was prepared by an older build, prepare it again.");
         }
 
         return author;
@@ -210,9 +232,15 @@ public class SeasonDraftService {
             case ADD_SEASON:
                 return addSeason(draft);
             case INSERT_CARDS:
-                return SeasonMigrationSql.insertCards(seasonDraftRepository.findDraftCards(draft.getId()), draft.getPreparedAt());
+                return SeasonMigrationSql.insertCards(
+                        seasonDraftRepository.findDraftCards(draft.getId()),
+                        draft.getPreparedAt()
+                );
             case INSERT_CARD_SEASON_DATA:
-                return SeasonMigrationSql.insertCardSeasonData(draft.getSeasonNumber(), seasonDraftRepository.findDraftCards(draft.getId()));
+                return SeasonMigrationSql.insertCardSeasonData(
+                        draft.getSeasonNumber(),
+                        seasonDraftRepository.findDraftCards(draft.getId())
+                );
         }
 
         throw new IllegalArgumentException("Don't know how to write the migration for '" + part + "'.");
@@ -222,12 +250,15 @@ public class SeasonDraftService {
         SeasonDraftReportVO report = toReport(draft);
 
         // A replay on an untouched database needs the repaired normalized names as well, not just the real renames
-        List<SeasonDraftReportVO.RenamedCardVO> renamedCards = new ArrayList<>(report.getRenamedCards().size() + report.getNormalizedNameFixes().size());
+        List<SeasonDraftReportVO.RenamedCardVO> renamedCards =
+                new ArrayList<>(report.getRenamedCards().size() + report.getNormalizedNameFixes().size());
         renamedCards.addAll(report.getRenamedCards());
         renamedCards.addAll(report.getNormalizedNameFixes());
         for (SeasonDraftReportVO.RenamedCardVO renamedCard : renamedCards) {
-            if (renamedCard.getPreviousNormalizedName() == null) { // a report from before that field existed, the UPDATE would be written with a NULL in it
-                throw new IllegalStateException("The draft for season " + draft.getSeasonNumber() + " was prepared by an older build, prepare it again.");
+            // A report from before that field existed, the UPDATE would be written with a NULL in it
+            if (renamedCard.getPreviousNormalizedName() == null) {
+                throw new IllegalStateException("The draft for season " + draft.getSeasonNumber()
+                        + " was prepared by an older build, prepare it again.");
             }
         }
 
@@ -236,7 +267,8 @@ public class SeasonDraftService {
                 sqlFileName(draft, SeasonSqlFile.ADD_SEASON),
                 draft,
                 report.getOracleIdChanges(),
-                renamedCards);
+                renamedCards
+        );
     }
 
     private SeasonDraftVO uncommittedDraft(DraftAction action) {
@@ -246,7 +278,8 @@ public class SeasonDraftService {
         SeasonDraftVO latestDraft = seasonDraftRepository.findDraft();
         if (latestDraft != null) {
             // Committed, or somebody discarded it while this page was open - from here the two look the same
-            throw new IllegalStateException("There is no season draft to " + action + ". Season " + latestDraft.getSeasonNumber() + " is the newest one and it is committed.");
+            throw new IllegalStateException("There is no season draft to " + action + "."
+                    + " Season " + latestDraft.getSeasonNumber() + " is the newest one and it is committed.");
         }
 
         throw new IllegalStateException("There is no season draft to " + action + ".");
@@ -259,7 +292,8 @@ public class SeasonDraftService {
                     .withCommittedBy(draft.getCommittedBy())
                     .withPullRequestUrl(draft.getPullRequestUrl());
         } catch (JsonProcessingException e) {
-            throw new RuntimeException("Couldn't read the report of the draft for season " + draft.getSeasonNumber() + ".", e);
+            throw new RuntimeException("Couldn't read the report of the draft"
+                    + " for season " + draft.getSeasonNumber() + ".", e);
         }
     }
 

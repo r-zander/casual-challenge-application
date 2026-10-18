@@ -118,7 +118,8 @@ public class SeasonPreparationService {
     /** A rebuild and a preparation never read MTGJSON at the same time. */
     private final AtomicBoolean rebuildRunning = new AtomicBoolean(false);
 
-    private volatile SeasonPreparationStatusVO preparation = new SeasonPreparationStatusVO(SeasonPreparationState.IDLE, null, null, null, null, null);
+    private volatile SeasonPreparationStatusVO preparation =
+            new SeasonPreparationStatusVO(SeasonPreparationState.IDLE, null, null, null, null, null);
 
     public SeasonPreparationService(
             MtgJsonClient mtgJsonClient,
@@ -154,19 +155,27 @@ public class SeasonPreparationService {
             throw new IllegalStateException("There is no current season to continue.");
         }
 
-        SeasonPreparationRequestVO fullRequest = withDefaults(request, currentSeason.getEndDate(), priceWindowDays, seasonDates);
+        SeasonPreparationRequestVO fullRequest =
+                withDefaults(request, currentSeason.getEndDate(), priceWindowDays, seasonDates);
         if (!fullRequest.getEndDate().isAfter(fullRequest.getStartDate())) {
-            throw new IllegalArgumentException("A season that starts on " + fullRequest.getStartDate() + " can't end on " + fullRequest.getEndDate() + ".");
+            throw new IllegalArgumentException("A season that starts on " + fullRequest.getStartDate()
+                    + " can't end on " + fullRequest.getEndDate() + ".");
         }
         if (fullRequest.getPriceWindow().getEnd().isAfter(fullRequest.getStartDate())) {
-            throw new IllegalArgumentException("The price window has to end at the start of the season at the latest, but it ends on " + fullRequest.getPriceWindow().getEnd() + ".");
+            throw new IllegalArgumentException("The price window has to end at the start of the season at the latest,"
+                    + " but it ends on " + fullRequest.getPriceWindow().getEnd() + ".");
         }
         if (fullRequest.getMetaSource() == MetaShareSource.FILES) {
-            if (fullRequest.getUploadedBans() == null) throw new IllegalArgumentException("The meta source 'files' needs an uploaded 'bans' file.");
-            if (fullRequest.getUploadedExtendedBans() == null) throw new IllegalArgumentException("The meta source 'files' needs an uploaded 'extendedBans' file.");
+            if (fullRequest.getUploadedBans() == null) {
+                throw new IllegalArgumentException("The meta source 'files' needs an uploaded 'bans' file.");
+            }
+            if (fullRequest.getUploadedExtendedBans() == null) {
+                throw new IllegalArgumentException("The meta source 'files' needs an uploaded 'extendedBans' file.");
+            }
         }
         if (preparation.getState() == SeasonPreparationState.RUNNING) {
-            throw new IllegalStateException("A season is already being prepared since " + preparation.getStartedAt() + ".");
+            throw new IllegalStateException("A season is already being prepared"
+                    + " since " + preparation.getStartedAt() + ".");
         }
         if (rebuildRunning.get()) {
             throw new IllegalStateException("The price details of a season are being rebuilt,"
@@ -174,7 +183,14 @@ public class SeasonPreparationService {
         }
 
         cancelRequested.set(false);
-        preparation = new SeasonPreparationStatusVO(SeasonPreparationState.RUNNING, SeasonPreparationStep.STARTING, "Untap, Upkeep, Draw!", LocalDateTime.now(Constants.TIMEZONE), null, null);
+        preparation = new SeasonPreparationStatusVO(
+                SeasonPreparationState.RUNNING,
+                SeasonPreparationStep.STARTING,
+                "Untap, Upkeep, Draw!",
+                LocalDateTime.now(Constants.TIMEZONE),
+                null,
+                null
+        );
         preparationExecutor.submit(() -> runPreparation(fullRequest));
 
         return preparation;
@@ -218,8 +234,8 @@ public class SeasonPreparationService {
                 LocalDate committedEnd = committedDraft.getPriceWindowEnd();
                 if (!window.equals(new PriceWindowVO(committedStart, committedEnd))) {
                     throw new IllegalStateException("The archive of season " + seasonNumber
-                            + " prices " + window.getStart() + " to " + window.getEnd()
-                            + ", but the season was committed"
+                            + " prices " + window.getStart() + " to " + window.getEnd() + ","
+                            + " but the season was committed"
                             + " with the prices of " + committedStart + " to " + committedEnd + ".");
                 }
             }
@@ -230,8 +246,8 @@ public class SeasonPreparationService {
                 LocalDate committedMtgJsonDate = committedDraft.getMtgJsonDate();
                 if (!Objects.equals(mtgJsonDate, committedMtgJsonDate)) {
                     throw new IllegalStateException("The archive of season " + seasonNumber
-                            + " holds MTGJSON of " + mtgJsonDate
-                            + ", but the season was committed with MTGJSON of " + committedMtgJsonDate + ".");
+                            + " holds MTGJSON of " + mtgJsonDate + ","
+                            + " but the season was committed with MTGJSON of " + committedMtgJsonDate + ".");
                 }
             }
 
@@ -262,7 +278,8 @@ public class SeasonPreparationService {
                     mismatches.size(),
                     firstMismatches,
                     unmatchedCards.size(),
-                    firstUnmatchedCards);
+                    firstUnmatchedCards
+            );
 
             return new RebuiltPriceDetailsVO(
                     seasonNumber,
@@ -279,8 +296,8 @@ public class SeasonPreparationService {
 
     private synchronized void startRebuild() {
         if (preparation.getState() == SeasonPreparationState.RUNNING) {
-            throw new IllegalStateException("A season is being prepared since " + preparation.getStartedAt()
-                    + ", the price details have to wait until it is done.");
+            throw new IllegalStateException("A season is being prepared since " + preparation.getStartedAt() + ","
+                    + " the price details have to wait until it is done.");
         }
         if (!rebuildRunning.compareAndSet(false, true)) {
             throw new IllegalStateException("The price details of a season are being rebuilt already.");
@@ -289,8 +306,10 @@ public class SeasonPreparationService {
 
     @PreDestroy
     public void shutdown() {
-        cancelRequested.set(true); // the preparation only gives up between steps, interrupting it alone doesn't help
-        preparationExecutor.shutdownNow(); // the executor thread is not a daemon --> the JVM would wait for it on every deploy
+        // The preparation only gives up between steps, interrupting it alone doesn't help
+        cancelRequested.set(true);
+        // The executor thread is not a daemon --> the JVM would wait for it on every deploy
+        preparationExecutor.shutdownNow();
         try {
             preparationExecutor.awaitTermination(SHUTDOWN_TIMEOUT_IN_SECONDS, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
@@ -304,25 +323,30 @@ public class SeasonPreparationService {
             int priceWindowDays,
             SeasonDates seasonDates
     ) {
-        LocalDate startDate = request.getStartDate() != null ? request.getStartDate() : LocalDate.now(Constants.TIMEZONE);
+        LocalDate startDate =
+                request.getStartDate() != null ? request.getStartDate() : LocalDate.now(Constants.TIMEZONE);
         LocalDate endDate = request.getEndDate();
         if (endDate == null) {
             endDate = seasonDates.defaultEndDate(previousSeasonEnd);
             if (!endDate.isAfter(startDate)) {
-                endDate = seasonDates.defaultEndDate(startDate.minusDays(1)); // the previous season ended ages ago --> count the season length from the new start instead
+                // The previous season ended ages ago --> count the season length from the new start instead
+                endDate = seasonDates.defaultEndDate(startDate.minusDays(1));
             }
         }
 
         PriceWindowVO defaultPriceWindow = PriceWindowVO.of(startDate, priceWindowDays);
         PriceWindowVO priceWindow = request.getPriceWindow();
+        LocalDate priceWindowStart = defaultPriceWindow.getStart();
+        LocalDate priceWindowEnd = defaultPriceWindow.getEnd();
+        if (priceWindow != null) {
+            if (priceWindow.getStart() != null) priceWindowStart = priceWindow.getStart();
+            if (priceWindow.getEnd() != null) priceWindowEnd = priceWindow.getEnd();
+        }
 
         return new SeasonPreparationRequestVO(
                 startDate,
                 endDate,
-                new PriceWindowVO(
-                        priceWindow != null && priceWindow.getStart() != null ? priceWindow.getStart() : defaultPriceWindow.getStart(),
-                        priceWindow != null && priceWindow.getEnd() != null ? priceWindow.getEnd() : defaultPriceWindow.getEnd()
-                ),
+                new PriceWindowVO(priceWindowStart, priceWindowEnd),
                 request.getMetaSource() != null ? request.getMetaSource() : MetaShareSource.MTGGOLDFISH,
                 request.getUploadedBans(),
                 request.getUploadedExtendedBans(),
@@ -336,7 +360,14 @@ public class SeasonPreparationService {
             SeasonDraftVO draft = prepareSeason(request);
             if (draft == null) {
                 log.info("Preparing a new season was cancelled. Nothing was written.");
-                preparation = new SeasonPreparationStatusVO(SeasonPreparationState.CANCELLED, preparation.getStepId(), preparation.getStep(), preparation.getStartedAt(), LocalDateTime.now(Constants.TIMEZONE), null);
+                preparation = new SeasonPreparationStatusVO(
+                        SeasonPreparationState.CANCELLED,
+                        preparation.getStepId(),
+                        preparation.getStep(),
+                        preparation.getStartedAt(),
+                        LocalDateTime.now(Constants.TIMEZONE),
+                        null
+                );
                 return;
             }
 
@@ -358,7 +389,8 @@ public class SeasonPreparationService {
                     LocalDateTime.now(Constants.TIMEZONE),
                     throwable.getMessage() != null ? throwable.getMessage() : throwable.toString()
             );
-            if (throwable instanceof Error) throw (Error) throwable; // an out of memory is not ours to swallow
+            // An out of memory is not ours to swallow
+            if (throwable instanceof Error) throw (Error) throwable;
         }
     }
 
@@ -373,14 +405,18 @@ public class SeasonPreparationService {
         startStep(SeasonPreparationStep.READING_ALL_PRINTINGS, "Reading AllPrintings.json");
         MtgJsonPrintingsVO printings = mtgJsonClient.fetchPrintings(seasonArchive);
         LocalDate lastPricedDay = printings.getMetaDate();
-        if (lastPricedDay != null && request.getPriceWindow().getEnd().isAfter(lastPricedDay.plusDays(1))) {
-            throw new IllegalStateException("MTGJSON has prices until " + lastPricedDay + ", the price window ends " + request.getPriceWindow().getEnd()
-                    + " --> prepare on the season start date or pass an earlier priceWindowEnd.");
+        if (lastPricedDay != null) {
+            if (request.getPriceWindow().getEnd().isAfter(lastPricedDay.plusDays(1))) {
+                throw new IllegalStateException("MTGJSON has prices until " + lastPricedDay + ","
+                        + " the price window ends " + request.getPriceWindow().getEnd()
+                        + " --> prepare on the season start date or pass an earlier priceWindowEnd.");
+            }
         }
         if (cancelRequested.get()) return null;
 
         startStep(SeasonPreparationStep.READING_ALL_PRICES, "Reading AllPrices.json");
-        MtgJsonPricesVO prices = mtgJsonClient.fetchPrices(printings.getPrintingsByUuid(), request.getPriceWindow(), seasonArchive);
+        MtgJsonPricesVO prices =
+                mtgJsonClient.fetchPrices(printings.getPrintingsByUuid(), request.getPriceWindow(), seasonArchive);
         if (cancelRequested.get()) return null;
 
         startStep(SeasonPreparationStep.READING_META_SHARES, "Reading meta shares from " + request.getMetaSource());
@@ -388,7 +424,10 @@ public class SeasonPreparationService {
         writeArchiveFile(seasonArchive, STAPLES_FILE, metaShares);
         if (cancelRequested.get()) return null;
 
-        startStep(SeasonPreparationStep.ASSEMBLING_THE_DRAFT, "Calculating budget points and assembling the draft - the big step");
+        startStep(
+                SeasonPreparationStep.ASSEMBLING_THE_DRAFT,
+                "Calculating budget points and assembling the draft - the big step"
+        );
         AssembledDraftVO assembledDraft = assemble(
                 printings,
                 prices,
@@ -405,14 +444,26 @@ public class SeasonPreparationService {
         SeasonDraftVO draft = toDraft(assembledDraft.getReport(), printings, request, currentSeason);
         seasonDraftRepository.replace(draft, assembledDraft.getCards());
         pruneArchive(archiveDirectory, archivedSeasons);
-        log.info("{} / {} | All done. Season {} is ready for review with {} cards.", TOTAL_STEPS, TOTAL_STEPS, draft.getSeasonNumber(), assembledDraft.getCards().size());
+        log.info("{} / {} | All done. Season {} is ready for review with {} cards.",
+                TOTAL_STEPS,
+                TOTAL_STEPS,
+                draft.getSeasonNumber(),
+                assembledDraft.getCards().size()
+        );
 
         return draft;
     }
 
     private void startStep(SeasonPreparationStep step, String description) {
         log.info("{} / {} | {}", step.getNumber(), TOTAL_STEPS, description);
-        preparation = new SeasonPreparationStatusVO(SeasonPreparationState.RUNNING, step, description, preparation.getStartedAt(), null, null);
+        preparation = new SeasonPreparationStatusVO(
+                SeasonPreparationState.RUNNING,
+                step,
+                description,
+                preparation.getStartedAt(),
+                null,
+                null
+        );
     }
 
     private MetaSharesVO fetchMetaShares(SeasonPreparationRequestVO request) {
@@ -420,7 +471,8 @@ public class SeasonPreparationService {
             return MetaSharesVO.fromBanFiles(request.getUploadedBans(), request.getUploadedExtendedBans());
         }
 
-        MetaGameSourceClient metaGameSourceClient = request.getMetaSource() == MetaShareSource.MTGTOP8 ? mtgTop8Client : mtgGoldfishClient;
+        MetaGameSourceClient metaGameSourceClient =
+                request.getMetaSource() == MetaShareSource.MTGTOP8 ? mtgTop8Client : mtgGoldfishClient;
         Map<MtgFormat, List<Staple>> top50 = new EnumMap<>(MtgFormat.class);
         Map<MtgFormat, List<Staple>> top150 = new EnumMap<>(MtgFormat.class);
         for (MtgFormat mtgFormat : MtgFormat.values()) {
@@ -431,7 +483,12 @@ public class SeasonPreparationService {
         return MetaSharesVO.fromStaples(request.getMetaSource(), top50, top150);
     }
 
-    private SeasonDraftVO toDraft(SeasonDraftReportVO report, MtgJsonPrintingsVO printings, SeasonPreparationRequestVO request, Season currentSeason) {
+    private SeasonDraftVO toDraft(
+            SeasonDraftReportVO report,
+            MtgJsonPrintingsVO printings,
+            SeasonPreparationRequestVO request,
+            Season currentSeason
+    ) {
         return new SeasonDraftVO(
                 0,
                 report.getSeasonNumber(),
@@ -490,13 +547,14 @@ public class SeasonPreparationService {
         }
     }
 
-    // The season we just wrote is the newest one, so it always survives
+    /** The season we just wrote is the newest one, so it always survives. */
     public static void pruneArchive(Path archiveDirectory, int archivedSeasons) {
         if (archivedSeasons <= 0) return;
 
         try {
             List<Path> seasonDirectories = new ArrayList<>();
-            try (DirectoryStream<Path> directories = Files.newDirectoryStream(archiveDirectory, SEASON_DIRECTORY_PREFIX + "*")) {
+            String seasonDirectoryGlob = SEASON_DIRECTORY_PREFIX + "*";
+            try (DirectoryStream<Path> directories = Files.newDirectoryStream(archiveDirectory, seasonDirectoryGlob)) {
                 for (Path directory : directories) {
                     if (Files.isDirectory(directory)) seasonDirectories.add(directory);
                 }
@@ -513,11 +571,13 @@ public class SeasonPreparationService {
 
     private static int seasonNumberOf(Path seasonDirectory) {
         String seasonNumber = seasonDirectory.getFileName().toString().substring(SEASON_DIRECTORY_PREFIX.length());
-        if (!seasonNumber.matches("[0-9]+")) return 0; // whatever that is, it is the first to go
+        // Whatever that is, it is the first to go
+        if (!seasonNumber.matches("[0-9]+")) return 0;
 
         return Integer.parseInt(seasonNumber);
     }
 
+    /** false = there is no archive for that season, or it couldn't be deleted */
     public static boolean deleteArchive(Path archiveDirectory, int seasonNumber) {
         Path seasonDirectory = archiveDirectory.resolve(SEASON_DIRECTORY_PREFIX + seasonNumber);
         if (!Files.isDirectory(seasonDirectory)) return false;
@@ -562,10 +622,13 @@ public class SeasonPreparationService {
             existingCardsByOracleId.put(existingCard.getOracleId(), existingCard);
         }
 
-        // Playtest and joke cards share their normalized name with the real card often enough, and the order of the sets in the file is nothing to decide that by
+        // Playtest and joke cards share their normalized name with the real card often enough,
+        // and the order of the sets in the file is nothing to decide that by
         Map<String, String> legalNamesByNormalizedName = new HashMap<>(printings.getCardsByName().size());
         for (MtgJsonCard card : printings.getCardsByName().values()) {
-            if (!card.isVintageLegal() || card.getOracleId() == null || CasualChallengeRules.isFlipStyleName(card.getName())) continue;
+            if (!card.isVintageLegal()) continue;
+            if (card.getOracleId() == null) continue;
+            if (CasualChallengeRules.isFlipStyleName(card.getName())) continue;
 
             legalNamesByNormalizedName.putIfAbsent(CardNameNormalizer.normalize(card.getName()), card.getName());
         }
@@ -576,12 +639,22 @@ public class SeasonPreparationService {
 
         for (MtgJsonCard card : printings.getCardsByName().values()) {
             String cardName = card.getName();
-            if (CasualChallengeRules.isFlipStyleName(cardName) || card.getOracleId() == null) continue;
+            if (CasualChallengeRules.isFlipStyleName(cardName)) continue;
+            if (card.getOracleId() == null) continue;
 
             Card cardWithSameName = existingCardsByName.get(cardName);
             Card cardWithSameOracleId = existingCardsByOracleId.get(card.getOracleId());
             String normalizedName = CardNameNormalizer.normalize(cardName);
-            String skipReason = findSkipReason(card, normalizedName, cardWithSameName, cardWithSameOracleId, existingCardsByNormalizedName, namesByNormalizedName, namesByOracleId, legalNamesByNormalizedName);
+            String skipReason = findSkipReason(
+                    card,
+                    normalizedName,
+                    cardWithSameName,
+                    cardWithSameOracleId,
+                    existingCardsByNormalizedName,
+                    namesByNormalizedName,
+                    namesByOracleId,
+                    legalNamesByNormalizedName
+            );
             // skip_reason is a varchar(255) and card names can be silly long
             if (skipReason != null) {
                 if (skipReason.length() > MAX_SKIP_REASON_LENGTH) {
@@ -595,11 +668,14 @@ public class SeasonPreparationService {
 
             boolean isNewCard = true;
             UUID previousOracleId = null;
-            if (cardWithSameName != null && cardWithSameName.getOracleId().equals(card.getOracleId())) {
-                isNewCard = false;
-            } else if (cardWithSameName != null) {
-                // The card kept its name but got a new oracle id --> commit moves the existing rows over and has nothing left to insert
-                previousOracleId = cardWithSameName.getOracleId();
+            if (cardWithSameName != null) {
+                if (cardWithSameName.getOracleId().equals(card.getOracleId())) {
+                    isNewCard = false;
+                } else {
+                    // The card kept its name but got a new oracle id
+                    // --> commit moves the existing rows over and has nothing left to insert
+                    previousOracleId = cardWithSameName.getOracleId();
+                }
             } else if (cardWithSameOracleId != null) {
                 isNewCard = false;
             }
@@ -629,8 +705,10 @@ public class SeasonPreparationService {
             ));
         }
 
-        // The card table also holds cards that have no printing we may price any more (acorn only, playtest only, oversized only).
-        // Dropping their season row would make them vanish from the API instead of answering "not legal" --> keep them.
+        // The card table also holds cards that have no printing we may price any more
+        // (acorn only, playtest only, oversized only).
+        // Dropping their season row would make them vanish from the API instead of answering "not legal"
+        // --> keep them.
         Set<UUID> draftedOracleIds = new HashSet<>(cards.size());
         for (SeasonDraftCardVO card : cards) {
             if (card.getSkipReason() != null) continue;
@@ -658,7 +736,20 @@ public class SeasonPreparationService {
             ));
         }
 
-        return new AssembledDraftVO(cards, buildReport(cards, existingCardsByOracleId, previousSeasonData, printings, metaShares, budgetPoints, prices, request, currentSeason, seasonDates));
+        SeasonDraftReportVO report = buildReport(
+                cards,
+                existingCardsByOracleId,
+                previousSeasonData,
+                printings,
+                metaShares,
+                budgetPoints,
+                prices,
+                request,
+                currentSeason,
+                seasonDates
+        );
+
+        return new AssembledDraftVO(cards, report);
     }
 
     /**
@@ -784,7 +875,8 @@ public class SeasonPreparationService {
             }
         }
 
-        double exchangeRate = exchangeRateCount > 0 ? totalExchangeRate / exchangeRateCount : 0;
+        double exchangeRate = 0;
+        if (exchangeRateCount > 0) exchangeRate = totalExchangeRate / exchangeRateCount;
         double adjustedExchangeRate = BudgetPointsUtil.adjustExchangeRate(exchangeRate);
         log.info("Average exchange rate is {}, adjusted to {}.", exchangeRate, adjustedExchangeRate);
 
@@ -974,65 +1066,94 @@ public class SeasonPreparationService {
 
         for (SeasonDraftCardVO card : cards) {
             if (card.getSkipReason() != null) {
-                skippedCards.add(new SeasonDraftReportVO.LeftOutCardVO(card.getName(), card.getOracleId(), card.getSkipReason()));
+                skippedCards.add(new SeasonDraftReportVO.LeftOutCardVO(
+                        card.getName(),
+                        card.getOracleId(),
+                        card.getSkipReason()
+                ));
                 continue;
             }
 
             cardCount++;
             legalities.merge(card.getLegality(), 1, Integer::sum);
-            if (card.isNewCard() && card.getPreviousOracleId() == null) newCardCount++;
+            if (card.isNewCard()) {
+                if (card.getPreviousOracleId() == null) newCardCount++;
+            }
             if (card.getBudgetPoints() == 0) cardsWithoutPrice++;
             if (!printings.getCardsByName().containsKey(card.getName())) {
-                keptCards.add(new SeasonDraftReportVO.LeftOutCardVO(card.getName(), card.getOracleId(), "no eligible printing this season, kept as not legal"));
+                keptCards.add(new SeasonDraftReportVO.LeftOutCardVO(
+                        card.getName(),
+                        card.getOracleId(),
+                        "no eligible printing this season, kept as not legal"
+                ));
             }
 
             Card existingCard = existingCardsByOracleId.get(card.getOracleId());
             if (card.getPreviousOracleId() != null) {
-                oracleIdChanges.add(new SeasonDraftReportVO.OracleIdChangeVO(card.getName(), card.getPreviousOracleId(), card.getOracleId(), printings.getCardsByName().get(card.getName()).getFirstSetCode()));
-                existingCard = existingCardsByOracleId.get(card.getPreviousOracleId()); // still sitting on its old oracle id --> it can be renamed on top of the remap
+                oracleIdChanges.add(new SeasonDraftReportVO.OracleIdChangeVO(
+                        card.getName(),
+                        card.getPreviousOracleId(),
+                        card.getOracleId(),
+                        printings.getCardsByName().get(card.getName()).getFirstSetCode()
+                ));
+                // Still sitting on its old oracle id --> it can be renamed on top of the remap
+                existingCard = existingCardsByOracleId.get(card.getPreviousOracleId());
             }
-            if (existingCard != null && !existingCard.getName().equals(card.getName())) {
-                renamedCards.add(toRenamedCard(existingCard, card));
-            } else if (existingCard != null && !existingCard.getNormalizedName().equals(card.getNormalizedName())) {
-                // Same name, other normalized name: the old python tool turned apostrophes into a dash --> the commit repairs those rows on the way
-                normalizedNameFixes.add(toRenamedCard(existingCard, card));
+            if (existingCard != null) {
+                if (!existingCard.getName().equals(card.getName())) {
+                    renamedCards.add(toRenamedCard(existingCard, card));
+                } else if (!existingCard.getNormalizedName().equals(card.getNormalizedName())) {
+                    // Same name, other normalized name: the old python tool turned apostrophes into a dash
+                    // --> the commit repairs those rows on the way
+                    normalizedNameFixes.add(toRenamedCard(existingCard, card));
+                }
             }
 
-            UUID previousOracleId = card.getPreviousOracleId() != null ? card.getPreviousOracleId() : card.getOracleId();
+            UUID previousOracleId =
+                    card.getPreviousOracleId() != null ? card.getPreviousOracleId() : card.getOracleId();
             knownOracleIds.add(previousOracleId);
             CardSeasonData previousData = previousDataByOracleId.get(previousOracleId);
             Legality previousLegality = previousData != null ? previousData.getLegality() : null;
 
-            if (card.getLegality() == Legality.BANNED && previousLegality != Legality.BANNED) {
-                newBans.add(toBanChange(card));
-            } else if (card.getLegality() != Legality.BANNED && previousLegality == Legality.BANNED) {
+            if (card.getLegality() == Legality.BANNED) {
+                if (previousLegality != Legality.BANNED) newBans.add(toBanChange(card));
+            } else if (previousLegality == Legality.BANNED) {
                 unbans.add(toBanChange(card));
             }
-            if (card.getLegality() == Legality.EXTENDED && previousLegality != Legality.EXTENDED) {
-                newExtended.add(toBanChange(card));
-            } else if (card.getLegality() != Legality.EXTENDED && previousLegality == Legality.EXTENDED) {
+            if (card.getLegality() == Legality.EXTENDED) {
+                if (previousLegality != Legality.EXTENDED) newExtended.add(toBanChange(card));
+            } else if (previousLegality == Legality.EXTENDED) {
                 noLongerExtended.add(toBanChange(card));
             }
 
-            if (previousData == null || previousData.getBudgetPoints() == null) continue;
+            if (previousData == null) continue;
+            if (previousData.getBudgetPoints() == null) continue;
 
             int previousBudgetPoints = previousData.getBudgetPoints();
             int change = card.getBudgetPoints() - previousBudgetPoints;
-            SeasonDraftReportVO.BudgetPointChangeVO budgetPointChange = new SeasonDraftReportVO.BudgetPointChangeVO(card.getName(), previousBudgetPoints, card.getBudgetPoints(), change);
+            SeasonDraftReportVO.BudgetPointChangeVO budgetPointChange = new SeasonDraftReportVO.BudgetPointChangeVO(
+                    card.getName(),
+                    previousBudgetPoints,
+                    card.getBudgetPoints(),
+                    change
+            );
             if (change > 0) {
                 increases.add(budgetPointChange);
             } else if (change < 0) {
                 decreases.add(budgetPointChange);
             }
             if (isRelevantChange(change, previousBudgetPoints)) budgetPointChanges.add(budgetPointChange);
-            if (card.getBudgetPoints() == 0 && previousBudgetPoints > 0) zeroBudgetPointCards.add(budgetPointChange);
+            if (card.getBudgetPoints() == 0) {
+                if (previousBudgetPoints > 0) zeroBudgetPointCards.add(budgetPointChange);
+            }
         }
 
         for (MtgJsonCard card : printings.getCardsByName().values()) {
             // A card without an oracle id can't even have a draft row, but the reviewer should still hear about it
-            if (card.getOracleId() == null && !CasualChallengeRules.isFlipStyleName(card.getName())) {
-                skippedCards.add(new SeasonDraftReportVO.LeftOutCardVO(card.getName(), null, "no oracle id"));
-            }
+            if (card.getOracleId() != null) continue;
+            if (CasualChallengeRules.isFlipStyleName(card.getName())) continue;
+
+            skippedCards.add(new SeasonDraftReportVO.LeftOutCardVO(card.getName(), null, "no oracle id"));
         }
 
         Map<String, String> skipReasonsByName = new HashMap<>(skippedCards.size());
@@ -1046,7 +1167,11 @@ public class SeasonPreparationService {
 
             Card existingCard = existingCardsByOracleId.get(cardSeasonData.getCardOracleId());
             String cardName = existingCard != null ? existingCard.getName() : null;
-            missingCards.add(new SeasonDraftReportVO.LeftOutCardVO(cardName, cardSeasonData.getCardOracleId(), findMissingReason(cardName, skipReasonsByName)));
+            missingCards.add(new SeasonDraftReportVO.LeftOutCardVO(
+                    cardName,
+                    cardSeasonData.getCardOracleId(),
+                    findMissingReason(cardName, skipReasonsByName)
+            ));
         }
         missingCards.addAll(keptCards);
 
@@ -1054,7 +1179,9 @@ public class SeasonPreparationService {
         unbans.sort(Comparator.comparing(SeasonDraftReportVO.BanChangeVO::getName));
         newExtended.sort(Comparator.comparing(SeasonDraftReportVO.BanChangeVO::getName));
         noLongerExtended.sort(Comparator.comparing(SeasonDraftReportVO.BanChangeVO::getName));
-        budgetPointChanges.sort(Comparator.comparingInt((SeasonDraftReportVO.BudgetPointChangeVO budgetPointChange) -> Math.abs(budgetPointChange.getChange())).reversed());
+        Comparator<SeasonDraftReportVO.BudgetPointChangeVO> byAbsoluteChange =
+                Comparator.comparingInt(budgetPointChange -> Math.abs(budgetPointChange.getChange()));
+        budgetPointChanges.sort(byAbsoluteChange.reversed());
         increases.sort(Comparator.comparingInt(SeasonDraftReportVO.BudgetPointChangeVO::getChange).reversed());
         decreases.sort(Comparator.comparingInt(SeasonDraftReportVO.BudgetPointChangeVO::getChange));
 
@@ -1120,7 +1247,12 @@ public class SeasonPreparationService {
         );
     }
 
-    // MTGJSON knows the upcoming sets long before they are out --> a set only counts once a card it printed first became playable. Commander sets, promos etc. count toward their main set, that's what the announcement lists.
+    /**
+     * MTGJSON knows the upcoming sets long before they are out
+     * --> a set only counts once a card it printed first became playable.
+     * <p>
+     * Commander sets, promos etc. count toward their main set, that's what the announcement lists.
+     */
     private static List<MtgSetVO> findSetsReleased(
             List<SeasonDraftCardVO> cards,
             MtgJsonPrintingsVO printings,
@@ -1134,15 +1266,20 @@ public class SeasonPreparationService {
 
         Map<String, Integer> newCardCountsBySetCode = new HashMap<>();
         for (SeasonDraftCardVO card : cards) {
-            if (card.getSkipReason() != null || card.getLegality() == Legality.NOT_LEGAL) continue;
+            if (card.getSkipReason() != null) continue;
+            if (card.getLegality() == Legality.NOT_LEGAL) continue;
 
-            UUID previousOracleId = card.getPreviousOracleId() != null ? card.getPreviousOracleId() : card.getOracleId();
+            UUID previousOracleId =
+                    card.getPreviousOracleId() != null ? card.getPreviousOracleId() : card.getOracleId();
             CardSeasonData previousData = previousDataByOracleId.get(previousOracleId);
             Legality previousLegality = previousData != null ? previousData.getLegality() : null;
-            if (previousLegality != null && previousLegality != Legality.NOT_LEGAL) continue;
+            if (previousLegality != null) {
+                if (previousLegality != Legality.NOT_LEGAL) continue;
+            }
 
             MtgJsonCard mtgJsonCard = printings.getCardsByName().get(card.getName());
-            if (mtgJsonCard == null) continue; // kept from the card table, no printing this season
+            // Kept from the card table, no printing this season
+            if (mtgJsonCard == null) continue;
             // An old card whose price only came back this season is no news
             if (mtgJsonCard.getFirstReleaseDate() == null) continue;
             if (mtgJsonCard.getFirstReleaseDate().isBefore(currentSeason.getStartDate())) continue;
@@ -1180,22 +1317,39 @@ public class SeasonPreparationService {
             childCodes.sort(Comparator.naturalOrder());
             List<MtgSetVO.ChildSetVO> childSets = new ArrayList<>(childCodes.size());
             for (String childCode : childCodes) {
-                childSets.add(new MtgSetVO.ChildSetVO(setsByCode.get(childCode).getName(), childCode, newCardCountsBySetCode.get(childCode)));
+                childSets.add(new MtgSetVO.ChildSetVO(
+                        setsByCode.get(childCode).getName(),
+                        childCode,
+                        newCardCountsBySetCode.get(childCode)
+                ));
             }
-            setsReleased.add(new MtgSetVO(mtgSet.getName(), mtgSet.getCode(), mtgSet.getReleaseDate(), mtgSet.getSetType(), commanderDecksByRootCode.get(mtgSet.getCode()), childSets, newCardCount));
+            setsReleased.add(new MtgSetVO(
+                    mtgSet.getName(),
+                    mtgSet.getCode(),
+                    mtgSet.getReleaseDate(),
+                    mtgSet.getSetType(),
+                    commanderDecksByRootCode.get(mtgSet.getCode()),
+                    childSets,
+                    newCardCount
+            ));
         }
         setsReleased.sort(Comparator.comparing(MtgSetVO::getReleaseDate).thenComparing(MtgSetVO::getCode));
 
         return setsReleased;
     }
 
-    // A parent that isn't in the dump ends the walk, and so does a loop in the parent codes
+    /** A parent that isn't in the dump ends the walk, and so does a loop in the parent codes. */
     private static String rootCodeOf(String setCode, Map<String, MtgJsonSet> setsByCode) {
         Set<String> visitedCodes = new HashSet<>();
         String rootCode = setCode;
         MtgJsonSet mtgSet = setsByCode.get(rootCode);
-        while (mtgSet != null && mtgSet.getParentCode() != null && setsByCode.containsKey(mtgSet.getParentCode()) && visitedCodes.add(rootCode)) {
-            rootCode = mtgSet.getParentCode();
+        while (mtgSet != null) {
+            String parentCode = mtgSet.getParentCode();
+            if (parentCode == null) break;
+            if (!setsByCode.containsKey(parentCode)) break;
+            if (!visitedCodes.add(rootCode)) break;
+
+            rootCode = parentCode;
             mtgSet = setsByCode.get(rootCode);
         }
 
@@ -1215,7 +1369,8 @@ public class SeasonPreparationService {
         List<String> unbanNames = new ArrayList<>(unbans.size());
         for (SeasonDraftReportVO.BanChangeVO unban : unbans) {
             // A card that is still banned in paper or too expensive to play stays out of the unban deck
-            if (unban.getBannedIn() != null || unban.isVintageRestricted()) continue;
+            if (unban.getBannedIn() != null) continue;
+            if (unban.isVintageRestricted()) continue;
             if (unban.getBudgetPoints() > CasualChallengeRules.MAX_BUDGET_POINTS) continue;
 
             unbanNames.add(unban.getName());
@@ -1223,7 +1378,8 @@ public class SeasonPreparationService {
 
         List<String> currentBanNames = new ArrayList<>();
         for (SeasonDraftCardVO card : cards) {
-            if (card.getSkipReason() != null || card.getLegality() != Legality.BANNED) continue;
+            if (card.getSkipReason() != null) continue;
+            if (card.getLegality() != Legality.BANNED) continue;
             if (card.getBudgetPoints() > CasualChallengeRules.MAX_BUDGET_POINTS) continue;
 
             currentBanNames.add(card.getName());
@@ -1233,7 +1389,8 @@ public class SeasonPreparationService {
         return new SeasonDraftReportVO.ScryfallDecksVO(
                 String.join("\n", newBanNames),
                 String.join("\n", unbanNames),
-                String.join("\n", currentBanNames));
+                String.join("\n", currentBanNames)
+        );
     }
 
     private static String findSkipReason(
@@ -1249,7 +1406,8 @@ public class SeasonPreparationService {
         String cardName = card.getName();
         UUID oracleId = card.getOracleId();
 
-        // A card MTGJSON knows no vintage legality for never takes the name away from one it does, whichever of the two comes first
+        // A card MTGJSON knows no vintage legality for never takes the name away from one it does,
+        // whichever of the two comes first
         String legalCardName = card.isVintageLegal() ? null : legalNamesByNormalizedName.get(normalizedName);
         if (legalCardName != null) {
             return "duplicate normalized name '" + normalizedName + "' (first: '" + legalCardName + "')";
@@ -1264,17 +1422,25 @@ public class SeasonPreparationService {
         if (firstCardName != null) return "duplicate oracle id '" + oracleId + "' (first: '" + firstCardName + "')";
 
         Card existingCard = existingCardsByNormalizedName.get(normalizedName);
-        if (existingCard != null && !existingCard.getName().equals(cardName) && !existingCard.getOracleId().equals(oracleId)) {
+        if (isAnotherCard(existingCard, cardName, oracleId)) {
             return "normalized name '" + normalizedName + "' already belongs to '" + existingCard.getName() + "'";
         }
 
         // A remap onto an oracle id that another card already holds would only blow up in the commit transaction
-        if (cardWithSameName != null && !cardWithSameName.getOracleId().equals(oracleId)
-                && cardWithSameOracleId != null && !cardWithSameOracleId.getName().equals(cardName)) {
-            return "oracle id '" + oracleId + "' already belongs to '" + cardWithSameOracleId.getName() + "'";
-        }
+        if (cardWithSameName == null) return null;
+        if (cardWithSameName.getOracleId().equals(oracleId)) return null;
+        if (cardWithSameOracleId == null) return null;
+        if (cardWithSameOracleId.getName().equals(cardName)) return null;
 
-        return null;
+        return "oracle id '" + oracleId + "' already belongs to '" + cardWithSameOracleId.getName() + "'";
+    }
+
+    /** Neither the name nor the oracle id match --> it's a different card. */
+    private static boolean isAnotherCard(Card existingCard, String cardName, UUID oracleId) {
+        if (existingCard == null) return false;
+        if (existingCard.getName().equals(cardName)) return false;
+
+        return !existingCard.getOracleId().equals(oracleId);
     }
 
     private static SeasonDraftReportVO.RenamedCardVO toRenamedCard(Card existingCard, SeasonDraftCardVO card) {
@@ -1283,7 +1449,8 @@ public class SeasonPreparationService {
                 existingCard.getName(),
                 existingCard.getNormalizedName(),
                 card.getName(),
-                card.getNormalizedName());
+                card.getNormalizedName()
+        );
     }
 
     private static String findMissingReason(String cardName, Map<String, String> skipReasonsByName) {
@@ -1305,20 +1472,35 @@ public class SeasonPreparationService {
         if (card.getMetaShareVintage() != null) metaShares.put(MtgFormat.VINTAGE, card.getMetaShareVintage());
         if (card.getMetaSharePauper() != null) metaShares.put(MtgFormat.PAUPER, card.getMetaSharePauper());
 
-        return new SeasonDraftReportVO.BanChangeVO(card.getName(), card.getBudgetPoints(), metaShares, card.getBannedIn(), card.isVintageRestricted());
+        return new SeasonDraftReportVO.BanChangeVO(
+                card.getName(),
+                card.getBudgetPoints(),
+                metaShares,
+                card.getBannedIn(),
+                card.isVintageRestricted()
+        );
     }
 
-    private static BigDecimal metaShareOf(Map<MtgFormat, BigDecimal> extendedBan, Map<MtgFormat, BigDecimal> ban, MtgFormat mtgFormat) {
+    private static BigDecimal metaShareOf(
+            Map<MtgFormat, BigDecimal> extendedBan,
+            Map<MtgFormat, BigDecimal> ban,
+            MtgFormat mtgFormat
+    ) {
         BigDecimal metaShare = extendedBan != null ? extendedBan.get(mtgFormat) : null;
-        if (metaShare == null && ban != null) metaShare = ban.get(mtgFormat);
+        if (metaShare == null) {
+            if (ban != null) metaShare = ban.get(mtgFormat);
+        }
         if (metaShare == null) return null;
 
-        return metaShare.setScale(3, RoundingMode.HALF_UP); // the ban files come with two decimals, the column holds three
+        // The ban files come with two decimals, the column holds three
+        return metaShare.setScale(3, RoundingMode.HALF_UP);
     }
 
     private static boolean isRelevantChange(int change, int previousBudgetPoints) {
         int absoluteChange = Math.abs(change);
-        return absoluteChange >= RELEVANT_CHANGE_IN_BUDGET_POINTS && absoluteChange * 100 >= previousBudgetPoints * RELEVANT_CHANGE_IN_PERCENT;
+        if (absoluteChange < RELEVANT_CHANGE_IN_BUDGET_POINTS) return false;
+
+        return absoluteChange * 100 >= previousBudgetPoints * RELEVANT_CHANGE_IN_PERCENT;
     }
 
 }

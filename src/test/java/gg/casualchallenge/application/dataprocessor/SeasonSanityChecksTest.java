@@ -40,7 +40,10 @@ class SeasonSanityChecksTest {
         LocalDate priceWindowEnd = LocalDate.of(2026, 9, 20);
 
         assertEquals("Priced days", SeasonSanityChecks.pricedDays(67, priceWindowStart, priceWindowEnd).getLabel());
-        assertEquals("the whole window, give or take a day", SeasonSanityChecks.pricedDays(67, priceWindowStart, priceWindowEnd).getExpectation());
+        assertEquals(
+                "the whole window, give or take a day",
+                SeasonSanityChecks.pricedDays(67, priceWindowStart, priceWindowEnd).getExpectation()
+        );
         assertEquals("70 of 70", SeasonSanityChecks.pricedDays(70, priceWindowStart, priceWindowEnd).getActual());
         assertEquals("67 of 70", SeasonSanityChecks.pricedDays(67, priceWindowStart, priceWindowEnd).getActual());
         assertEquals("66 of 70", SeasonSanityChecks.pricedDays(66, priceWindowStart, priceWindowEnd).getActual());
@@ -52,13 +55,34 @@ class SeasonSanityChecksTest {
 
     @Test
     void testTopRows() {
-        assertEquals("Top 50 rows", SeasonSanityChecks.topRows("Top 50 rows", rowCounts(50, 50, 50, 50, 50, 50), 50).getLabel());
-        assertEquals("50 per format", SeasonSanityChecks.topRows("Top 50 rows", rowCounts(50, 50, 50, 50, 50, 50), 50).getActual());
-        assertEquals("50 per format", SeasonSanityChecks.topRows("Top 50 rows", rowCounts(50, 50, 49, 50, 50, 50), 50).getExpectation());
-        assertEquals("Pauper 49", SeasonSanityChecks.topRows("Top 50 rows", rowCounts(50, 50, 49, 50, 50, 50), 50).getActual());
-        assertEquals("Pioneer 51, Pauper 49", SeasonSanityChecks.topRows("Top 50 rows", rowCounts(50, 51, 49, 50, 50, 50), 50).getActual());
-        assertEquals("150 per format", SeasonSanityChecks.topRows("Top 150 rows", rowCounts(150, 150, 150, 150, 150, 150), 150).getActual());
-        assertEquals("Vintage 148", SeasonSanityChecks.topRows("Top 150 rows", rowCounts(150, 150, 150, 150, 150, 148), 150).getActual());
+        assertEquals(
+                "Top 50 rows",
+                SeasonSanityChecks.topRows("Top 50 rows", rowCounts(50, 50, 50, 50, 50, 50), 50).getLabel()
+        );
+        assertEquals(
+                "50 per format",
+                SeasonSanityChecks.topRows("Top 50 rows", rowCounts(50, 50, 50, 50, 50, 50), 50).getActual()
+        );
+        assertEquals(
+                "50 per format",
+                SeasonSanityChecks.topRows("Top 50 rows", rowCounts(50, 50, 49, 50, 50, 50), 50).getExpectation()
+        );
+        assertEquals(
+                "Pauper 49",
+                SeasonSanityChecks.topRows("Top 50 rows", rowCounts(50, 50, 49, 50, 50, 50), 50).getActual()
+        );
+        assertEquals(
+                "Pioneer 51, Pauper 49",
+                SeasonSanityChecks.topRows("Top 50 rows", rowCounts(50, 51, 49, 50, 50, 50), 50).getActual()
+        );
+        assertEquals(
+                "150 per format",
+                SeasonSanityChecks.topRows("Top 150 rows", rowCounts(150, 150, 150, 150, 150, 150), 150).getActual()
+        );
+        assertEquals(
+                "Vintage 148",
+                SeasonSanityChecks.topRows("Top 150 rows", rowCounts(150, 150, 150, 150, 150, 148), 150).getActual()
+        );
         assertTrue(SeasonSanityChecks.topRows("Top 50 rows", rowCounts(50, 50, 50, 50, 50, 50), 50).isPassing());
         assertFalse(SeasonSanityChecks.topRows("Top 50 rows", rowCounts(50, 50, 49, 50, 50, 50), 50).isPassing());
         assertTrue(SeasonSanityChecks.topRows("Top 50 rows", rowCounts(50, 50, 49, 50, 50, 50), 50).isBlocking());
@@ -69,8 +93,11 @@ class SeasonSanityChecksTest {
         assertEquals("Cards counted twice", SeasonSanityChecks.duplicateMetaShareNames(List.of()).getLabel());
         assertEquals("none", SeasonSanityChecks.duplicateMetaShareNames(List.of()).getActual());
         assertEquals("none", SeasonSanityChecks.duplicateMetaShareNames(List.of()).getExpectation());
-        assertEquals("Lightning Bolt, Brainstorm & Ponder",
-                SeasonSanityChecks.duplicateMetaShareNames(List.of("Lightning Bolt", "Brainstorm & Ponder")).getActual());
+        assertEquals(
+                "Lightning Bolt, Brainstorm & Ponder",
+                SeasonSanityChecks.duplicateMetaShareNames(List.of("Lightning Bolt", "Brainstorm & Ponder"))
+                        .getActual()
+        );
         assertTrue(SeasonSanityChecks.duplicateMetaShareNames(List.of()).isPassing());
         assertFalse(SeasonSanityChecks.duplicateMetaShareNames(List.of("Lightning Bolt")).isPassing());
         assertTrue(SeasonSanityChecks.duplicateMetaShareNames(List.of("Lightning Bolt")).isBlocking());
@@ -88,7 +115,10 @@ class SeasonSanityChecksTest {
         assertEquals("somewhere between 1 and 2.5", SeasonSanityChecks.exchangeRate(1.17, 1.085).getExpectation());
         assertEquals("1.17 USD per EUR, adjusted 1.08", SeasonSanityChecks.exchangeRate(1.17, 1.085).getActual());
         assertEquals("1.00 USD per EUR, adjusted 1.00", SeasonSanityChecks.exchangeRate(1.0, 1.005).getActual());
-        assertEquals("1.60 USD per EUR, adjusted 1.30", SeasonSanityChecks.exchangeRate(1.5987249435463233, 1.2993624717731618).getActual());
+        assertEquals(
+                "1.60 USD per EUR, adjusted 1.30",
+                SeasonSanityChecks.exchangeRate(1.5987249435463233, 1.2993624717731618).getActual()
+        );
         assertTrue(SeasonSanityChecks.exchangeRate(1.17, 1.085).isPassing());
         assertFalse(SeasonSanityChecks.exchangeRate(1.0, 1.0).isPassing());
         assertFalse(SeasonSanityChecks.exchangeRate(2.5, 1.75).isPassing());
@@ -101,11 +131,14 @@ class SeasonSanityChecksTest {
                 {"priceWindowStart": "2026-07-12", "priceWindowEnd": "2026-09-20", "duplicateMetaShareNames": [],
                  "counts": {"cards": 33334, "newCards": 1457, "cardsWithoutPrice": 1153, "pricedDays": 68,
                             "exchangeRate": 1.5987249435463233, "adjustedExchangeRate": 1.2993624717731618,
-                            "top50Rows": {"STANDARD": 50, "PIONEER": 50, "PAUPER": 50, "MODERN": 50, "LEGACY": 50, "VINTAGE": 50},
-                            "top150Rows": {"STANDARD": 150, "PIONEER": 150, "PAUPER": 150, "MODERN": 150, "LEGACY": 150, "VINTAGE": 150}}}""";
+                            "top50Rows": {"STANDARD": 50, "PIONEER": 50, "PAUPER": 50,
+                                          "MODERN": 50, "LEGACY": 50, "VINTAGE": 50},
+                            "top150Rows": {"STANDARD": 150, "PIONEER": 150, "PAUPER": 150,
+                                           "MODERN": 150, "LEGACY": 150, "VINTAGE": 150}}}""";
         ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json().build();
 
-        SeasonSanityChecksVO sanityChecks = SeasonSanityChecks.of(objectMapper.readValue(storedReport, SeasonDraftReportVO.class));
+        SeasonSanityChecksVO sanityChecks =
+                SeasonSanityChecks.of(objectMapper.readValue(storedReport, SeasonDraftReportVO.class));
         List<SeasonSanityChecksVO.SanityCheckVO> checks = sanityChecks.getChecks();
 
         assertEquals(7, checks.size());
@@ -141,14 +174,18 @@ class SeasonSanityChecksTest {
     @Test
     void testOf_withBlockingFailure() throws JsonProcessingException {
         String storedReport = """
-                {"priceWindowStart": "2026-07-12", "priceWindowEnd": "2026-09-20", "duplicateMetaShareNames": ["Lightning Bolt"],
+                {"priceWindowStart": "2026-07-12", "priceWindowEnd": "2026-09-20",
+                 "duplicateMetaShareNames": ["Lightning Bolt"],
                  "counts": {"cards": 33334, "newCards": 1457, "cardsWithoutPrice": 1153, "pricedDays": 68,
                             "exchangeRate": 1.5987249435463233, "adjustedExchangeRate": 1.2993624717731618,
-                            "top50Rows": {"STANDARD": 50, "PIONEER": 50, "PAUPER": 50, "MODERN": 50, "LEGACY": 50, "VINTAGE": 50},
-                            "top150Rows": {"STANDARD": 150, "PIONEER": 150, "PAUPER": 150, "MODERN": 150, "LEGACY": 150, "VINTAGE": 148}}}""";
+                            "top50Rows": {"STANDARD": 50, "PIONEER": 50, "PAUPER": 50,
+                                          "MODERN": 50, "LEGACY": 50, "VINTAGE": 50},
+                            "top150Rows": {"STANDARD": 150, "PIONEER": 150, "PAUPER": 150,
+                                           "MODERN": 150, "LEGACY": 150, "VINTAGE": 148}}}""";
         ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json().build();
 
-        SeasonSanityChecksVO sanityChecks = SeasonSanityChecks.of(objectMapper.readValue(storedReport, SeasonDraftReportVO.class));
+        SeasonSanityChecksVO sanityChecks =
+                SeasonSanityChecks.of(objectMapper.readValue(storedReport, SeasonDraftReportVO.class));
         List<SeasonSanityChecksVO.SanityCheckVO> checks = sanityChecks.getChecks();
 
         assertEquals("Vintage 148", checks.get(3).getActual());
@@ -164,7 +201,14 @@ class SeasonSanityChecksTest {
         assertEquals(List.of("top 150 rows", "cards counted twice"), sanityChecks.getBlockingLabels());
     }
 
-    private static Map<MtgFormat, Integer> rowCounts(int standard, int pioneer, int pauper, int modern, int legacy, int vintage) {
+    private static Map<MtgFormat, Integer> rowCounts(
+            int standard,
+            int pioneer,
+            int pauper,
+            int modern,
+            int legacy,
+            int vintage
+    ) {
         Map<MtgFormat, Integer> rowCounts = new EnumMap<>(MtgFormat.class);
         rowCounts.put(MtgFormat.STANDARD, standard);
         rowCounts.put(MtgFormat.PIONEER, pioneer);

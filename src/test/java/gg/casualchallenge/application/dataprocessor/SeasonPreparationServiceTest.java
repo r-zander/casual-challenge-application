@@ -342,8 +342,8 @@ class SeasonPreparationServiceTest {
         assertNull(priceDetailsByOracleId.get(BEE_BEE_GUN).getPricedBy());
         assertEquals(
                 List.of(
-                        new RebuiltPriceDetailsVO.MismatchVO("Lightning Bolt", null, 60),
-                        new RebuiltPriceDetailsVO.MismatchVO("Sol Ring", 300, 320)
+                        new RebuiltPriceDetailsVO.MismatchVO("Lightning Bolt", null, 60, PriceProvider.CARDMARKET),
+                        new RebuiltPriceDetailsVO.MismatchVO("Sol Ring", 300, 320, PriceProvider.TCGPLAYER)
                 ),
                 matchedPriceDetails.getMismatches()
         );
@@ -351,6 +351,7 @@ class SeasonPreparationServiceTest {
                 List.of(new RebuiltPriceDetailsVO.UnmatchedCardVO("Black Lotus", 599200)),
                 matchedPriceDetails.getUnmatchedCards()
         );
+        assertEquals(1.25, matchedPriceDetails.getAdjustedExchangeRate());
     }
 
     @Test

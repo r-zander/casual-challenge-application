@@ -179,8 +179,12 @@ public class SeasonPreparationControllerV1 {
                     Synchronous and takes a few minutes - a proxy may cut the request off before the answer arrives, \
                     the rebuild finishes anyway and its log line has the same numbers.
 
-                    - `mismatches` are cards priced differently than their stored budget points
+                    - `mismatches` are cards priced differently than their stored budget points, \
+                    `pricedBy` says by which market
                     - `unmatchedCards` are the ones with budget points but no card in the archive
+                    - `adjustedExchangeRate` converts the tcgplayer prices of the rebuilt details, \
+                    `committedAdjustedExchangeRate` is the one the season was committed with \
+                    (null for a season without a committed draft)
                     """
     )
     @ApiResponse(responseCode = "200")

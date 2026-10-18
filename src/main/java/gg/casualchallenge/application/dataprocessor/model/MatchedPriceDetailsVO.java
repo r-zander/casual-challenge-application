@@ -13,4 +13,5 @@ public class MatchedPriceDetailsVO {
     Map<UUID, CardPriceDetailsVO> priceDetailsByOracleId;
     List<RebuiltPriceDetailsVO.MismatchVO> mismatches;
     List<RebuiltPriceDetailsVO.UnmatchedCardVO> unmatchedCards;
+    double adjustedExchangeRate;
 }

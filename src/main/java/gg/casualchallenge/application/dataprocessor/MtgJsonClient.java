@@ -147,6 +147,12 @@ public class MtgJsonClient {
             } catch (IOException e) {
                 throw new RuntimeException("Couldn't read '" + ignoredPrices + "': " + e.getMessage(), e);
             }
+        } else {
+            log.warn(
+                    "The season archive '{}' has no {}, reading it with the list of today.",
+                    seasonDirectory,
+                    IGNORED_PRICES_FILE
+            );
         }
 
         try (ZipInputStream zipStream = new ZipInputStream(new BufferedInputStream(Files.newInputStream(zip)))) {

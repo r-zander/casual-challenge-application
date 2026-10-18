@@ -260,6 +260,23 @@ public class SeasonPreparationService {
                     cardSeasonDataRepository.findAllBySeason(season),
                     window
             );
+            double adjustedExchangeRate = matchedPriceDetails.getAdjustedExchangeRate();
+            Double committedAdjustedExchangeRate = null;
+            if (committedDraft != null) {
+                committedAdjustedExchangeRate = toReport(committedDraft).getCounts().getAdjustedExchangeRate();
+                // Same input, same order of the cards --> the very same double, no tolerance needed
+                if (Double.compare(committedAdjustedExchangeRate, adjustedExchangeRate) != 0) {
+                    log.warn("The archive of season {} converts tcgplayer prices at {},"
+                                    + " but the season was committed with {}"
+                                    + " --> the rebuild doesn't price like the preparation did (IgnoredPrices.json?),"
+                                    + " and every document priced by tcgplayer shows the other rate.",
+                            seasonNumber,
+                            adjustedExchangeRate,
+                            committedAdjustedExchangeRate
+                    );
+                }
+            }
+
             Map<UUID, CardPriceDetailsVO> priceDetailsByOracleId = matchedPriceDetails.getPriceDetailsByOracleId();
             int storedCount = seasonDraftRepository.replacePriceDetails(season.getId(), priceDetailsByOracleId);
 
@@ -272,13 +289,16 @@ public class SeasonPreparationService {
             // A slow synchronous request might get canceled by edge servers, so we also simply log it
             log.info("Rebuilt the price details of season {}. {} cards stored,"
                             + " {} priced differently than their budget points {},"
-                            + " {} with budget points but no card in the archive {}.",
+                            + " {} with budget points but no card in the archive {},"
+                            + " adjusted exchange rate {} (committed with {}).",
                     seasonNumber,
                     storedCount,
                     mismatches.size(),
                     firstMismatches,
                     unmatchedCards.size(),
-                    firstUnmatchedCards
+                    firstUnmatchedCards,
+                    adjustedExchangeRate,
+                    committedAdjustedExchangeRate
             );
 
             return new RebuiltPriceDetailsVO(
@@ -287,7 +307,9 @@ public class SeasonPreparationService {
                     mismatches.size(),
                     firstMismatches,
                     unmatchedCards.size(),
-                    firstUnmatchedCards
+                    firstUnmatchedCards,
+                    adjustedExchangeRate,
+                    committedAdjustedExchangeRate
             );
         } finally {
             rebuildRunning.set(false);
@@ -301,6 +323,15 @@ public class SeasonPreparationService {
         }
         if (!rebuildRunning.compareAndSet(false, true)) {
             throw new IllegalStateException("The price details of a season are being rebuilt already.");
+        }
+    }
+
+    private SeasonDraftReportVO toReport(SeasonDraftVO draft) {
+        try {
+            return objectMapper.readValue(draft.getReport(), SeasonDraftReportVO.class);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Couldn't read the report of the draft"
+                    + " for season " + draft.getSeasonNumber() + ".", e);
         }
     }
 
@@ -800,22 +831,34 @@ public class SeasonPreparationService {
                 continue;
             }
 
-            int recalculatedBudgetPoints = budgetPoints.getPricesByCardName().get(cardName).toBudgetPoints();
+            CardPriceDetailsVO priceDetails = budgetPoints.getPriceDetailsByCardName().get(cardName);
+            // The document has to explain the stored budget points, so they are read back from it
+            int recalculatedBudgetPoints = 0;
+            PriceProvider pricedBy = null;
+            // Basics have none
+            if (priceDetails != null) {
+                recalculatedBudgetPoints = BudgetPointsUtil.fromPriceDetails(priceDetails).toBudgetPoints();
+                pricedBy = priceDetails.getPricedBy();
+                priceDetailsByOracleId.put(oracleId, priceDetails);
+            }
             if (!Objects.equals(storedBudgetPoints, recalculatedBudgetPoints)) {
                 mismatches.add(new RebuiltPriceDetailsVO.MismatchVO(
                         cardName,
                         storedBudgetPoints,
-                        recalculatedBudgetPoints
+                        recalculatedBudgetPoints,
+                        pricedBy
                 ));
             }
-            CardPriceDetailsVO priceDetails = budgetPoints.getPriceDetailsByCardName().get(cardName);
-            // Basics have none
-            if (priceDetails != null) priceDetailsByOracleId.put(oracleId, priceDetails);
         }
         mismatches.sort(Comparator.comparing(RebuiltPriceDetailsVO.MismatchVO::getName));
         unmatchedCards.sort(Comparator.comparing(RebuiltPriceDetailsVO.UnmatchedCardVO::getName));
 
-        return new MatchedPriceDetailsVO(priceDetailsByOracleId, mismatches, unmatchedCards);
+        return new MatchedPriceDetailsVO(
+                priceDetailsByOracleId,
+                mismatches,
+                unmatchedCards,
+                budgetPoints.getAdjustedExchangeRate()
+        );
     }
 
     private static String findArchivedName(String existingName, MtgJsonPrintingsVO printings) {

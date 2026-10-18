@@ -5,6 +5,8 @@ services:
     ports:
       - "443:8443"
     container_name: casual-challenge-app
+    # casual-challenge-app on the server, so docker does not run as root
+    user: "1000:1000"
     depends_on:
       - postgresql_db
     volumes:

@@ -40,9 +40,14 @@ public class MtgGoldfishClient implements MetaGameSourceClient {
     private final static int MAX_DELAY_IN_MILLISECONDS = 2 * 1000;
     private final static int BACKOFF_IN_MILLISECONDS = 5 * 1000;
     private final static int TIMEOUT_IN_MILLISECONDS = 30 * 1000;
-    private final static String CHROME_131_ON_WINDOWS_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+    private final static String CHROME_131_ON_WINDOWS_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+            + " AppleWebKit/537.36 (KHTML, like Gecko)"
+            + " Chrome/131.0.0.0 Safari/537.36";
 
-    // MtgGoldfish hands out a _mtg_session cookie on the first request and gets touchy when the following 23 don't send it back
+    /**
+     * MtgGoldfish hands out a _mtg_session cookie on the first request
+     * and gets touchy when the following 23 don't send it back.
+     */
     private final Connection session = Jsoup.newSession()
             .timeout(TIMEOUT_IN_MILLISECONDS)
             .header("User-Agent", CHROME_131_ON_WINDOWS_USER_AGENT)
@@ -50,18 +55,19 @@ public class MtgGoldfishClient implements MetaGameSourceClient {
             .header("Accept-Language", "en-US,en;q=0.9");
 
     private List<Staple> fetchStaples(MtgFormat mtgFormat, PathSuffix pathSuffix)  {
-        String url = "https://www.mtggoldfish.com/format-staples/" + FORMAT_PATHS.get(mtgFormat) + "/full/" + pathSuffix.toString();
+        String url = "https://www.mtggoldfish.com/format-staples/" + FORMAT_PATHS.get(mtgFormat)
+                + "/full/" + pathSuffix.toString();
 
         List<Staple> staples = parseStaples(fetch(url));
         if (staples.size() != STAPLES_PER_PAGE) {
-            throw new IllegalStateException("Found " + staples.size() + " staples on '" + url + "', expected " + STAPLES_PER_PAGE + ".");
+            throw new IllegalStateException("Found " + staples.size() + " staples on '" + url + "',"
+                    + " expected " + STAPLES_PER_PAGE + ".");
         }
 
         return staples;
     }
 
     public List<Staple> parseStaples(Document document) {
-        // Find the table with class "table-staples"
         Element table = document.selectFirst("table.table-staples");
         if (table == null) {
             throw new IllegalStateException("Table with class 'table-staples' not found");
@@ -72,13 +78,15 @@ public class MtgGoldfishClient implements MetaGameSourceClient {
 
         for (Element row : rows) {
             Element cardLink = row.selectFirst("td.col-card a");
-            if (cardLink == null) continue; // header row
+            // Header row
+            if (cardLink == null) continue;
 
             // The lands page has no "Cost" column, so counting the columns from the left doesn't work
             Elements columns = row.select("td");
             String percentageText = columns.get(columns.size() - 2).text();
 
-            staples.add(new Staple(cardLink.text(), parsePercentage(percentageText, cardLink.text(), document.location())));
+            BigDecimal percentageOfDecks = parsePercentage(percentageText, cardLink.text(), document.location());
+            staples.add(new Staple(cardLink.text(), percentageOfDecks));
         }
 
         return staples;
@@ -86,9 +94,12 @@ public class MtgGoldfishClient implements MetaGameSourceClient {
 
     private static BigDecimal parsePercentage(String percentageText, String cardName, String url) {
         try {
-            return new BigDecimal(percentageText.replace("%", "").trim()).movePointLeft(2).setScale(3, RoundingMode.HALF_UP);
+            return new BigDecimal(percentageText.replace("%", "").trim())
+                    .movePointLeft(2)
+                    .setScale(3, RoundingMode.HALF_UP);
         } catch (NumberFormatException e) {
-            throw new IllegalStateException("Couldn't parse percentage '" + percentageText + "' for '" + cardName + "' on '" + url + "'.", e);
+            throw new IllegalStateException("Couldn't parse percentage '" + percentageText + "'"
+                    + " for '" + cardName + "' on '" + url + "'.", e);
         }
     }
 
@@ -103,8 +114,7 @@ public class MtgGoldfishClient implements MetaGameSourceClient {
             try {
                 return session.newRequest().url(url).get();
             } catch (HttpStatusException e) {
-                // 403 is Cloudflare being unhappy about us, 429 is plain rate limiting --> both are worth another try
-                if (e.getStatusCode() != 403 && e.getStatusCode() != 429) {
+                if (!isWorthAnotherTry(e.getStatusCode())) {
                     throw new RuntimeException("Couldn't connect to URL '" + url + "'.", e);
                 }
                 lastError = e;
@@ -113,7 +123,18 @@ public class MtgGoldfishClient implements MetaGameSourceClient {
             }
         }
 
-        throw new RuntimeException("Couldn't connect to URL '" + url + "' in " + MAX_ATTEMPTS + " attempts.", lastError);
+        throw new RuntimeException(
+                "Couldn't connect to URL '" + url + "' in " + MAX_ATTEMPTS + " attempts.",
+                lastError
+        );
+    }
+
+    private static boolean isWorthAnotherTry(int statusCode) {
+        // 403 is Cloudflare being unhappy about us, 429 is plain rate limiting --> both are worth another try
+        if (statusCode == 403) return true;
+        if (statusCode == 429) return true;
+
+        return false;
     }
 
     private static void sleep(long milliseconds) {

@@ -24,8 +24,9 @@ public final class SeasonMigrationSql {
 
     private static final int CHUNK_SIZE = 1000;
 
-    // Seasons are prepared in UTC, so the offset never changes
-    private static final DateTimeFormatter ADDED_AT_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'+00:00'");
+    /** Seasons are prepared in UTC, so the offset never changes. */
+    private static final DateTimeFormatter ADDED_AT_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'+00:00'");
 
     private static final LegalityConverter LEGALITY_CONVERTER = new LegalityConverter();
     private static final MtgFormatConverter MTG_FORMAT_CONVERTER = new MtgFormatConverter();
@@ -65,11 +66,15 @@ public final class SeasonMigrationSql {
 
         if (!oracleIdChanges.isEmpty()) {
             sql.append("\n");
-            sql.append("-- card_season_data references card.oracle_id without ON UPDATE CASCADE --> both updates have to be one statement\n"); // keep in sync with SeasonDraftRepository.commit
+            // Keep in sync with SeasonDraftRepository.commit
+            sql.append("-- card_season_data references card.oracle_id without ON UPDATE CASCADE "
+                    + "--> both updates have to be one statement\n");
             for (SeasonDraftReportVO.OracleIdChangeVO oracleIdChange : oracleIdChanges) {
-                sql.append("WITH remapped_card AS (UPDATE public.card SET oracle_id = " + escapeUuid(oracleIdChange.getOracleId())
+                sql.append("WITH remapped_card AS (UPDATE public.card SET oracle_id = "
+                        + escapeUuid(oracleIdChange.getOracleId())
                         + " WHERE oracle_id = " + escapeUuid(oracleIdChange.getPreviousOracleId()) + ")"
-                        + " UPDATE public.card_season_data SET card_oracle_id = " + escapeUuid(oracleIdChange.getOracleId())
+                        + " UPDATE public.card_season_data SET card_oracle_id = "
+                        + escapeUuid(oracleIdChange.getOracleId())
                         + " WHERE card_oracle_id = " + escapeUuid(oracleIdChange.getPreviousOracleId())
                         + "; -- " + oracleIdChange.getName() + "\n");
             }
@@ -81,7 +86,8 @@ public final class SeasonMigrationSql {
                 sql.append("UPDATE public.card SET name = " + escapeString(renamedCard.getName())
                         + ", normalized_name = " + escapeString(renamedCard.getNormalizedName())
                         + " WHERE oracle_id = " + escapeUuid(renamedCard.getOracleId())
-                        + "; -- was " + escapeString(renamedCard.getPreviousName()) + " / " + escapeString(renamedCard.getPreviousNormalizedName()) + "\n");
+                        + "; -- was " + escapeString(renamedCard.getPreviousName())
+                        + " / " + escapeString(renamedCard.getPreviousNormalizedName()) + "\n");
             }
         }
 
@@ -99,21 +105,28 @@ public final class SeasonMigrationSql {
             PRIMARY KEY (id)
         );
      */
-    public static String insertCards(List<SeasonDraftCardVO> cards, LocalDateTime addedAt) { // keep in sync with SeasonDraftRepository.commit
+    // Keep in sync with SeasonDraftRepository.commit
+    public static String insertCards(List<SeasonDraftCardVO> cards, LocalDateTime addedAt) {
         String addedAtValue = "'" + addedAt.format(ADDED_AT_FORMAT) + "'";
 
         StringBuilder sql = new StringBuilder();
         List<String> values = new ArrayList<>(CHUNK_SIZE);
-        // Every card, not just the new ones: a database rebuilt from the migrations alone has to end up complete. The python
-        // counted the skipped cards towards the chunk as well, the migrations in the repository are cut that way.
+        // Every card, not just the new ones: a database rebuilt from the migrations alone has to end up complete.
+        // The python counted the skipped cards towards the chunk as well,
+        // the migrations in the repository are cut that way.
         for (int index = 0; index < cards.size(); index++) {
             SeasonDraftCardVO card = cards.get(index);
             if (card.getSkipReason() != null) continue;
 
-            values.add("\t(" + escapeUuid(card.getOracleId()) + ", " + escapeString(card.getName()) + ", " + escapeString(card.getNormalizedName()) + ", " + addedAtValue + ")");
-            if (index > 0 && index % CHUNK_SIZE == 0) {
-                sql.append(cardBatch(values));
-                values.clear();
+            values.add("\t(" + escapeUuid(card.getOracleId())
+                    + ", " + escapeString(card.getName())
+                    + ", " + escapeString(card.getNormalizedName())
+                    + ", " + addedAtValue + ")");
+            if (index > 0) {
+                if (index % CHUNK_SIZE == 0) {
+                    sql.append(cardBatch(values));
+                    values.clear();
+                }
             }
         }
 
@@ -144,7 +157,8 @@ public final class SeasonMigrationSql {
             PRIMARY KEY (id)
         );
      */
-    public static String insertCardSeasonData(int seasonId, List<SeasonDraftCardVO> cards) { // keep in sync with SeasonDraftRepository.commit
+    // Keep in sync with SeasonDraftRepository.commit
+    public static String insertCardSeasonData(int seasonId, List<SeasonDraftCardVO> cards) {
         List<SeasonDraftCardVO> sortedCards = new ArrayList<>(cards);
         sortedCards.sort(Comparator.comparing(SeasonDraftCardVO::getName));
 
@@ -153,6 +167,8 @@ public final class SeasonMigrationSql {
         for (int index = 0; index < sortedCards.size(); index++) {
             SeasonDraftCardVO card = sortedCards.get(index);
             if (card.getSkipReason() != null) continue;
+
+            String vintageRestricted = card.isVintageRestricted() ? "TRUE" : "FALSE";
 
             values.add("\t(" + seasonId
                     + ", " + escapeUuid(card.getOracleId())
@@ -165,10 +181,12 @@ public final class SeasonMigrationSql {
                     + ", " + metaShare(card.getMetaShareVintage())
                     + ", " + metaShare(card.getMetaSharePauper())
                     + ", " + bannedIn(card.getBannedIn())
-                    + ", " + (card.isVintageRestricted() ? "TRUE" : "FALSE") + ")");
-            if (index > 0 && index % CHUNK_SIZE == 0) {
-                sql.append(cardSeasonDataBatch(values));
-                values.clear();
+                    + ", " + vintageRestricted + ")");
+            if (index > 0) {
+                if (index % CHUNK_SIZE == 0) {
+                    sql.append(cardSeasonDataBatch(values));
+                    values.clear();
+                }
             }
         }
 
@@ -186,7 +204,9 @@ public final class SeasonMigrationSql {
     }
 
     private static String cardSeasonDataBatch(List<String> values) {
-        return "INSERT INTO public.card_season_data (season_id, card_oracle_id, budget_points, legality, meta_share_standard, meta_share_pioneer, meta_share_modern, meta_share_legacy, meta_share_vintage, meta_share_pauper, banned_in, vintage_restricted)\n"
+        return "INSERT INTO public.card_season_data (season_id, card_oracle_id, budget_points, legality,"
+                + " meta_share_standard, meta_share_pioneer, meta_share_modern, meta_share_legacy, meta_share_vintage,"
+                + " meta_share_pauper, banned_in, vintage_restricted)\n"
                 + "VALUES\n    " + String.join(",\n", values) + "\n"
                 + "ON CONFLICT (season_id, card_oracle_id) DO UPDATE SET\n"
                 + "    budget_points = EXCLUDED.budget_points,\n"

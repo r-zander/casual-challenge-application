@@ -41,7 +41,8 @@ class MtgJsonClientTest {
     private static final UUID SOL_RING_ALPHA = UUID.fromString("1f3c8b2a-6e45-59d7-8c10-b4a2e76f3d09");
     private static final UUID SOL_RING_COMMANDER = UUID.fromString("8f6a9d1c-4b3e-5a7d-9c21-6e0f5a2b7d43");
 
-    private final MtgJsonClient mtgJsonClient = new MtgJsonClient("https://mtgjson.com/api/v5", System.getProperty("java.io.tmpdir"));
+    private final MtgJsonClient mtgJsonClient =
+            new MtgJsonClient("https://mtgjson.com/api/v5", System.getProperty("java.io.tmpdir"));
 
     @Test
     void testReadPrintings() {
@@ -51,54 +52,121 @@ class MtgJsonClientTest {
                   "data": {
                     "C13": {
                       "cards": [
-                        {"availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil"], "identifiers": {"scryfallOracleId": "6ad8011d-3471-4369-9d68-b264cc027487"}, "legalities": {"legacy": "Banned", "vintage": "Restricted"}, "name": "Sol Ring", "number": "254", "uuid": "8f6a9d1c-4b3e-5a7d-9c21-6e0f5a2b7d43"},
-                        {"availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil"], "identifiers": {"scryfallOracleId": "6ad8011d-3471-4369-9d68-b264cc027487"}, "isOversized": true, "legalities": {"legacy": "Banned", "vintage": "Restricted"}, "name": "Sol Ring", "number": "254b", "uuid": "2d7b4e90-1a6c-5f38-b4e7-9c1d05a6f2b8"}
+                        {
+                          "availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil"],
+                          "identifiers": {"scryfallOracleId": "6ad8011d-3471-4369-9d68-b264cc027487"},
+                          "legalities": {"legacy": "Banned", "vintage": "Restricted"}, "name": "Sol Ring",
+                          "number": "254", "uuid": "8f6a9d1c-4b3e-5a7d-9c21-6e0f5a2b7d43"
+                        },
+                        {
+                          "availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil"],
+                          "identifiers": {"scryfallOracleId": "6ad8011d-3471-4369-9d68-b264cc027487"},
+                          "isOversized": true, "legalities": {"legacy": "Banned", "vintage": "Restricted"},
+                          "name": "Sol Ring", "number": "254b", "uuid": "2d7b4e90-1a6c-5f38-b4e7-9c1d05a6f2b8"
+                        }
                       ],
                       "decks": [
                         {"name": "Mind Seize", "releaseDate": "2013-11-01", "type": "MTGO Commander Deck"},
                         {"name": "Power Hungry", "releaseDate": "2013-11-01", "type": "Theme Deck"}
                       ],
-                      "code": "C13", "isOnlineOnly": false, "name": "Commander 2013", "releaseDate": "2013-11-01", "type": "commander"
+                      "code": "C13", "isOnlineOnly": false, "name": "Commander 2013", "releaseDate": "2013-11-01",
+                      "type": "commander"
                     },
                     "CMB1": {
                       "cards": [
-                        {"availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil"], "identifiers": {"scryfallOracleId": "0c94cb69-4ee5-4e2a-9b1c-9b4ab4bdc5e5"}, "legalities": {}, "name": "Red Herring", "number": "76", "uuid": "5a1e3c72-9d84-5b06-a1f3-7e2c48d905b1"}
+                        {
+                          "availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil"],
+                          "identifiers": {"scryfallOracleId": "0c94cb69-4ee5-4e2a-9b1c-9b4ab4bdc5e5"}, "legalities": {},
+                          "name": "Red Herring", "number": "76", "uuid": "5a1e3c72-9d84-5b06-a1f3-7e2c48d905b1"
+                        }
                       ],
-                      "code": "CMB1", "isOnlineOnly": false, "name": "Mystery Booster Playtest Cards 2019", "parentCode": "MB1", "releaseDate": "2019-11-07", "type": "funny"
+                      "code": "CMB1", "isOnlineOnly": false, "name": "Mystery Booster Playtest Cards 2019",
+                      "parentCode": "MB1", "releaseDate": "2019-11-07", "type": "funny"
                     },
                     "LEA": {
                       "cards": [
-                        {"availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil"], "foreignData": [{"language": "German", "name": "Chaoskugel"}], "identifiers": {"scryfallOracleId": "edb455f4-8dc9-4b7c-b25c-cb51b7dfbb41"}, "legalities": {"legacy": "Banned", "vintage": "Banned"}, "name": "Chaos Orb", "number": "13", "uuid": "9c04a7e1-3b58-5d26-af19-0e7d61c452b3"},
-                        {"availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil"], "identifiers": {"scryfallOracleId": "6ad8011d-3471-4369-9d68-b264cc027487"}, "legalities": {"legacy": "Banned", "vintage": "Restricted"}, "name": "Sol Ring", "number": "258", "uuid": "1f3c8b2a-6e45-59d7-8c10-b4a2e76f3d09"}
+                        {
+                          "availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil"],
+                          "foreignData": [{"language": "German", "name": "Chaoskugel"}],
+                          "identifiers": {"scryfallOracleId": "edb455f4-8dc9-4b7c-b25c-cb51b7dfbb41"},
+                          "legalities": {"legacy": "Banned", "vintage": "Banned"}, "name": "Chaos Orb", "number": "13",
+                          "uuid": "9c04a7e1-3b58-5d26-af19-0e7d61c452b3"
+                        },
+                        {
+                          "availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil"],
+                          "identifiers": {"scryfallOracleId": "6ad8011d-3471-4369-9d68-b264cc027487"},
+                          "legalities": {"legacy": "Banned", "vintage": "Restricted"}, "name": "Sol Ring",
+                          "number": "258", "uuid": "1f3c8b2a-6e45-59d7-8c10-b4a2e76f3d09"
+                        }
                       ],
-                      "code": "LEA", "isOnlineOnly": false, "name": "Limited Edition Alpha", "releaseDate": "1993-08-05", "tokens": [], "type": "core"
+                      "code": "LEA", "isOnlineOnly": false, "name": "Limited Edition Alpha",
+                      "releaseDate": "1993-08-05", "tokens": [], "type": "core"
                     },
                     "MKM": {
                       "cards": [
-                        {"availability": ["arena"], "borderColor": "black", "finishes": ["nonfoil"], "identifiers": {"scryfallOracleId": "d0f6b1e2-5c3a-4f19-8e07-2b6a9d4c1f83"}, "isRebalanced": true, "legalities": {}, "name": "A-Case of the Gorgon's Kiss", "number": "A-84", "uuid": "4e8d1b53-2f70-5a94-b6c8-1d59f0a83e27"},
-                        {"availability": ["mtgo", "paper"], "borderColor": "black", "finishes": ["nonfoil", "foil"], "identifiers": {"scryfallOracleId": "f0ee45b5-697b-48f8-b1a6-cb3ae75e4a29"}, "legalities": {"pauper": "Banned", "standard": "Banned", "vintage": "Legal"}, "name": "Red Herring", "number": "90", "uuid": "6b2f90d4-7c13-5e48-9a05-3d8b17e6c204"}
+                        {
+                          "availability": ["arena"], "borderColor": "black", "finishes": ["nonfoil"],
+                          "identifiers": {"scryfallOracleId": "d0f6b1e2-5c3a-4f19-8e07-2b6a9d4c1f83"},
+                          "isRebalanced": true, "legalities": {}, "name": "A-Case of the Gorgon's Kiss",
+                          "number": "A-84", "uuid": "4e8d1b53-2f70-5a94-b6c8-1d59f0a83e27"
+                        },
+                        {
+                          "availability": ["mtgo", "paper"], "borderColor": "black", "finishes": ["nonfoil", "foil"],
+                          "identifiers": {"scryfallOracleId": "f0ee45b5-697b-48f8-b1a6-cb3ae75e4a29"},
+                          "legalities": {"pauper": "Banned", "standard": "Banned", "vintage": "Legal"},
+                          "name": "Red Herring", "number": "90", "uuid": "6b2f90d4-7c13-5e48-9a05-3d8b17e6c204"
+                        }
                       ],
-                      "code": "MKM", "decks": [{"code": "MKM", "name": "Deadly Disguise", "releaseDate": "2024-02-09", "type": "Commander Deck"}],
-                      "isOnlineOnly": false, "name": "Murders at Karlov Manor", "releaseDate": "2024-02-09", "type": "expansion"
+                      "code": "MKM",
+                      "decks": [
+                        {
+                          "code": "MKM", "name": "Deadly Disguise", "releaseDate": "2024-02-09",
+                          "type": "Commander Deck"
+                        }
+                      ],
+                      "isOnlineOnly": false, "name": "Murders at Karlov Manor", "releaseDate": "2024-02-09",
+                      "type": "expansion"
                     },
                     "SUM": {
                       "cards": [
-                        {"availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil"], "identifiers": {"scryfallOracleId": "02418479-9455-417f-a6a1-004356faff37"}, "legalities": {"legacy": "Legal", "vintage": "Legal"}, "name": "Tundra", "number": "281", "uuid": "3a5c7e11-8d92-5064-bf37-2c8016d4a95e"}
+                        {
+                          "availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil"],
+                          "identifiers": {"scryfallOracleId": "02418479-9455-417f-a6a1-004356faff37"},
+                          "legalities": {"legacy": "Legal", "vintage": "Legal"}, "name": "Tundra", "number": "281",
+                          "uuid": "3a5c7e11-8d92-5064-bf37-2c8016d4a95e"
+                        }
                       ],
-                      "code": "SUM", "isOnlineOnly": false, "name": "Summer Magic / Edgar", "releaseDate": "1994-07-01", "type": "core"
+                      "code": "SUM", "isOnlineOnly": false, "name": "Summer Magic / Edgar", "releaseDate": "1994-07-01",
+                      "type": "core"
                     },
                     "UNF": {
                       "cards": [
-                        {"availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil", "foil"], "identifiers": {"scryfallOracleId": "c9d3a2f8-16b4-4e07-8d5a-4f1b2c6e7093"}, "isFunny": true, "legalities": {"legacy": "Legal", "vintage": "Legal"}, "name": "Comet, Stellar Pup", "number": "132", "uuid": "0e7a2c58-4d13-5b96-8f42-7c3a91d6b05e"},
-                        {"availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil"], "identifiers": {"scryfallOracleId": "7b6e0d34-2a91-4c58-b0e7-9d1f3a4c6285"}, "isFunny": true, "legalities": {}, "name": "Sole Performer", "number": "111", "uuid": "8c1b6f03-9e27-54da-b731-2f6a0c85e94d"}
+                        {
+                          "availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil", "foil"],
+                          "identifiers": {"scryfallOracleId": "c9d3a2f8-16b4-4e07-8d5a-4f1b2c6e7093"}, "isFunny": true,
+                          "legalities": {"legacy": "Legal", "vintage": "Legal"}, "name": "Comet, Stellar Pup",
+                          "number": "132", "uuid": "0e7a2c58-4d13-5b96-8f42-7c3a91d6b05e"
+                        },
+                        {
+                          "availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil"],
+                          "identifiers": {"scryfallOracleId": "7b6e0d34-2a91-4c58-b0e7-9d1f3a4c6285"}, "isFunny": true,
+                          "legalities": {}, "name": "Sole Performer", "number": "111",
+                          "uuid": "8c1b6f03-9e27-54da-b731-2f6a0c85e94d"
+                        }
                       ],
-                      "code": "UNF", "isOnlineOnly": false, "name": "Unfinity", "releaseDate": "2022-10-07", "type": "funny"
+                      "code": "UNF", "isOnlineOnly": false, "name": "Unfinity", "releaseDate": "2022-10-07",
+                      "type": "funny"
                     },
                     "UGL": {
                       "cards": [
-                        {"availability": ["paper"], "borderColor": "silver", "finishes": ["nonfoil"], "identifiers": {"scryfallOracleId": "8d4a1c07-3f52-4b6e-91a8-5c0e7d2b4396"}, "legalities": {}, "name": "Bee-Bee Gun", "number": "71", "uuid": "7d09f3b6-5c28-541a-93e0-8b6f21c07d4a"}
+                        {
+                          "availability": ["paper"], "borderColor": "silver", "finishes": ["nonfoil"],
+                          "identifiers": {"scryfallOracleId": "8d4a1c07-3f52-4b6e-91a8-5c0e7d2b4396"}, "legalities": {},
+                          "name": "Bee-Bee Gun", "number": "71", "uuid": "7d09f3b6-5c28-541a-93e0-8b6f21c07d4a"
+                        }
                       ],
-                      "code": "UGL", "isOnlineOnly": false, "name": "Unglued", "releaseDate": "1998-08-11", "type": "funny"
+                      "code": "UGL", "isOnlineOnly": false, "name": "Unglued", "releaseDate": "1998-08-11",
+                      "type": "funny"
                     }
                   }
                 }""";
@@ -107,12 +175,16 @@ class MtgJsonClientTest {
 
         assertEquals(LocalDate.of(2026, 9, 13), printings.getMetaDate());
         assertEquals("5.2.2+20260913", printings.getMetaVersion());
-        assertEquals(List.of("Sol Ring", "Chaos Orb", "Red Herring", "Tundra", "Comet, Stellar Pup"), new ArrayList<>(printings.getCardsByName().keySet()));
+        assertEquals(
+                List.of("Sol Ring", "Chaos Orb", "Red Herring", "Tundra", "Comet, Stellar Pup"),
+                new ArrayList<>(printings.getCardsByName().keySet())
+        );
         assertEquals(7, printings.getPrintingsByUuid().size());
-        assertFalse(printings.getPrintingsByUuid().containsKey(UUID.fromString("2d7b4e90-1a6c-5f38-b4e7-9c1d05a6f2b8")));
-        assertFalse(printings.getPrintingsByUuid().containsKey(UUID.fromString("4e8d1b53-2f70-5a94-b6c8-1d59f0a83e27")));
-        assertFalse(printings.getPrintingsByUuid().containsKey(UUID.fromString("7d09f3b6-5c28-541a-93e0-8b6f21c07d4a")));
-        assertFalse(printings.getPrintingsByUuid().containsKey(UUID.fromString("3a5c7e11-8d92-5064-bf37-2c8016d4a95e")));
+        Map<UUID, MtgJsonPrinting> printingsByUuid = printings.getPrintingsByUuid();
+        assertFalse(printingsByUuid.containsKey(UUID.fromString("2d7b4e90-1a6c-5f38-b4e7-9c1d05a6f2b8")));
+        assertFalse(printingsByUuid.containsKey(UUID.fromString("4e8d1b53-2f70-5a94-b6c8-1d59f0a83e27")));
+        assertFalse(printingsByUuid.containsKey(UUID.fromString("7d09f3b6-5c28-541a-93e0-8b6f21c07d4a")));
+        assertFalse(printingsByUuid.containsKey(UUID.fromString("3a5c7e11-8d92-5064-bf37-2c8016d4a95e")));
 
         MtgJsonCard solRing = printings.getCardsByName().get("Sol Ring");
         assertEquals("LEA", solRing.getFirstSetCode());
@@ -175,16 +247,33 @@ class MtgJsonClientTest {
                   "data": {
                     "PSOS": {
                       "cards": [
-                        {"availability": ["paper"], "borderColor": "black", "finishes": ["foil"], "identifiers": {"scryfallOracleId": "3e1a7c92-5b04-4d6f-a8e3-91c2f0b56d17"}, "legalities": {"vintage": "Legal"}, "name": "Sundering Archaic", "number": "3p", "uuid": "c41f8a26-7d3b-5e90-b2c5-6a8e1d07f394"},
-                        {"availability": ["paper"], "borderColor": "black", "finishes": ["foil"], "identifiers": {"scryfallOracleId": "a7d2e5f1-0c68-4b93-9e14-5f3b8c21d6a0"}, "legalities": {"vintage": "Legal"}, "name": "The Dawning Archaic", "number": "1", "uuid": "e62b0d93-4a15-5c78-8f06-d93a7b24c1e5"}
+                        {
+                          "availability": ["paper"], "borderColor": "black", "finishes": ["foil"],
+                          "identifiers": {"scryfallOracleId": "3e1a7c92-5b04-4d6f-a8e3-91c2f0b56d17"},
+                          "legalities": {"vintage": "Legal"}, "name": "Sundering Archaic", "number": "3p",
+                          "uuid": "c41f8a26-7d3b-5e90-b2c5-6a8e1d07f394"
+                        },
+                        {
+                          "availability": ["paper"], "borderColor": "black", "finishes": ["foil"],
+                          "identifiers": {"scryfallOracleId": "a7d2e5f1-0c68-4b93-9e14-5f3b8c21d6a0"},
+                          "legalities": {"vintage": "Legal"}, "name": "The Dawning Archaic", "number": "1",
+                          "uuid": "e62b0d93-4a15-5c78-8f06-d93a7b24c1e5"
+                        }
                       ],
-                      "code": "PSOS", "isOnlineOnly": false, "name": "Secrets of Strixhaven Promos", "parentCode": "SOS", "releaseDate": "2026-04-24", "type": "promo"
+                      "code": "PSOS", "isOnlineOnly": false, "name": "Secrets of Strixhaven Promos",
+                      "parentCode": "SOS", "releaseDate": "2026-04-24", "type": "promo"
                     },
                     "SOS": {
                       "cards": [
-                        {"availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil", "foil"], "identifiers": {"scryfallOracleId": "3e1a7c92-5b04-4d6f-a8e3-91c2f0b56d17"}, "legalities": {"vintage": "Legal"}, "name": "Sundering Archaic", "number": "3", "uuid": "0b95c3e7-2f41-5a68-9d7c-4e10b8a6f253"}
+                        {
+                          "availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil", "foil"],
+                          "identifiers": {"scryfallOracleId": "3e1a7c92-5b04-4d6f-a8e3-91c2f0b56d17"},
+                          "legalities": {"vintage": "Legal"}, "name": "Sundering Archaic", "number": "3",
+                          "uuid": "0b95c3e7-2f41-5a68-9d7c-4e10b8a6f253"
+                        }
                       ],
-                      "code": "SOS", "isOnlineOnly": false, "name": "Secrets of Strixhaven", "releaseDate": "2026-04-24", "type": "expansion"
+                      "code": "SOS", "isOnlineOnly": false, "name": "Secrets of Strixhaven",
+                      "releaseDate": "2026-04-24", "type": "expansion"
                     }
                   }
                 }""";
@@ -208,18 +297,28 @@ class MtgJsonClientTest {
                         "cardmarket": {
                           "buylist": {"normal": {"2025-06-04": 0.1}},
                           "currency": "EUR",
-                          "retail": {"foil": {"2025-06-04": 0.5}, "normal": {"2025-06-03": 9.0, "2025-06-04": 1.0, "2025-06-05": null, "2025-06-06": 3.0, "2025-06-07": 99.0}}
+                          "retail": {
+                            "foil": {"2025-06-04": 0.5},
+                            "normal": {
+                              "2025-06-03": 9.0, "2025-06-04": 1.0, "2025-06-05": null, "2025-06-06": 3.0,
+                              "2025-06-07": 99.0
+                            }
+                          }
                         },
                         "tcgplayer": {"currency": "USD", "retail": {"normal": {"2025-06-05": 2.0}}}
                       }
                     },
                     "8f6a9d1c-4b3e-5a7d-9c21-6e0f5a2b7d43": {
                       "paper": {
-                        "cardmarket": {"retail": {"foil": {"2025-06-04": 50.0, "2025-06-05": 50.0}, "normal": {"2025-06-04": 2.0}}},
+                        "cardmarket": {
+                          "retail": {"foil": {"2025-06-04": 50.0, "2025-06-05": 50.0}, "normal": {"2025-06-04": 2.0}}
+                        },
                         "tcgplayer": {"retail": {"normal": {"2025-01-01": 5.0}}}
                       }
                     },
-                    "6b2f90d4-7c13-5e48-9a05-3d8b17e6c204": {"paper": {"cardmarket": {"retail": {"normal": {"2025-06-04": 0.25}}}}}
+                    "6b2f90d4-7c13-5e48-9a05-3d8b17e6c204": {
+                      "paper": {"cardmarket": {"retail": {"normal": {"2025-06-04": 0.25}}}}
+                    }
                   }
                 }""";
 
@@ -242,7 +341,9 @@ class MtgJsonClientTest {
         printingsByUuid.put(SOL_RING_COMMANDER, commander);
         PriceWindowVO window = PriceWindowVO.of(LocalDate.of(2025, 6, 7), 3);
 
-        Map<String, CardPrices> pricesByCardName = mtgJsonClient.readPrices(toStream(allPrices), printingsByUuid, window).getPricesByCardName();
+        Map<String, CardPrices> pricesByCardName = mtgJsonClient
+                .readPrices(toStream(allPrices), printingsByUuid, window)
+                .getPricesByCardName();
 
         assertEquals(Set.of("Sol Ring"), pricesByCardName.keySet());
         CardPrices solRing = pricesByCardName.get("Sol Ring");

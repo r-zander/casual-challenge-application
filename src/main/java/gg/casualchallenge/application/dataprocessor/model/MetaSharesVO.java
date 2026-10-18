@@ -20,7 +20,8 @@ public class MetaSharesVO {
 
     Map<String, Map<MtgFormat, BigDecimal>> bans;
     Map<String, Map<MtgFormat, BigDecimal>> extendedBans;
-    Map<MtgFormat, Integer> top50Rows; // rows per format, sanity check in the report
+    /** Rows per format, sanity check in the report. */
+    Map<MtgFormat, Integer> top50Rows;
     Map<MtgFormat, Integer> top150Rows;
     List<String> duplicateNames;
     MetaShareSource source;
@@ -33,7 +34,10 @@ public class MetaSharesVO {
         return findMetaShares(extendedBans, cardName);
     }
 
-    private static Map<MtgFormat, BigDecimal> findMetaShares(Map<String, Map<MtgFormat, BigDecimal>> metaSharesByName, String cardName) {
+    private static Map<MtgFormat, BigDecimal> findMetaShares(
+            Map<String, Map<MtgFormat, BigDecimal>> metaSharesByName,
+            String cardName
+    ) {
         Map<MtgFormat, BigDecimal> metaShares = metaSharesByName.get(CardNameNormalizer.normalize(cardName));
         if (metaShares != null) return metaShares;
 
@@ -44,7 +48,11 @@ public class MetaSharesVO {
         return metaSharesByName.get(CardNameNormalizer.normalize(cardName.substring(0, separator)));
     }
 
-    public static MetaSharesVO fromStaples(MetaShareSource source, Map<MtgFormat, List<Staple>> top50, Map<MtgFormat, List<Staple>> top150) {
+    public static MetaSharesVO fromStaples(
+            MetaShareSource source,
+            Map<MtgFormat, List<Staple>> top50,
+            Map<MtgFormat, List<Staple>> top150
+    ) {
         Set<String> duplicateNames = new LinkedHashSet<>();
         return new MetaSharesVO(
                 toMetaSharesByName(top50, duplicateNames),
@@ -66,12 +74,18 @@ public class MetaSharesVO {
                 MetaShareSource.FILES);
     }
 
-    private static Map<String, Map<MtgFormat, BigDecimal>> toMetaSharesByName(Map<MtgFormat, List<Staple>> staplesByFormat, Set<String> duplicateNames) {
+    private static Map<String, Map<MtgFormat, BigDecimal>> toMetaSharesByName(
+            Map<MtgFormat, List<Staple>> staplesByFormat,
+            Set<String> duplicateNames
+    ) {
         Map<String, Map<MtgFormat, BigDecimal>> metaSharesByName = new HashMap<>();
         for (Map.Entry<MtgFormat, List<Staple>> entry : staplesByFormat.entrySet()) {
             for (Staple staple : entry.getValue()) {
                 BigDecimal knownShare = metaSharesByName
-                        .computeIfAbsent(CardNameNormalizer.normalize(staple.getCardName()), cardName -> new EnumMap<>(MtgFormat.class))
+                        .computeIfAbsent(
+                                CardNameNormalizer.normalize(staple.getCardName()),
+                                cardName -> new EnumMap<>(MtgFormat.class)
+                        )
                         .put(entry.getKey(), staple.getPercentageOfDecks());
                 if (knownShare != null) duplicateNames.add(staple.getCardName());
             }
@@ -80,15 +94,21 @@ public class MetaSharesVO {
         return metaSharesByName;
     }
 
-    private static Map<String, Map<MtgFormat, BigDecimal>> toMetaSharesByName(List<BanDTO> bans, Set<String> duplicateNames) {
+    private static Map<String, Map<MtgFormat, BigDecimal>> toMetaSharesByName(
+            List<BanDTO> bans,
+            Set<String> duplicateNames
+    ) {
         Map<String, Map<MtgFormat, BigDecimal>> metaSharesByName = new HashMap<>();
         for (BanDTO ban : bans) {
             Map<MtgFormat, BigDecimal> metaShares = new EnumMap<>(MtgFormat.class);
             for (Map.Entry<LegacyMtgFormat, BigDecimal> entry : ban.getFormats().entrySet()) {
                 metaShares.put(toMtgFormat(entry.getKey()), entry.getValue());
             }
-            // A second row for the same card replaces the first one, just like the python tool does - the report says which ones
-            if (metaSharesByName.put(CardNameNormalizer.normalize(ban.getName()), metaShares) != null) duplicateNames.add(ban.getName());
+            // A second row for the same card replaces the first one, just like the python tool does
+            // - the report says which ones
+            Map<MtgFormat, BigDecimal> replacedMetaShares =
+                    metaSharesByName.put(CardNameNormalizer.normalize(ban.getName()), metaShares);
+            if (replacedMetaShares != null) duplicateNames.add(ban.getName());
         }
 
         return metaSharesByName;
@@ -115,6 +135,7 @@ public class MetaSharesVO {
     }
 
     private static MtgFormat toMtgFormat(LegacyMtgFormat legacyMtgFormat) {
-        return MtgFormat.valueOf(legacyMtgFormat.name()); // both enums spell their constants the same way
+        // Both enums spell their constants the same way
+        return MtgFormat.valueOf(legacyMtgFormat.name());
     }
 }

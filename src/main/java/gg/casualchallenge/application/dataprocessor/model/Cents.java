@@ -5,8 +5,9 @@ import lombok.Value;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
+/** A budget point is one cent, so card prices and budget points are the same number. */
 @Value
-public class Cents { // a budget point is one cent, so card prices and budget points are the same number
+public class Cents {
 
     long amount;
 
@@ -26,15 +27,22 @@ public class Cents { // a budget point is one cent, so card prices and budget po
         return amount < other.amount;
     }
 
-    // Half to even is what the round() of the python tool this comes from does, and one exact division beats summing doubles
+    /**
+     * Half to even is what the round() of the python tool this comes from does,
+     * and one exact division beats summing doubles.
+     */
     public Cents average(int days) {
         if (days == 0) return of(0);
 
-        return new Cents(BigDecimal.valueOf(amount).divide(BigDecimal.valueOf(days), 0, RoundingMode.HALF_EVEN).longValueExact());
+        return new Cents(BigDecimal.valueOf(amount)
+                .divide(BigDecimal.valueOf(days), 0, RoundingMode.HALF_EVEN)
+                .longValueExact());
     }
 
     public Cents dividedBy(double rate) {
-        return new Cents(BigDecimal.valueOf(amount).divide(BigDecimal.valueOf(rate), 0, RoundingMode.HALF_EVEN).longValueExact());
+        return new Cents(BigDecimal.valueOf(amount)
+                .divide(BigDecimal.valueOf(rate), 0, RoundingMode.HALF_EVEN)
+                .longValueExact());
     }
 
     public int toBudgetPoints() {

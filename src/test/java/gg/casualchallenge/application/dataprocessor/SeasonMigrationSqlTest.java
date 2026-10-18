@@ -34,7 +34,13 @@ class SeasonMigrationSqlTest {
 
     @Test
     void testAddSeason() {
-        String sql = SeasonMigrationSql.addSeason("raoul_zander", "20260913_2021_00_add_season_21.sql", draft(), List.of(), List.of());
+        String sql = SeasonMigrationSql.addSeason(
+                "raoul_zander",
+                "20260913_2021_00_add_season_21.sql",
+                draft(),
+                List.of(),
+                List.of()
+        );
 
         assertEquals("""
                 -- liquibase formatted sql
@@ -59,7 +65,13 @@ class SeasonMigrationSqlTest {
                 "20260913_2021_00_add_season_21.sql",
                 draft(),
                 List.of(new SeasonDraftReportVO.OracleIdChangeVO("Joven and Chandler", JOVEN_OLD, JOVEN_NEW, "ATQ")),
-                List.of(new SeasonDraftReportVO.RenamedCardVO(JOVEN_NEW, "Joven", "joven", "Joven and Chandler", "joven-and-chandler")));
+                List.of(new SeasonDraftReportVO.RenamedCardVO(
+                        JOVEN_NEW,
+                        "Joven",
+                        "joven",
+                        "Joven and Chandler",
+                        "joven-and-chandler"
+                )));
 
         assertEquals("""
                 -- liquibase formatted sql
@@ -75,10 +87,15 @@ class SeasonMigrationSqlTest {
                 ON CONFLICT (id) DO NOTHING;
                 SELECT setval('season_id_seq', (SELECT MAX(id) FROM public.season));
 
-                -- card_season_data references card.oracle_id without ON UPDATE CASCADE --> both updates have to be one statement
-                WITH remapped_card AS (UPDATE public.card SET oracle_id = '11db8545-eca6-43f5-b9e8-f302acef53a5'::uuid WHERE oracle_id = '86b47725-1764-4716-993d-e4dfcea2346c'::uuid) UPDATE public.card_season_data SET card_oracle_id = '11db8545-eca6-43f5-b9e8-f302acef53a5'::uuid WHERE card_oracle_id = '86b47725-1764-4716-993d-e4dfcea2346c'::uuid; -- Joven and Chandler
+                -- card_season_data references card.oracle_id without ON UPDATE CASCADE \
+                --> both updates have to be one statement
+                WITH remapped_card AS (UPDATE public.card SET oracle_id = '11db8545-eca6-43f5-b9e8-f302acef53a5'::uuid \
+                WHERE oracle_id = '86b47725-1764-4716-993d-e4dfcea2346c'::uuid) \
+                UPDATE public.card_season_data SET card_oracle_id = '11db8545-eca6-43f5-b9e8-f302acef53a5'::uuid \
+                WHERE card_oracle_id = '86b47725-1764-4716-993d-e4dfcea2346c'::uuid; -- Joven and Chandler
 
-                UPDATE public.card SET name = 'Joven and Chandler', normalized_name = 'joven-and-chandler' WHERE oracle_id = '11db8545-eca6-43f5-b9e8-f302acef53a5'::uuid; -- was 'Joven' / 'joven'
+                UPDATE public.card SET name = 'Joven and Chandler', normalized_name = 'joven-and-chandler' \
+                WHERE oracle_id = '11db8545-eca6-43f5-b9e8-f302acef53a5'::uuid; -- was 'Joven' / 'joven'
                 """, sql);
     }
 
@@ -96,19 +113,24 @@ class SeasonMigrationSqlTest {
         assertEquals("""
                 INSERT INTO public.card (oracle_id, "name", normalized_name, added_at)
                 VALUES
-                    \t('fc2ccab7-cab1-4463-b73d-898070136d74'::uuid, 'Ancestor''s Chosen', 'ancestors-chosen', '2026-09-13T18:21:10+00:00'),
-                \t('a2daaf32-dbfe-4618-892e-0da24f63a44a'::uuid, 'Angel of Mercy', 'angel-of-mercy', '2026-09-13T18:21:10+00:00'),
-                \t('6ad8011d-3471-4369-9d68-b264cc027487'::uuid, 'Sol Ring', 'sol-ring', '2026-09-13T18:21:10+00:00')
+                    \t('fc2ccab7-cab1-4463-b73d-898070136d74'::uuid, 'Ancestor''s Chosen', 'ancestors-chosen', \
+                '2026-09-13T18:21:10+00:00'),
+                \t('a2daaf32-dbfe-4618-892e-0da24f63a44a'::uuid, 'Angel of Mercy', 'angel-of-mercy', \
+                '2026-09-13T18:21:10+00:00'),
+                \t('6ad8011d-3471-4369-9d68-b264cc027487'::uuid, 'Sol Ring', 'sol-ring', \
+                '2026-09-13T18:21:10+00:00')
                 ON CONFLICT (oracle_id) DO NOTHING;
                 """, sql);
     }
 
     @Test
     void testInsertCards_withChunking() {
-        String sql = SeasonMigrationSql.insertCards(numberedCards(1001), PREPARED_AT); // the python flushed on the index over all cards, so the first block carries 1001 rows
+        // The python flushed on the index over all cards, so the first block carries 1001 rows
+        String sql = SeasonMigrationSql.insertCards(numberedCards(1001), PREPARED_AT);
 
         assertFalse(sql.contains("ON CONFLICT (oracle_id) DO NOTHING;\nINSERT INTO public.card "));
-        assertTrue(sql.endsWith(", 'Card 1000', 'card-1000', '2026-09-13T18:21:10+00:00')\nON CONFLICT (oracle_id) DO NOTHING;\n"));
+        assertTrue(sql.endsWith(", 'Card 1000', 'card-1000', '2026-09-13T18:21:10+00:00')\n"
+                + "ON CONFLICT (oracle_id) DO NOTHING;\n"));
 
         sql = SeasonMigrationSql.insertCards(numberedCards(1002), PREPARED_AT);
 
@@ -116,7 +138,8 @@ class SeasonMigrationSqlTest {
                 + "ON CONFLICT (oracle_id) DO NOTHING;\n"
                 + "INSERT INTO public.card (oracle_id, \"name\", normalized_name, added_at)\n"
                 + "VALUES\n    \t("));
-        assertTrue(sql.endsWith(", 'Card 1001', 'card-1001', '2026-09-13T18:21:10+00:00')\nON CONFLICT (oracle_id) DO NOTHING;\n"));
+        assertTrue(sql.endsWith(", 'Card 1001', 'card-1001', '2026-09-13T18:21:10+00:00')\n"
+                + "ON CONFLICT (oracle_id) DO NOTHING;\n"));
     }
 
     @Test
@@ -125,7 +148,8 @@ class SeasonMigrationSqlTest {
                 new SeasonDraftCardVO(SOL_RING, null, "Sol Ring", "sol-ring", 12, Legality.LEGAL,
                         null, null, null, null, null, null, null,
                         false, false, null, null),
-                new SeasonDraftCardVO(ANCESTRAL_RECALL, null, "Ancestral Recall", "ancestral-recall", 65924, Legality.BANNED,
+                new SeasonDraftCardVO(ANCESTRAL_RECALL, null, "Ancestral Recall", "ancestral-recall", 65924,
+                        Legality.BANNED,
                         null, null, null, null, new BigDecimal("0.680"), null, MtgFormat.LEGACY,
                         true, false, null, null),
                 new SeasonDraftCardVO(BRAINSTORM, null, "Brainstorm", "brainstorm", 300, Legality.BANNED,
@@ -139,11 +163,16 @@ class SeasonMigrationSqlTest {
         String sql = SeasonMigrationSql.insertCardSeasonData(21, cards);
 
         assertEquals("""
-                INSERT INTO public.card_season_data (season_id, card_oracle_id, budget_points, legality, meta_share_standard, meta_share_pioneer, meta_share_modern, meta_share_legacy, meta_share_vintage, meta_share_pauper, banned_in, vintage_restricted)
+                INSERT INTO public.card_season_data (season_id, card_oracle_id, budget_points, legality, \
+                meta_share_standard, meta_share_pioneer, meta_share_modern, meta_share_legacy, meta_share_vintage, \
+                meta_share_pauper, banned_in, vintage_restricted)
                 VALUES
-                    \t(21, '550c74d4-1fcb-406a-b02a-639a760a4380'::uuid, 65924, 'banned'::legality, NULL, NULL, NULL, NULL, 0.680, NULL, 'legacy'::mtg_format, TRUE),
-                \t(21, '36cd2364-d113-47d1-b2c4-b088d9eb88dd'::uuid, 300, 'banned'::legality, 0.050, NULL, NULL, 0.400, NULL, NULL, NULL, FALSE),
-                \t(21, '6ad8011d-3471-4369-9d68-b264cc027487'::uuid, 12, 'legal'::legality, NULL, NULL, NULL, NULL, NULL, NULL, NULL, FALSE)
+                    \t(21, '550c74d4-1fcb-406a-b02a-639a760a4380'::uuid, 65924, 'banned'::legality, \
+                NULL, NULL, NULL, NULL, 0.680, NULL, 'legacy'::mtg_format, TRUE),
+                \t(21, '36cd2364-d113-47d1-b2c4-b088d9eb88dd'::uuid, 300, 'banned'::legality, \
+                0.050, NULL, NULL, 0.400, NULL, NULL, NULL, FALSE),
+                \t(21, '6ad8011d-3471-4369-9d68-b264cc027487'::uuid, 12, 'legal'::legality, \
+                NULL, NULL, NULL, NULL, NULL, NULL, NULL, FALSE)
                 ON CONFLICT (season_id, card_oracle_id) DO UPDATE SET
                     budget_points = EXCLUDED.budget_points,
                     legality = EXCLUDED.legality,

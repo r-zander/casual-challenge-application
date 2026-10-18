@@ -27,7 +27,7 @@ public class MtgTop8Client implements MetaGameSourceClient {
 
     private final static Map<MtgFormat, String> FORMAT_CODES = new EnumMap<>(MtgFormat.class);
 
-    // Ids of the "Last 2 Months" entry in the meta drop down of https://mtgtop8.com/topcards, verified 15.09.2026
+    /** Ids of the "Last 2 Months" entry in the meta drop down of https://mtgtop8.com/topcards, verified 15.09.2026. */
     private final static Map<MtgFormat, Integer> META_IDS = new EnumMap<>(MtgFormat.class);
 
     static {
@@ -47,8 +47,6 @@ public class MtgTop8Client implements MetaGameSourceClient {
     }
 
     private final static String BASE_URL = "https://mtgtop8.com/topcards";
-    private final static String MAIN_DECK = "MD";
-    private final static String SIDEBOARD = "SB";
     private final static int TOP_50 = 50;
     private final static int PAGES_FOR_TOP_50 = 3;
     private final static int TOP_150 = 150;
@@ -57,7 +55,9 @@ public class MtgTop8Client implements MetaGameSourceClient {
     private final static int TIMEOUT_IN_MILLISECONDS = 30 * 1000;
 
     private List<Staple> fetchStaples(MtgFormat mtgFormat, int pages, int limit) {
-        List<Staple> staples = merge(fetchPages(mtgFormat, MAIN_DECK, pages), fetchPages(mtgFormat, SIDEBOARD, pages), limit);
+        List<Staple> mainDeckStaples = fetchPages(mtgFormat, DeckSection.MAIN_DECK, pages);
+        List<Staple> sideboardStaples = fetchPages(mtgFormat, DeckSection.SIDEBOARD, pages);
+        List<Staple> staples = merge(mainDeckStaples, sideboardStaples, limit);
         if (staples.size() < limit) {
             log.warn("Only found {} staples for {} on mtgtop8, expected {}.", staples.size(), mtgFormat, limit);
         }
@@ -65,10 +65,11 @@ public class MtgTop8Client implements MetaGameSourceClient {
         return staples;
     }
 
-    private List<Staple> fetchPages(MtgFormat mtgFormat, String deckSection, int pages) {
+    private List<Staple> fetchPages(MtgFormat mtgFormat, DeckSection deckSection, int pages) {
         List<Staple> staples = new ArrayList<>();
         for (int page = 1; page <= pages; page++) {
-            String url = BASE_URL + "?f=" + FORMAT_CODES.get(mtgFormat) + "&meta=" + META_IDS.get(mtgFormat) + "&data=1&lands=1&maindeck=" + deckSection + "&current_page=" + page;
+            String url = BASE_URL + "?f=" + FORMAT_CODES.get(mtgFormat) + "&meta=" + META_IDS.get(mtgFormat)
+                    + "&data=1&lands=1&maindeck=" + deckSection + "&current_page=" + page;
             staples.addAll(parseStaples(fetch(url)));
         }
 
@@ -91,9 +92,12 @@ public class MtgTop8Client implements MetaGameSourceClient {
 
     private static BigDecimal parsePercentage(String percentageText, String cardName, String url) {
         try {
-            return new BigDecimal(percentageText.replace("%", "").trim()).movePointLeft(2).setScale(3, RoundingMode.HALF_UP);
+            return new BigDecimal(percentageText.replace("%", "").trim())
+                    .movePointLeft(2)
+                    .setScale(3, RoundingMode.HALF_UP);
         } catch (NumberFormatException e) {
-            throw new IllegalStateException("Couldn't parse percentage '" + percentageText + "' for '" + cardName + "' on '" + url + "'.", e);
+            throw new IllegalStateException("Couldn't parse percentage '" + percentageText + "'"
+                    + " for '" + cardName + "' on '" + url + "'.", e);
         }
     }
 
@@ -121,9 +125,11 @@ public class MtgTop8Client implements MetaGameSourceClient {
 
     private static void putLargerShare(Map<String, BigDecimal> largestShareByCardName, Staple staple) {
         BigDecimal knownShare = largestShareByCardName.get(staple.getCardName());
-        if (knownShare == null || staple.getPercentageOfDecks().compareTo(knownShare) > 0) {
-            largestShareByCardName.put(staple.getCardName(), staple.getPercentageOfDecks());
+        if (knownShare != null) {
+            if (staple.getPercentageOfDecks().compareTo(knownShare) <= 0) return;
         }
+
+        largestShareByCardName.put(staple.getCardName(), staple.getPercentageOfDecks());
     }
 
     private Document fetch(String url) {
@@ -154,5 +160,21 @@ public class MtgTop8Client implements MetaGameSourceClient {
     @Override
     public List<Staple> fetchTop150Staples(MtgFormat mtgFormat) {
         return fetchStaples(mtgFormat, PAGES_FOR_TOP_150, TOP_150);
+    }
+
+    private enum DeckSection {
+        MAIN_DECK("MD"),
+        SIDEBOARD("SB");
+
+        private final String code;
+
+        DeckSection(String code) {
+            this.code = code;
+        }
+
+        @Override
+        public String toString() {
+            return code;
+        }
     }
 }

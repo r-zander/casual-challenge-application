@@ -24,13 +24,17 @@ class MtgGoldfishClientTest {
                             <th class="text-end">Total Decks</th>
                         </tr>
                         <tr>
-                            <td class="col-card"><a href="/price/Modern+Horizons+2/Ragavan+Nimble+Pilferer">Ragavan, Nimble Pilferer</a></td>
+                            <td class="col-card">
+                                <a href="/price/Modern+Horizons+2/Ragavan+Nimble+Pilferer">Ragavan, Nimble Pilferer</a>
+                            </td>
                             <td class="text-end">R</td>
                             <td class="text-end">53%</td>
                             <td class="text-end">1234</td>
                         </tr>
                         <tr>
-                            <td class="col-card"><a href="/price/Modern+Horizons+3/Nadu+Winged+Wisdom">Nadu, Winged Wisdom</a></td>
+                            <td class="col-card">
+                                <a href="/price/Modern+Horizons+3/Nadu+Winged+Wisdom">Nadu, Winged Wisdom</a>
+                            </td>
                             <td class="text-end">1GU</td>
                             <td class="text-end">12.5%</td>
                             <td class="text-end">291</td>
@@ -61,7 +65,9 @@ class MtgGoldfishClientTest {
                     </thead>
                     <tbody>
                         <tr>
-                            <td class="col-card"><a href="/price/Modern+Horizons+3/Flooded+Strand">Flooded Strand</a></td>
+                            <td class="col-card">
+                                <a href="/price/Modern+Horizons+3/Flooded+Strand">Flooded Strand</a>
+                            </td>
                             <td class="text-end">31%</td>
                             <td class="text-end">742</td>
                         </tr>

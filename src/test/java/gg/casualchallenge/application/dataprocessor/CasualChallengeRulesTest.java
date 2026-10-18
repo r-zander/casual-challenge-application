@@ -38,20 +38,43 @@ class CasualChallengeRulesTest {
 
     @Test
     void testLegalityOf() {
-        assertEquals(Legality.LEGAL, CasualChallengeRules.legalityOf(card("Wastes", false, false, null), 0, true, true));
-        assertEquals(Legality.LEGAL, CasualChallengeRules.legalityOf(card("Forest", true, false, MtgFormat.LEGACY), null, true, true));
-        assertEquals(Legality.BANNED, CasualChallengeRules.legalityOf(card("Wasteland", true, false, null), 900, true, false));
-        assertEquals(Legality.NOT_LEGAL, CasualChallengeRules.legalityOf(card("Shahrazad", false, false, null), 100, true, true));
-        assertEquals(Legality.NOT_LEGAL, CasualChallengeRules.legalityOf(card("Lightning Bolt", true, false, null), null, true, true));
-        assertEquals(Legality.NOT_LEGAL, CasualChallengeRules.legalityOf(card("Lightning Bolt", true, false, null), 0, true, true));
-        assertEquals(Legality.BANNED, CasualChallengeRules.legalityOf(card("Black Lotus", true, true, null), 100000, false, false));
-        assertEquals(Legality.BANNED, CasualChallengeRules.legalityOf(card("Ragavan, Nimble Pilferer", true, false, null), 4000, true, true));
-        assertEquals(Legality.BANNED, CasualChallengeRules.legalityOf(card("Lurrus of the Dream-Den", true, false, MtgFormat.MODERN), 600, false, true));
-        assertEquals(Legality.EXTENDED, CasualChallengeRules.legalityOf(card("Abrade", true, false, null), 50, false, true));
-        assertEquals(Legality.LEGAL, CasualChallengeRules.legalityOf(card("Abrade", true, false, null), 50, false, false));
+        MtgJsonCard wastes = card("Wastes", false, false, null);
+        MtgJsonCard forest = card("Forest", true, false, MtgFormat.LEGACY);
+        MtgJsonCard wasteland = card("Wasteland", true, false, null);
+        MtgJsonCard shahrazad = card("Shahrazad", false, false, null);
+        MtgJsonCard lightningBolt = card("Lightning Bolt", true, false, null);
+        MtgJsonCard blackLotus = card("Black Lotus", true, true, null);
+        MtgJsonCard ragavan = card("Ragavan, Nimble Pilferer", true, false, null);
+        MtgJsonCard lurrus = card("Lurrus of the Dream-Den", true, false, MtgFormat.MODERN);
+        MtgJsonCard abrade = card("Abrade", true, false, null);
+
+        assertEquals(Legality.LEGAL, CasualChallengeRules.legalityOf(wastes, 0, true, true));
+        assertEquals(Legality.LEGAL, CasualChallengeRules.legalityOf(forest, null, true, true));
+        assertEquals(Legality.BANNED, CasualChallengeRules.legalityOf(wasteland, 900, true, false));
+        assertEquals(Legality.NOT_LEGAL, CasualChallengeRules.legalityOf(shahrazad, 100, true, true));
+        assertEquals(Legality.NOT_LEGAL, CasualChallengeRules.legalityOf(lightningBolt, null, true, true));
+        assertEquals(Legality.NOT_LEGAL, CasualChallengeRules.legalityOf(lightningBolt, 0, true, true));
+        assertEquals(Legality.BANNED, CasualChallengeRules.legalityOf(blackLotus, 100000, false, false));
+        assertEquals(Legality.BANNED, CasualChallengeRules.legalityOf(ragavan, 4000, true, true));
+        assertEquals(Legality.BANNED, CasualChallengeRules.legalityOf(lurrus, 600, false, true));
+        assertEquals(Legality.EXTENDED, CasualChallengeRules.legalityOf(abrade, 50, false, true));
+        assertEquals(Legality.LEGAL, CasualChallengeRules.legalityOf(abrade, 50, false, false));
     }
 
-    private static MtgJsonCard card(String cardName, boolean isVintageLegal, boolean isVintageRestricted, MtgFormat bannedIn) {
-        return new MtgJsonCard(cardName, null, isVintageLegal, isVintageRestricted, bannedIn, "LEA", LocalDate.of(1993, 8, 5));
+    private static MtgJsonCard card(
+            String cardName,
+            boolean isVintageLegal,
+            boolean isVintageRestricted,
+            MtgFormat bannedIn
+    ) {
+        return new MtgJsonCard(
+                cardName,
+                null,
+                isVintageLegal,
+                isVintageRestricted,
+                bannedIn,
+                "LEA",
+                LocalDate.of(1993, 8, 5)
+        );
     }
 }

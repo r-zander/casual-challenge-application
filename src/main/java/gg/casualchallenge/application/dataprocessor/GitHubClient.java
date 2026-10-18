@@ -23,8 +23,8 @@ import java.util.Base64;
 import java.util.List;
 
 /*
- * The three migrations of a season start, as one commit on a branch of its own plus a pull request. The Git Data API rather
- * than the contents API, because that one writes a commit per file and the 02 file is four megabytes on its own:
+ * The three migrations of a season start, as one commit on a branch of its own plus a pull request. The Git Data API
+ * rather than the contents API, because that one writes a commit per file and the 02 file is four megabytes on its own:
  *
  *     GET  /repos/{repository}/git/matching-refs/heads/{branch} --> [] unless an earlier attempt left the branch behind
  *     GET  /repos/{repository}/git/ref/heads/{baseBranch}       --> the commit the branch starts from
@@ -45,7 +45,8 @@ public class GitHubClient {
     private static final int TIMEOUT_IN_MINUTES = 5;
 
     private static final String MIGRATION_DIRECTORY = "src/main/resources/db/changelog/migrations";
-    private static final String FILE_MODE = "100644"; // a plain file, nothing executable
+    /** A plain file, nothing executable. */
+    private static final String FILE_MODE = "100644";
 
     private final ObjectMapper objectMapper;
     private final String apiBaseUrl;
@@ -78,13 +79,19 @@ public class GitHubClient {
 
     public static String pullRequestBody(SeasonDraftVO draft, List<SeasonSqlFileVO> files) {
         StringBuilder body = new StringBuilder();
-        body.append("Season ").append(draft.getSeasonNumber()).append(" migrations, straight out of the season wizard.\n\n");
-        body.append("- prepared ").append(draft.getPreparedAt().format(PREPARED_AT_FORMAT)).append(" by ").append(draft.getPreparedBy());
+        body.append("Season ")
+                .append(draft.getSeasonNumber())
+                .append(" migrations, straight out of the season wizard.\n\n");
+        body.append("- prepared ")
+                .append(draft.getPreparedAt().format(PREPARED_AT_FORMAT))
+                .append(" by ")
+                .append(draft.getPreparedBy());
         body.append(", committed by ").append(draft.getCommittedBy()).append("\n");
         for (SeasonSqlFileVO file : files) {
             body.append("- ").append(file.getFileName()).append("\n");
         }
-        body.append("- the season is live already, these files are only so the database can be rebuilt from the repository alone\n");
+        body.append("- the season is live already, ");
+        body.append("these files are only so the database can be rebuilt from the repository alone\n");
         body.append("- merge, then run the deploy workflow\n");
 
         return body.toString();
@@ -94,10 +101,13 @@ public class GitHubClient {
         int seasonNumber = draft.getSeasonNumber();
         String branch = branchName(seasonNumber);
 
-        // Checked up front, POST /git/refs only answers a bare 422 "Reference already exists" - and that after all the uploading
+        // Checked up front, POST /git/refs only answers a bare 422 "Reference already exists"
+        // - and that after all the uploading
         for (JsonNode existingReference : get("/git/matching-refs/heads/" + branch, token)) {
             if (existingReference.path("ref").asText().equals("refs/heads/" + branch)) {
-                throw new IllegalStateException("Branch '" + branch + "' is already on GitHub, probably left over from an earlier attempt or a rehearsal - closing a pull request doesn't delete its branch. Delete it on https://github.com/" + repository + "/branches and commit again.");
+                throw new IllegalStateException("Branch '" + branch + "' is already on GitHub, probably left over"
+                        + " from an earlier attempt or a rehearsal - closing a pull request doesn't delete its branch."
+                        + " Delete it on https://github.com/" + repository + "/branches and commit again.");
             }
         }
 
@@ -109,7 +119,8 @@ public class GitHubClient {
         ArrayNode entries = tree.putArray("tree");
         for (SeasonSqlFileVO file : files) {
             ObjectNode blob = objectMapper.createObjectNode();
-            blob.put("content", Base64.getEncoder().encodeToString(file.getContent().getBytes(StandardCharsets.UTF_8)));
+            byte[] contentBytes = file.getContent().getBytes(StandardCharsets.UTF_8);
+            blob.put("content", Base64.getEncoder().encodeToString(contentBytes));
             blob.put("encoding", "base64");
 
             ObjectNode entry = entries.addObject();
@@ -149,7 +160,11 @@ public class GitHubClient {
             throw e;
         }
 
-        log.info("Opened pull request {} with the migrations for season {}.", opened.path("html_url").asText(), seasonNumber);
+        log.info(
+                "Opened pull request {} with the migrations for season {}.",
+                opened.path("html_url").asText(),
+                seasonNumber
+        );
 
         return new PullRequestVO(opened.path("number").asInt(), opened.path("html_url").asText(), branch, commitSha);
     }
@@ -194,15 +209,21 @@ public class GitHubClient {
                 .build();
 
         try {
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new IllegalStateException("GitHub answered " + response.statusCode() + " on '" + url + "': " + errorMessage(response.body()));
+            HttpResponse<String> response = httpClient.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
+            );
+            if (!isSuccessful(response.statusCode())) {
+                throw new IllegalStateException("GitHub answered " + response.statusCode()
+                        + " on '" + url + "': " + errorMessage(response.body()));
             }
-            if (response.body() == null || response.body().isEmpty()) return objectMapper.createObjectNode();
+            if (response.body() == null) return objectMapper.createObjectNode();
+            if (response.body().isEmpty()) return objectMapper.createObjectNode();
 
             return objectMapper.readTree(response.body());
         } catch (IOException e) {
-            // IllegalStateException and not a plain RuntimeException: GitHub being unhappy is a 409 with a readable message, not a 500
+            // IllegalStateException and not a plain RuntimeException:
+            // GitHub being unhappy is a 409 with a readable message, not a 500
             throw new IllegalStateException("Couldn't reach GitHub at '" + url + "'. " + e, e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -210,8 +231,16 @@ public class GitHubClient {
         }
     }
 
+    private static boolean isSuccessful(int statusCode) {
+        if (statusCode < 200) return false;
+        if (statusCode >= 300) return false;
+
+        return true;
+    }
+
     private String errorMessage(String body) {
-        if (body == null || body.isEmpty()) return "no message";
+        if (body == null) return "no message";
+        if (body.isEmpty()) return "no message";
 
         try {
             JsonNode error = objectMapper.readTree(body);
@@ -219,13 +248,16 @@ public class GitHubClient {
             if (message.isEmpty()) return body;
 
             JsonNode errors = error.path("errors");
-            if (errors.isArray() && errors.size() > 0) {
-                return message + " (" + errors.get(0).toString() + ")";
+            if (errors.isArray()) {
+                if (errors.size() > 0) {
+                    return message + " (" + errors.get(0).toString() + ")";
+                }
             }
 
             return message;
         } catch (IOException e) {
-            return body; // not json, so the body is all we have
+            // Not json, so the body is all we have
+            return body;
         }
     }
 

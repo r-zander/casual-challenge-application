@@ -19,7 +19,8 @@ public class PriceWindowVO {
     }
 
     public int dayIndex(LocalDate date) {
-        if (date.isBefore(start) || !date.isBefore(end)) return -1;
+        if (date.isBefore(start)) return -1;
+        if (!date.isBefore(end)) return -1;
         return (int) ChronoUnit.DAYS.between(start, date);
     }
 

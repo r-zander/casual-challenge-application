@@ -42,7 +42,8 @@ class GitHubClientTest {
                 - 20261122_1044_00_add_season_22.sql
                 - 20261122_1044_01_insert_cards.sql
                 - 20261122_1044_02_insert_card_season_data_for_season_22.sql
-                - the season is live already, these files are only so the database can be rebuilt from the repository alone
+                - the season is live already, \
+                these files are only so the database can be rebuilt from the repository alone
                 - merge, then run the deploy workflow
                 """, GitHubClient.pullRequestBody(draft(), files()));
     }
@@ -75,6 +76,9 @@ class GitHubClientTest {
         return List.of(
                 new SeasonSqlFileVO("20261122_1044_00_add_season_22.sql", "-- liquibase formatted sql\n"),
                 new SeasonSqlFileVO("20261122_1044_01_insert_cards.sql", "INSERT INTO public.card ...\n"),
-                new SeasonSqlFileVO("20261122_1044_02_insert_card_season_data_for_season_22.sql", "INSERT INTO public.card_season_data ...\n"));
+                new SeasonSqlFileVO(
+                        "20261122_1044_02_insert_card_season_data_for_season_22.sql",
+                        "INSERT INTO public.card_season_data ...\n"
+                ));
     }
 }

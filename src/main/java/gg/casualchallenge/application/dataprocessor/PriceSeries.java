@@ -10,16 +10,21 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-// One instance per card and market, folding every printing in as it streams by, so the gigabyte of AllPrices.json never sits in memory
+/**
+ * One instance per card and market, folding every printing in as it streams by,
+ * so the gigabyte of AllPrices.json never sits in memory.
+ */
 public class PriceSeries {
 
-    private static final long NO_PRICE = -1; // no card ever costs a negative amount of cents
+    /** No card ever costs a negative amount of cents. */
+    private static final long NO_PRICE = -1;
 
     @Getter
     private int printingCount;
     @Getter
     private int flatPrintingCount;
-    private final long[] cheapestPerDay; // 33k cards hold four of these, so the running minimums stay primitive
+    // 33k cards hold four of these, so the running minimums stay primitive
+    private final long[] cheapestPerDay;
     private final long[] cheapestFlatPerDay;
     /** Index into {@code printingPrices}, only means something on a day with a price */
     private final int[] cheapestPrintingPerDay;
@@ -62,10 +67,12 @@ public class PriceSeries {
         for (int day = 0; day < centsPerDay.length; day++) {
             Cents price = centsPerDay[day];
             if (price == null) continue;
-            if (cheapest[day] == NO_PRICE || price.isLessThan(Cents.of(cheapest[day]))) {
-                cheapest[day] = price.getAmount();
-                cheapestPrinting[day] = printingIndex;
+            if (cheapest[day] != NO_PRICE) {
+                if (!price.isLessThan(Cents.of(cheapest[day]))) continue;
             }
+
+            cheapest[day] = price.getAmount();
+            cheapestPrinting[day] = printingIndex;
         }
     }
 
@@ -132,7 +139,10 @@ public class PriceSeries {
         return flatPrintingCount == printingCount;
     }
 
-    // A price that never moves is an anomaly, so the flat printings only count when there is no other printing to fall back on
+    /**
+     * A price that never moves is an anomaly, so the flat printings only count when there is no other printing
+     * to fall back on.
+     */
     private long[] cheapestOfEveryDay() {
         return flatPrintingCount < printingCount ? cheapestPerDay : cheapestFlatPerDay;
     }

@@ -62,9 +62,10 @@ public class MtgJsonClient {
 
     private static final long REQUIRED_DISK_SPACE = 2L * 1024 * 1024 * 1024;
 
-    private static final Set<MtgSetType> IGNORED_SET_TYPES = EnumSet.of(MtgSetType.FUNNY, MtgSetType.MEMORABILIA, MtgSetType.MINIGAME);
+    private static final Set<MtgSetType> IGNORED_SET_TYPES =
+            EnumSet.of(MtgSetType.FUNNY, MtgSetType.MEMORABILIA, MtgSetType.MINIGAME);
 
-    // The order decides which format ends up in banned_in for a card that is banned in more than one of them
+    /** The order decides which format ends up in banned_in for a card that is banned in more than one of them. */
     private final static Map<String, MtgFormat> FORMATS_BY_LEGALITY_KEY = new LinkedHashMap<>();
 
     static {
@@ -94,11 +95,15 @@ public class MtgJsonClient {
         }
     }
 
-    /** @param seasonDirectory null = download into a temp directory in the archive directory and throw it away afterwards */
+    /**
+     * @param seasonDirectory null = download into a temp directory in the archive directory
+     *                        and throw it away afterwards
+     */
     public MtgJsonPrintingsVO fetchPrintings(Path seasonDirectory) {
         if (seasonDirectory != null) archiveIgnoredPrices(seasonDirectory);
         Path directory = seasonDirectory != null ? seasonDirectory : createDownloadDirectory();
-        try (ZipInputStream zipStream = new ZipInputStream(new BufferedInputStream(Files.newInputStream(download(PRINTINGS_ZIP, directory))))) {
+        try (ZipInputStream zipStream = new ZipInputStream(
+                new BufferedInputStream(Files.newInputStream(download(PRINTINGS_ZIP, directory))))) {
             positionOnEntry(zipStream, PRINTINGS_FILE);
             return readPrintings(zipStream);
         } catch (IOException e) {
@@ -108,10 +113,18 @@ public class MtgJsonClient {
         }
     }
 
-    /** @param seasonDirectory null = download into a temp directory in the archive directory and throw it away afterwards */
-    public MtgJsonPricesVO fetchPrices(Map<UUID, MtgJsonPrinting> printingsByUuid, PriceWindowVO window, Path seasonDirectory) {
+    /**
+     * @param seasonDirectory null = download into a temp directory in the archive directory
+     *                        and throw it away afterwards
+     */
+    public MtgJsonPricesVO fetchPrices(
+            Map<UUID, MtgJsonPrinting> printingsByUuid,
+            PriceWindowVO window,
+            Path seasonDirectory
+    ) {
         Path directory = seasonDirectory != null ? seasonDirectory : createDownloadDirectory();
-        try (ZipInputStream zipStream = new ZipInputStream(new BufferedInputStream(Files.newInputStream(download(PRICES_ZIP, directory))))) {
+        try (ZipInputStream zipStream = new ZipInputStream(
+                new BufferedInputStream(Files.newInputStream(download(PRICES_ZIP, directory))))) {
             positionOnEntry(zipStream, PRICES_FILE);
             return readPrices(zipStream, printingsByUuid, window);
         } catch (IOException e) {
@@ -221,7 +234,12 @@ public class MtgJsonClient {
             cardsByName.put(identity.getCardName(), toCard(identity));
         }
 
-        log.info("Read {} sets with {} cards and {} printings.", sets.size(), cardsByName.size(), printingsByUuid.size());
+        log.info(
+                "Read {} sets with {} cards and {} printings.",
+                sets.size(),
+                cardsByName.size(),
+                printingsByUuid.size()
+        );
         return new MtgJsonPrintingsVO(
                 cardsByName,
                 printingsByUuid,
@@ -232,7 +250,11 @@ public class MtgJsonClient {
         );
     }
 
-    public MtgJsonPricesVO readPrices(InputStream allPricesJson, Map<UUID, MtgJsonPrinting> printingsByUuid, PriceWindowVO window) {
+    public MtgJsonPricesVO readPrices(
+            InputStream allPricesJson,
+            Map<UUID, MtgJsonPrinting> printingsByUuid,
+            PriceWindowVO window
+    ) {
         Map<String, CardPrices> pricesByCardName = new HashMap<>();
         boolean[] pricedDays = new boolean[window.lengthInDays()];
 
@@ -264,7 +286,12 @@ public class MtgJsonClient {
             if (pricedDay) pricedDayCount++;
         }
 
-        log.info("Read prices for {} cards on {} of the {} days in the window.", pricesByCardName.size(), pricedDayCount, pricedDays.length);
+        log.info(
+                "Read prices for {} cards on {} of the {} days in the window.",
+                pricesByCardName.size(),
+                pricedDayCount,
+                pricedDays.length
+        );
         return new MtgJsonPricesVO(pricesByCardName, pricedDayCount);
     }
 
@@ -292,12 +319,15 @@ public class MtgJsonClient {
         try {
             long usableSpace = Files.getFileStore(directory).getUsableSpace();
             if (usableSpace < REQUIRED_DISK_SPACE) {
-                throw new RuntimeException("Not enough disk space for '" + fileName + "'. We want " + REQUIRED_DISK_SPACE + " bytes free, but '" + directory + "' only has " + usableSpace + " bytes left.");
+                throw new RuntimeException("Not enough disk space for '" + fileName + "'."
+                        + " We want " + REQUIRED_DISK_SPACE + " bytes free,"
+                        + " but '" + directory + "' only has " + usableSpace + " bytes left.");
             }
             HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
             try (InputStream body = response.body()) {
                 if (response.statusCode() != 200) {
-                    throw new RuntimeException("Couldn't download '" + url + "'. Status code was " + response.statusCode() + ".");
+                    throw new RuntimeException("Couldn't download '" + url + "'."
+                            + " Status code was " + response.statusCode() + ".");
                 }
                 Files.copy(body, target, StandardCopyOption.REPLACE_EXISTING);
             }
@@ -323,10 +353,13 @@ public class MtgJsonClient {
 
     private static void positionOnEntry(ZipInputStream zipStream, String entryName) throws IOException {
         ZipEntry entry = zipStream.getNextEntry();
-        while (entry != null && !entryName.equals(entry.getName())) {
+        while (entry != null) {
+            if (entryName.equals(entry.getName())) return;
+
             entry = zipStream.getNextEntry();
         }
-        if (entry == null) throw new RuntimeException("Couldn't find '" + entryName + "' in the downloaded zip file.");
+
+        throw new RuntimeException("Couldn't find '" + entryName + "' in the downloaded zip file.");
     }
 
     private MtgJsonSet readSet(
@@ -389,14 +422,18 @@ public class MtgJsonClient {
         // The cards come before the set attributes in the file --> we can only judge them once the set is done
         boolean isIgnoredSetType = IGNORED_SET_TYPES.contains(setType);
         for (IdentityCandidate candidate : identityCandidates) {
-            if (isIgnoredSetType && !candidate.isVintageLegal()) continue;
+            if (isIgnoredSetType) {
+                if (!candidate.isVintageLegal()) continue;
+            }
 
             candidate.setReleaseDate(releaseDate);
             candidate.setMainSet(parentCode == null);
             IdentityCandidate identity = identitiesByName.get(candidate.getCardName());
-            if (identity == null || isOlderPrinting(candidate, identity)) {
-                identitiesByName.put(candidate.getCardName(), candidate);
+            if (identity != null) {
+                if (!isOlderPrinting(candidate, identity)) continue;
             }
+
+            identitiesByName.put(candidate.getCardName(), candidate);
         }
 
         return new MtgJsonSet(setName, setCode, releaseDate, setType, parentCode, isOnlineOnly, decks);
@@ -482,7 +519,10 @@ public class MtgJsonClient {
             }
         }
 
-        if (!isPaper || isOversized || "silver".equals(borderColor) || "gold".equals(borderColor)) return;
+        if (!isPaper) return;
+        if (isOversized) return;
+        if ("silver".equals(borderColor)) return;
+        if ("gold".equals(borderColor)) return;
 
         UUID printingUuid = UUID.fromString(uuid);
         Set<Finish> ignoredFinishes = EnumSet.noneOf(Finish.class);
@@ -506,7 +546,10 @@ public class MtgJsonClient {
             }
         }
         if (isRebalanced) return;
-        if (isFunny && !legalities.containsKey(MtgFormat.VINTAGE)) return; // MTGJSON flags every Unfinity card as funny, but the eternal legal ones are real cards
+        // MTGJSON flags every Unfinity card as funny, but the eternal legal ones are real cards
+        if (isFunny) {
+            if (!legalities.containsKey(MtgFormat.VINTAGE)) return;
+        }
 
         String vintage = legalities.get(MtgFormat.VINTAGE);
         IdentityCandidate candidate = new IdentityCandidate();
@@ -514,7 +557,8 @@ public class MtgJsonClient {
         candidate.setOracleId(oracleId);
         candidate.setNumber(number);
         candidate.setSetCode(setCode);
-        candidate.setVintageLegal(legalities.containsKey(MtgFormat.VINTAGE)); // MTGJSON leaves out formats a card isn't legal in --> key present is what counts, like the python did
+        // MTGJSON leaves out formats a card isn't legal in --> key present is what counts, like the python did
+        candidate.setVintageLegal(legalities.containsKey(MtgFormat.VINTAGE));
         candidate.setVintageRestricted("Restricted".equalsIgnoreCase(vintage));
         for (MtgFormat mtgFormat : FORMATS_BY_LEGALITY_KEY.values()) {
             if ("Banned".equals(legalities.get(mtgFormat))) {
@@ -555,7 +599,13 @@ public class MtgJsonClient {
         return new MtgJsonSet.MtgJsonDeck(deckName, isCommanderDeck, releaseDate);
     }
 
-    private static void readPricesOfPrinting(JsonParser parser, MtgJsonPrinting printing, PriceWindowVO window, Map<String, CardPrices> pricesByCardName, boolean[] pricedDays) throws IOException {
+    private static void readPricesOfPrinting(
+            JsonParser parser,
+            MtgJsonPrinting printing,
+            PriceWindowVO window,
+            Map<String, CardPrices> pricesByCardName,
+            boolean[] pricedDays
+    ) throws IOException {
         while (parser.nextToken() != JsonToken.END_OBJECT) {
             String fieldName = parser.currentName();
             parser.nextToken();
@@ -566,18 +616,30 @@ public class MtgJsonClient {
             while (parser.nextToken() != JsonToken.END_OBJECT) {
                 String marketIdentifier = parser.currentName();
                 parser.nextToken();
-                if (!"cardmarket".equals(marketIdentifier) && !"tcgplayer".equals(marketIdentifier)) {
-                    parser.skipChildren();
-                    continue;
+                boolean isCardmarket = "cardmarket".equals(marketIdentifier);
+                if (!isCardmarket) {
+                    if (!"tcgplayer".equals(marketIdentifier)) {
+                        parser.skipChildren();
+                        continue;
+                    }
                 }
-                CardPrices cardPrices = pricesByCardName.computeIfAbsent(printing.getCardName(), cardName -> new CardPrices(window.lengthInDays()));
-                PriceSeries series = "cardmarket".equals(marketIdentifier) ? cardPrices.getEur() : cardPrices.getUsd();
+                CardPrices cardPrices = pricesByCardName.computeIfAbsent(
+                        printing.getCardName(),
+                        cardName -> new CardPrices(window.lengthInDays())
+                );
+                PriceSeries series = isCardmarket ? cardPrices.getEur() : cardPrices.getUsd();
                 readRetailPrices(parser, printing, window, series, pricedDays);
             }
         }
     }
 
-    private static void readRetailPrices(JsonParser parser, MtgJsonPrinting printing, PriceWindowVO window, PriceSeries series, boolean[] pricedDays) throws IOException {
+    private static void readRetailPrices(
+            JsonParser parser,
+            MtgJsonPrinting printing,
+            PriceWindowVO window,
+            PriceSeries series,
+            boolean[] pricedDays
+    ) throws IOException {
         while (parser.nextToken() != JsonToken.END_OBJECT) {
             String fieldName = parser.currentName();
             parser.nextToken();
@@ -606,15 +668,21 @@ public class MtgJsonClient {
         }
     }
 
-    private static Cents[] readPricesPerDay(JsonParser parser, PriceWindowVO window, boolean[] pricedDays) throws IOException {
+    private static Cents[] readPricesPerDay(
+            JsonParser parser,
+            PriceWindowVO window,
+            boolean[] pricedDays
+    ) throws IOException {
         Cents[] centsPerDay = new Cents[window.lengthInDays()];
 
         while (parser.nextToken() != JsonToken.END_OBJECT) {
             LocalDate date = LocalDate.parse(parser.currentName());
             JsonToken price = parser.nextToken();
-            if (price != JsonToken.VALUE_NUMBER_FLOAT && price != JsonToken.VALUE_NUMBER_INT) {
-                parser.skipChildren();
-                continue;
+            if (price != JsonToken.VALUE_NUMBER_FLOAT) {
+                if (price != JsonToken.VALUE_NUMBER_INT) {
+                    parser.skipChildren();
+                    continue;
+                }
             }
             int dayIndex = window.dayIndex(date);
             if (dayIndex < 0) continue;
@@ -717,13 +785,14 @@ public class MtgJsonClient {
         if (identity.getReleaseDate() == null) return true;
         int comparison = candidate.getReleaseDate().compareTo(identity.getReleaseDate());
         if (comparison != 0) return comparison < 0;
-        if (candidate.isMainSet() != identity.isMainSet()) return candidate.isMainSet(); // promos come out on the same day as their set, but should not take precedence over main sets
+        // Promos come out on the same day as their set, but should not take precedence over main sets
+        if (candidate.isMainSet() != identity.isMainSet()) return candidate.isMainSet();
         comparison = candidate.getSetCode().compareTo(identity.getSetCode());
         if (comparison != 0) return comparison < 0;
         return compareCollectorNumbers(candidate.getNumber(), identity.getNumber()) < 0;
     }
 
-    // Collector numbers are strings like "1", "12a" or "A-7" - we want 2 before 12 and the plain numbers first
+    /** Collector numbers are strings like "1", "12a" or "A-7" - we want 2 before 12 and the plain numbers first. */
     private static int compareCollectorNumbers(String number, String otherNumber) {
         int comparison = Integer.compare(leadingNumber(number), leadingNumber(otherNumber));
         if (comparison != 0) return comparison;
@@ -732,7 +801,9 @@ public class MtgJsonClient {
 
     private static int leadingNumber(String number) {
         int digits = 0;
-        while (digits < number.length() && Character.isDigit(number.charAt(digits))) {
+        while (digits < number.length()) {
+            if (!Character.isDigit(number.charAt(digits))) break;
+
             digits++;
         }
         if (digits == 0) return Integer.MAX_VALUE;
@@ -744,7 +815,7 @@ public class MtgJsonClient {
         return LocalDate.parse(date);
     }
 
-    // One printing of one card while we are reading the file
+    /** One printing of one card while we are reading the file. */
     @Data
     private static class IdentityCandidate {
         private String cardName;

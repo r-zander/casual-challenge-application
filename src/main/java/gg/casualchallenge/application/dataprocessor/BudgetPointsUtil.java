@@ -9,7 +9,8 @@ public final class BudgetPointsUtil {
     }
 
     public static double adjustExchangeRate(double averageRate) {
-        return (1 + averageRate) / 2; // to be defensive, the average exchange rate is reduced
+        // To be defensive, the average exchange rate is reduced
+        return (1 + averageRate) / 2;
     }
 
     public static Cents fromUsd(Cents usdPrice, double adjustedRate) {

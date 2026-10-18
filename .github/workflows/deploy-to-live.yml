@@ -22,6 +22,6 @@ jobs:
             set -euo pipefail
             cd ${{ secrets.PROJECT_PATH }}
             git pull origin master
-            ./gradlew clean build -x test
+            ./gradlew clean build -x test --no-daemon
             docker compose -f docker-compose.prod.yml up --build -d --remove-orphans
             docker image prune -a -f

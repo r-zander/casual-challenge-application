@@ -225,10 +225,9 @@ public class SeasonPreparationService {
             }
 
             MtgJsonPrintingsVO printings = mtgJsonClient.readArchivedPrintings(seasonDirectory);
-            String mtgJsonDate = null;
-            if (printings.getMetaDate() != null) mtgJsonDate = printings.getMetaDate().toString();
+            LocalDate mtgJsonDate = printings.getMetaDate();
             if (committedDraft != null) {
-                String committedMtgJsonDate = committedDraft.getMtgJsonDate();
+                LocalDate committedMtgJsonDate = committedDraft.getMtgJsonDate();
                 if (!Objects.equals(mtgJsonDate, committedMtgJsonDate)) {
                     throw new IllegalStateException("The archive of season " + seasonNumber
                             + " holds MTGJSON of " + mtgJsonDate
@@ -443,8 +442,8 @@ public class SeasonPreparationService {
                 currentSeason.getId(),
                 currentSeason.getEndDate(),
                 currentSeason.getUpdatedAt(),
-                printings.getMetaDate() != null ? printings.getMetaDate().toString() : null,
-                request.getMetaSource().toString(),
+                printings.getMetaDate(),
+                request.getMetaSource(),
                 report.getPreparedAt(),
                 request.getPreparedBy(),
                 null,
@@ -919,10 +918,7 @@ public class SeasonPreparationService {
 
         List<CardPriceDetailsVO.IgnoredPrintingVO> ignoredPrintings = new ArrayList<>(printings.size());
         for (MtgJsonPrinting printing : printings) {
-            List<Finish> finishes = new ArrayList<>(2);
-            if (printing.isNonFoil()) finishes.add(Finish.NONFOIL);
-            if (printing.isFoil()) finishes.add(Finish.FOIL);
-            for (Finish finish : finishes) {
+            for (Finish finish : printing.getFinishes()) {
                 CardPriceDetailsVO.IgnoredPrintingVO ignoredPrinting =
                         new CardPriceDetailsVO.IgnoredPrintingVO(printing.getSetCode(), printing.getNumber(), finish);
                 // The faces of a card share their number
@@ -1097,7 +1093,7 @@ public class SeasonPreparationService {
                 request.getPriceWindow().getEnd(),
                 printings.getMetaDate(),
                 printings.getMetaVersion(),
-                request.getMetaSource().toString(),
+                request.getMetaSource(),
                 currentSeason.getSeasonNumber(),
                 LocalDateTime.now(Constants.TIMEZONE),
                 request.getPreparedBy(),
@@ -1171,8 +1167,7 @@ public class SeasonPreparationService {
 
             List<String> commanderDecks = commanderDecksByRootCode.computeIfAbsent(rootCode, code -> new ArrayList<>());
             for (MtgJsonSet.MtgJsonDeck deck : mtgSet.getDecks()) {
-                if (deck.getDeckType() == null) continue;
-                if (deck.getDeckType().contains("Commander")) commanderDecks.add(deck.getName());
+                if (deck.isCommanderDeck()) commanderDecks.add(deck.getName());
             }
         }
 

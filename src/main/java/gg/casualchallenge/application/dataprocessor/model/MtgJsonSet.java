@@ -19,7 +19,7 @@ public class MtgJsonSet {
     @Value
     public static class MtgJsonDeck {
         String name;
-        String deckType; // free text, "Commander Deck" and "MTGO Commander Deck" are both a thing
+        boolean isCommanderDeck;
         LocalDate releaseDate;
     }
 

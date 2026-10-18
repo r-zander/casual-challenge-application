@@ -6,6 +6,7 @@ import gg.casualchallenge.application.dataprocessor.model.PrintingPrices;
 import gg.casualchallenge.application.model.type.Finish;
 import org.junit.jupiter.api.Test;
 
+import java.util.EnumSet;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -15,13 +16,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PriceSeriesTest {
 
-    private static final MtgJsonPrinting CHK_193 = new MtgJsonPrinting(null, null, "CHK", "193", true, true);
-    private static final MtgJsonPrinting UMA_152 = new MtgJsonPrinting(null, null, "UMA", "152", true, true);
-    private static final MtgJsonPrinting INR_404 = new MtgJsonPrinting(null, null, "INR", "404", true, true);
-    private static final MtgJsonPrinting INR_175 = new MtgJsonPrinting(null, null, "INR", "175", true, true);
-    private static final MtgJsonPrinting MP2_49 = new MtgJsonPrinting(null, null, "MP2", "49", true, false);
-    private static final MtgJsonPrinting DELVER_INR_60_BACK = new MtgJsonPrinting(null, null, "INR", "60", true, true);
-    private static final MtgJsonPrinting DELVER_INR_60_FRONT = new MtgJsonPrinting(null, null, "INR", "60", true, true);
+    private static final MtgJsonPrinting CHK_193 =
+            new MtgJsonPrinting(null, null, "CHK", "193", EnumSet.of(Finish.NONFOIL, Finish.FOIL));
+    private static final MtgJsonPrinting UMA_152 =
+            new MtgJsonPrinting(null, null, "UMA", "152", EnumSet.of(Finish.NONFOIL, Finish.FOIL));
+    private static final MtgJsonPrinting INR_404 =
+            new MtgJsonPrinting(null, null, "INR", "404", EnumSet.of(Finish.NONFOIL, Finish.FOIL));
+    private static final MtgJsonPrinting INR_175 =
+            new MtgJsonPrinting(null, null, "INR", "175", EnumSet.of(Finish.NONFOIL, Finish.FOIL));
+    private static final MtgJsonPrinting MP2_49 =
+            new MtgJsonPrinting(null, null, "MP2", "49", EnumSet.of(Finish.FOIL));
+    private static final MtgJsonPrinting DELVER_INR_60_BACK =
+            new MtgJsonPrinting(null, null, "INR", "60", EnumSet.of(Finish.NONFOIL, Finish.FOIL));
+    private static final MtgJsonPrinting DELVER_INR_60_FRONT =
+            new MtgJsonPrinting(null, null, "INR", "60", EnumSet.of(Finish.NONFOIL, Finish.FOIL));
 
     @Test
     void testSumOfCheapest() {

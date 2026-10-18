@@ -35,9 +35,13 @@ public class CliTools {
                     System.err.println("Please provide a name that's used as jwt username as 2nd parameter, e.g. 'discord-bot'.");
                     return;
                 }
-                if (command.equals("generate-admin-jwt") && !args[1].matches("[^\\s:]+")) {
-                    System.err.println("An admin's name becomes the author of the season migrations, so no spaces and no ':' in there, e.g. 'raoul_zander'.");
-                    return;
+                boolean isAdminJwt = command.equals("generate-admin-jwt");
+                if (isAdminJwt) {
+                    if (!args[1].matches("[^\\s:]+")) {
+                        System.err.println("An admin's name becomes the author of the season migrations,"
+                                + " so no spaces and no ':' in there, e.g. 'raoul_zander'.");
+                        return;
+                    }
                 }
 
                 // Dynamically resolve the project root directory
@@ -46,7 +50,7 @@ public class CliTools {
                 String secretKey = Files.readString(secretFile).trim();
 
                 JwtService jwtService = new JwtService(secretKey);
-                String token = jwtService.generateToken(args[1], command.equals("generate-admin-jwt"));
+                String token = jwtService.generateToken(args[1], isAdminJwt);
                 System.out.println("Token: " + token);
                 System.out.println(jwtService.extractClaims(token));
                 System.out.println(jwtService.validateToken(token));

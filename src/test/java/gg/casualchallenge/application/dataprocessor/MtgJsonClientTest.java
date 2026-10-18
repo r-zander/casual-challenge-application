@@ -22,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +53,10 @@ class MtgJsonClientTest {
                       "cards": [
                         {"availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil"], "identifiers": {"scryfallOracleId": "6ad8011d-3471-4369-9d68-b264cc027487"}, "legalities": {"legacy": "Banned", "vintage": "Restricted"}, "name": "Sol Ring", "number": "254", "uuid": "8f6a9d1c-4b3e-5a7d-9c21-6e0f5a2b7d43"},
                         {"availability": ["paper"], "borderColor": "black", "finishes": ["nonfoil"], "identifiers": {"scryfallOracleId": "6ad8011d-3471-4369-9d68-b264cc027487"}, "isOversized": true, "legalities": {"legacy": "Banned", "vintage": "Restricted"}, "name": "Sol Ring", "number": "254b", "uuid": "2d7b4e90-1a6c-5f38-b4e7-9c1d05a6f2b8"}
+                      ],
+                      "decks": [
+                        {"name": "Mind Seize", "releaseDate": "2013-11-01", "type": "MTGO Commander Deck"},
+                        {"name": "Power Hungry", "releaseDate": "2013-11-01", "type": "Theme Deck"}
                       ],
                       "code": "C13", "isOnlineOnly": false, "name": "Commander 2013", "releaseDate": "2013-11-01", "type": "commander"
                     },
@@ -125,10 +130,12 @@ class MtgJsonClientTest {
         assertEquals(UUID.fromString("f0ee45b5-697b-48f8-b1a6-cb3ae75e4a29"), redHerring.getOracleId());
         assertEquals("MKM", redHerring.getFirstSetCode());
         assertEquals(MtgFormat.STANDARD, redHerring.getBannedIn());
-        assertTrue(printings.getPrintingsByUuid().get(UUID.fromString("6b2f90d4-7c13-5e48-9a05-3d8b17e6c204")).isFoil());
-        assertFalse(printings.getPrintingsByUuid().get(UUID.fromString("5a1e3c72-9d84-5b06-a1f3-7e2c48d905b1")).isFoil());
         MtgJsonPrinting redHerringPrinting =
                 printings.getPrintingsByUuid().get(UUID.fromString("6b2f90d4-7c13-5e48-9a05-3d8b17e6c204"));
+        MtgJsonPrinting playtestRedHerringPrinting =
+                printings.getPrintingsByUuid().get(UUID.fromString("5a1e3c72-9d84-5b06-a1f3-7e2c48d905b1"));
+        assertEquals(Set.of(Finish.NONFOIL, Finish.FOIL), redHerringPrinting.getFinishes());
+        assertEquals(Set.of(Finish.NONFOIL), playtestRedHerringPrinting.getFinishes());
         assertEquals("MKM", redHerringPrinting.getSetCode());
         assertEquals("90", redHerringPrinting.getNumber());
 
@@ -154,8 +161,10 @@ class MtgJsonClientTest {
         assertFalse(karlovManor.isOnlineOnly());
         assertEquals(1, karlovManor.getDecks().size());
         assertEquals("Deadly Disguise", karlovManor.getDecks().get(0).getName());
-        assertEquals("Commander Deck", karlovManor.getDecks().get(0).getDeckType());
+        assertTrue(karlovManor.getDecks().get(0).isCommanderDeck());
         assertEquals(LocalDate.of(2024, 2, 9), karlovManor.getDecks().get(0).getReleaseDate());
+        assertTrue(printings.getSets().get(0).getDecks().get(0).isCommanderDeck());
+        assertFalse(printings.getSets().get(0).getDecks().get(1).isCommanderDeck());
     }
 
     @Test
@@ -215,8 +224,20 @@ class MtgJsonClientTest {
                 }""";
 
         Map<UUID, MtgJsonPrinting> printingsByUuid = new HashMap<>();
-        MtgJsonPrinting alpha = new MtgJsonPrinting(SOL_RING_ALPHA, "Sol Ring", "LEA", "258", false, true);
-        MtgJsonPrinting commander = new MtgJsonPrinting(SOL_RING_COMMANDER, "Sol Ring", "C13", "254", true, true);
+        MtgJsonPrinting alpha = new MtgJsonPrinting(
+                SOL_RING_ALPHA,
+                "Sol Ring",
+                "LEA",
+                "258",
+                EnumSet.of(Finish.NONFOIL)
+        );
+        MtgJsonPrinting commander = new MtgJsonPrinting(
+                SOL_RING_COMMANDER,
+                "Sol Ring",
+                "C13",
+                "254",
+                EnumSet.of(Finish.NONFOIL, Finish.FOIL)
+        );
         printingsByUuid.put(SOL_RING_ALPHA, alpha);
         printingsByUuid.put(SOL_RING_COMMANDER, commander);
         PriceWindowVO window = PriceWindowVO.of(LocalDate.of(2025, 6, 7), 3);
@@ -309,12 +330,13 @@ class MtgJsonClientTest {
         );
 
         assertEquals(Set.of(SOL_RING_ALPHA, SOL_RING_COMMANDER), printings.getPrintingsByUuid().keySet());
-        assertFalse(printings.getPrintingsByUuid().get(SOL_RING_COMMANDER).isFoil());
-        assertTrue(printings.getPrintingsByUuid().get(SOL_RING_COMMANDER).isNonFoil());
+        assertEquals(Set.of(Finish.NONFOIL), printings.getPrintingsByUuid().get(SOL_RING_COMMANDER).getFinishes());
         assertEquals(1, printings.getIgnoredPrintingsByCardName().get("Sol Ring").size());
         assertEquals("254", printings.getIgnoredPrintingsByCardName().get("Sol Ring").get(0).getNumber());
-        assertTrue(printings.getIgnoredPrintingsByCardName().get("Sol Ring").get(0).isFoil());
-        assertFalse(printings.getIgnoredPrintingsByCardName().get("Sol Ring").get(0).isNonFoil());
+        assertEquals(
+                Set.of(Finish.FOIL),
+                printings.getIgnoredPrintingsByCardName().get("Sol Ring").get(0).getFinishes()
+        );
         assertEquals(Cents.of(110), prices.getPricesByCardName().get("Sol Ring").getEur().sumOfCheapest());
         assertEquals(2, prices.getPricedDays());
         assertTrue(exception.getMessage().contains(missingDirectory.toString()));

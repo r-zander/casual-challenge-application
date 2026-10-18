@@ -1,5 +1,6 @@
 package gg.casualchallenge.application.api.datamodel;
 
+import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
 import lombok.Value;
@@ -23,7 +24,7 @@ public class SeasonDraftReportResponse { // same field names as SeasonDraftRepor
     LocalDate priceWindowEnd;
     LocalDate mtgJsonDate;
     String mtgJsonVersion;
-    String metaSource;
+    MetaShareSource metaSource;
     int previousSeasonNumber;
     LocalDateTime preparedAt;
     String preparedBy;

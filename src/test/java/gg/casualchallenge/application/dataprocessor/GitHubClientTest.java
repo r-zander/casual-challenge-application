@@ -1,5 +1,6 @@
 package gg.casualchallenge.application.dataprocessor;
 
+import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
 import gg.casualchallenge.application.dataprocessor.model.SeasonSqlFileVO;
 import gg.casualchallenge.application.model.values.SeasonDraftVO;
 import org.junit.jupiter.api.Test;
@@ -57,8 +58,8 @@ class GitHubClientTest {
                 21,
                 LocalDate.of(2026, 11, 21),
                 LocalDateTime.of(2026, 9, 13, 20, 21),
-                "2026-11-22",
-                "mtggoldfish",
+                LocalDate.of(2026, 11, 22),
+                MetaShareSource.MTGGOLDFISH,
                 PREPARED_AT,
                 "raoul_zander",
                 COMMITTED_AT,

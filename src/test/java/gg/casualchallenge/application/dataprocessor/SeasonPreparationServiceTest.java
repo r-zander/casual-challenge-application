@@ -1,5 +1,7 @@
 package gg.casualchallenge.application.dataprocessor;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import gg.casualchallenge.application.api.legacy.datamodel.BanDTO;
 import gg.casualchallenge.application.api.legacy.datamodel.LegacyMtgFormat;
 import gg.casualchallenge.application.common.SeasonDates;
@@ -31,6 +33,7 @@ import gg.casualchallenge.application.persistence.entity.Card;
 import gg.casualchallenge.application.persistence.entity.CardSeasonData;
 import gg.casualchallenge.application.persistence.entity.Season;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -39,6 +42,7 @@ import java.nio.file.Path;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -67,12 +71,18 @@ class SeasonPreparationServiceTest {
     private static final UUID CHAOS_ORB = UUID.fromString("edb455f4-8dc9-4b7c-b25c-cb51b7dfbb41");
     private static final UUID DAWNING_ARCHAIC = UUID.fromString("a3e10b9b-9349-4b44-a46c-c825293dbd05");
     private static final UUID DELVER_OF_SECRETS = UUID.fromString("edd531b9-f615-4399-8c8c-1c5e18c4acbf");
-    private static final MtgJsonPrinting DELVER_INR_60_FRONT = new MtgJsonPrinting(null, null, "INR", "60", true, true);
-    private static final MtgJsonPrinting DELVER_INR_60_BACK = new MtgJsonPrinting(null, null, "INR", "60", true, true);
-    private static final MtgJsonPrinting DELVER_ISD_51_FRONT = new MtgJsonPrinting(null, null, "ISD", "51", true, true);
-    private static final MtgJsonPrinting DELVER_ISD_51_BACK = new MtgJsonPrinting(null, null, "ISD", "51", true, true);
-    private static final MtgJsonPrinting DELVER_MID_47_FRONT = new MtgJsonPrinting(null, null, "MID", "47", true, true);
-    private static final MtgJsonPrinting DELVER_MID_47_BACK = new MtgJsonPrinting(null, null, "MID", "47", true, true);
+    private static final MtgJsonPrinting DELVER_INR_60_FRONT =
+            new MtgJsonPrinting(null, null, "INR", "60", EnumSet.of(Finish.NONFOIL, Finish.FOIL));
+    private static final MtgJsonPrinting DELVER_INR_60_BACK =
+            new MtgJsonPrinting(null, null, "INR", "60", EnumSet.of(Finish.NONFOIL, Finish.FOIL));
+    private static final MtgJsonPrinting DELVER_ISD_51_FRONT =
+            new MtgJsonPrinting(null, null, "ISD", "51", EnumSet.of(Finish.NONFOIL, Finish.FOIL));
+    private static final MtgJsonPrinting DELVER_ISD_51_BACK =
+            new MtgJsonPrinting(null, null, "ISD", "51", EnumSet.of(Finish.NONFOIL, Finish.FOIL));
+    private static final MtgJsonPrinting DELVER_MID_47_FRONT =
+            new MtgJsonPrinting(null, null, "MID", "47", EnumSet.of(Finish.NONFOIL, Finish.FOIL));
+    private static final MtgJsonPrinting DELVER_MID_47_BACK =
+            new MtgJsonPrinting(null, null, "MID", "47", EnumSet.of(Finish.NONFOIL, Finish.FOIL));
     private static final UUID DINA_ESSENCE_BREWER = UUID.fromString("f61c1dc4-2f09-4b50-957f-ee656c659072");
     private static final UUID EMRAKUL_THE_EXIGENT_DOOM = UUID.fromString("4421ab7d-6d9b-4edd-b5a0-53a8ed84da6f");
     private static final UUID FRESH_FACE = UUID.fromString("bb1c9a77-4e6d-4f2a-9b3c-0a1d2e3f4a5b");
@@ -194,8 +204,8 @@ class SeasonPreparationServiceTest {
                 Map.of(cardName, card(cardName, DELVER_OF_SECRETS)),
                 Map.of(),
                 Map.of(cardName, List.of(
-                        new MtgJsonPrinting(null, null, "INR", "60", true, false),
-                        new MtgJsonPrinting(null, null, "INR", "60", true, false)
+                        new MtgJsonPrinting(null, null, "INR", "60", EnumSet.of(Finish.FOIL)),
+                        new MtgJsonPrinting(null, null, "INR", "60", EnumSet.of(Finish.FOIL))
                 )),
                 sets,
                 MTGJSON_DATE,
@@ -516,7 +526,7 @@ class SeasonPreparationServiceTest {
         assertEquals(20, report.getPreviousSeasonNumber());
         assertEquals(MTGJSON_DATE, report.getMtgJsonDate());
         assertEquals("5.2.2+20260913", report.getMtgJsonVersion());
-        assertEquals("mtggoldfish", report.getMetaSource());
+        assertEquals(MetaShareSource.MTGGOLDFISH, report.getMetaSource());
         assertEquals("raoul_zander", report.getPreparedBy());
         assertNull(report.getCommittedAt());
         assertNull(report.getCommittedBy());
@@ -576,11 +586,11 @@ class SeasonPreparationServiceTest {
                 new MtgJsonSet("Secrets of Strixhaven Promos", "PSOS", strixhavenRelease, MtgSetType.PROMO, "SOS", false, List.of()),
                 new MtgJsonSet("The Zeta Set", "SLZ", LocalDate.of(2026, 9, 2), MtgSetType.BOX, null, false, List.of()),
                 new MtgJsonSet("Secrets of Strixhaven Commander", "SOC", strixhavenRelease, MtgSetType.COMMANDER, "SOS", false, List.of(
-                        new MtgJsonSet.MtgJsonDeck("Lorehold Spirit", "Commander Deck", strixhavenRelease),
-                        new MtgJsonSet.MtgJsonDeck("Prismari Artistry", "Commander Deck", strixhavenRelease)
+                        new MtgJsonSet.MtgJsonDeck("Lorehold Spirit", true, strixhavenRelease),
+                        new MtgJsonSet.MtgJsonDeck("Prismari Artistry", true, strixhavenRelease)
                 )),
                 new MtgJsonSet("Secrets of Strixhaven", "SOS", strixhavenRelease, MtgSetType.EXPANSION, null, false, List.of(
-                        new MtgJsonSet.MtgJsonDeck("Lifegain", "Theme Deck", strixhavenRelease)
+                        new MtgJsonSet.MtgJsonDeck("Lifegain", false, strixhavenRelease)
                 ))
         );
         MtgJsonPrintingsVO printings = printings(
@@ -727,6 +737,21 @@ class SeasonPreparationServiceTest {
     }
 
     @Test
+    void testRequest_withRequestOfAnOlderSeason() throws JsonProcessingException {
+        String archivedRequest = """
+                {"startDate":"2026-09-21","endDate":"2026-11-21",
+                 "priceWindow":{"start":"2026-07-05","end":"2026-09-13"},"metaSource":"MTGGOLDFISH",
+                 "uploadedBans":null,"uploadedExtendedBans":null,"preparedBy":"raoul_zander"}""";
+        ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json().build();
+
+        SeasonPreparationRequestVO request = objectMapper.readValue(archivedRequest, SeasonPreparationRequestVO.class);
+
+        assertEquals(MetaShareSource.MTGGOLDFISH, request.getMetaSource());
+        assertEquals(new PriceWindowVO(LocalDate.of(2026, 7, 5), LocalDate.of(2026, 9, 13)), request.getPriceWindow());
+        assertEquals("raoul_zander", request.getPreparedBy());
+    }
+
+    @Test
     void testPruneArchive() throws IOException {
         Path archive = Files.createTempDirectory("season-archive");
         for (int seasonNumber = 17; seasonNumber <= 22; seasonNumber++) {
@@ -767,7 +792,7 @@ class SeasonPreparationServiceTest {
     }
 
     private static CardPrices cardPrices(long eurCents, long usdCents) {
-        MtgJsonPrinting printing = new MtgJsonPrinting(null, null, "LEA", null, false, true);
+        MtgJsonPrinting printing = new MtgJsonPrinting(null, null, "LEA", null, EnumSet.of(Finish.NONFOIL));
         CardPrices cardPrices = new CardPrices(WINDOW_LENGTH);
         if (eurCents > 0) cardPrices.getEur().addPrinting(printing, Finish.NONFOIL, cents(eurCents, eurCents));
         if (usdCents > 0) cardPrices.getUsd().addPrinting(printing, Finish.NONFOIL, cents(usdCents, usdCents));

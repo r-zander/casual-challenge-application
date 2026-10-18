@@ -2,6 +2,7 @@ package gg.casualchallenge.application.dataprocessor;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
 import gg.casualchallenge.application.dataprocessor.model.SeasonSqlFile;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
@@ -86,6 +87,7 @@ class SeasonDraftServiceTest {
         SeasonDraftReportVO report = objectMapper.readValue(storedReport, SeasonDraftReportVO.class);
 
         assertEquals(20, report.getSeasonNumber());
+        assertEquals(MetaShareSource.MTGGOLDFISH, report.getMetaSource());
         assertEquals(30206, report.getCounts().getCards());
         assertEquals(0, report.getCounts().getPricesFixedByExchangeRateCount()); // the old name is gone, nothing to read it into
         assertNull(report.getDuplicateMetaShareNames());
@@ -108,8 +110,8 @@ class SeasonDraftServiceTest {
                 20,
                 LocalDate.of(2026, 6, 7),
                 LocalDateTime.of(2026, 4, 5, 10, 59),
-                "2026-09-13",
-                "mtggoldfish",
+                LocalDate.of(2026, 9, 13),
+                MetaShareSource.MTGGOLDFISH,
                 PREPARED_AT,
                 preparedBy,
                 committedAt,
@@ -146,7 +148,7 @@ class SeasonDraftServiceTest {
                 LocalDate.of(2026, 9, 13),
                 LocalDate.of(2026, 9, 13),
                 "5.2.2+20260913",
-                "mtggoldfish",
+                MetaShareSource.MTGGOLDFISH,
                 20,
                 PREPARED_AT,
                 "raoul_zander",

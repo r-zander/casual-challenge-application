@@ -41,6 +41,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -352,7 +353,8 @@ class SeasonReplayTest {
         Map<String, CardPrices> pricesByCardName = new HashMap<>(budgetPointsByCardName.size());
         for (Map.Entry<String, Integer> entry : budgetPointsByCardName.entrySet()) {
             CardPrices cardPrices = new CardPrices(1);
-            MtgJsonPrinting printing = new MtgJsonPrinting(null, entry.getKey(), null, null, false, true);
+            MtgJsonPrinting printing =
+                    new MtgJsonPrinting(null, entry.getKey(), null, null, EnumSet.of(Finish.NONFOIL));
             cardPrices.getEur().addPrinting(printing, Finish.NONFOIL, new Cents[]{Cents.of(entry.getValue())});
             pricesByCardName.put(entry.getKey(), cardPrices);
         }

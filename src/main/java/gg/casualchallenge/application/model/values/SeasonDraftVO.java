@@ -1,5 +1,6 @@
 package gg.casualchallenge.application.model.values;
 
+import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
 import lombok.Value;
 import lombok.With;
 
@@ -17,8 +18,8 @@ public class SeasonDraftVO {
     int previousSeasonId;
     LocalDate previousSeasonEndDate;
     LocalDateTime previousSeasonUpdatedAt;
-    String mtgJsonDate;
-    String metaSource;
+    LocalDate mtgJsonDate;
+    MetaShareSource metaSource;
     LocalDateTime preparedAt;
     String preparedBy;
     @With

@@ -2,6 +2,7 @@ package gg.casualchallenge.application.persistence;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
 import gg.casualchallenge.application.model.values.CardPriceDetailsVO;
 import gg.casualchallenge.application.model.values.CommittedSeasonCountsVO;
 import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
@@ -11,6 +12,7 @@ import gg.casualchallenge.application.model.values.SeasonRemovalCountsVO;
 import gg.casualchallenge.application.model.values.SeasonVO;
 import gg.casualchallenge.application.persistence.converters.LegalityConverter;
 import gg.casualchallenge.application.persistence.converters.MtgFormatConverter;
+import gg.casualchallenge.library.persistence.EnumValueConverter;
 import jakarta.transaction.Transactional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -35,6 +37,8 @@ public class SeasonDraftRepository {
 
     private static final LegalityConverter LEGALITY_CONVERTER = new LegalityConverter();
     private static final MtgFormatConverter MTG_FORMAT_CONVERTER = new MtgFormatConverter();
+    private static final EnumValueConverter<MetaShareSource> META_SHARE_SOURCE_CONVERTER =
+            new EnumValueConverter<>(MetaShareSource.class);
 
     private static final String SELECT_DRAFT = "SELECT id, season_number, start_date, end_date, price_window_start, price_window_end, previous_season_id, previous_season_end_date, previous_season_updated_at, mtgjson_date, meta_source, prepared_at, prepared_by, committed_at, committed_by, migration_branch, pull_request_url, removed_at, removed_by, report FROM public.season_draft";
 
@@ -77,7 +81,7 @@ public class SeasonDraftRepository {
                 draft.getPreviousSeasonEndDate(),
                 draft.getPreviousSeasonUpdatedAt(),
                 draft.getMtgJsonDate(),
-                draft.getMetaSource(),
+                META_SHARE_SOURCE_CONVERTER.convertToDatabaseColumn(draft.getMetaSource()),
                 draft.getPreparedAt(),
                 draft.getPreparedBy(),
                 draft.getReport());
@@ -498,8 +502,8 @@ public class SeasonDraftRepository {
                 resultSet.getInt("previous_season_id"),
                 resultSet.getObject("previous_season_end_date", LocalDate.class),
                 resultSet.getObject("previous_season_updated_at", LocalDateTime.class),
-                resultSet.getString("mtgjson_date"),
-                resultSet.getString("meta_source"),
+                resultSet.getObject("mtgjson_date", LocalDate.class),
+                META_SHARE_SOURCE_CONVERTER.convertToEntityAttribute(resultSet.getString("meta_source")),
                 resultSet.getObject("prepared_at", LocalDateTime.class),
                 resultSet.getString("prepared_by"),
                 resultSet.getObject("committed_at", LocalDateTime.class),

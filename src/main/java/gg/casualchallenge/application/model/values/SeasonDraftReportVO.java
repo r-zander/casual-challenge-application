@@ -1,5 +1,6 @@
 package gg.casualchallenge.application.model.values;
 
+import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
 import lombok.Value;
@@ -24,7 +25,7 @@ public class SeasonDraftReportVO { // everything you need to decide whether the 
     LocalDate priceWindowEnd;
     LocalDate mtgJsonDate;
     String mtgJsonVersion;
-    String metaSource;
+    MetaShareSource metaSource;
     int previousSeasonNumber;
     LocalDateTime preparedAt;
     String preparedBy;

@@ -2,6 +2,7 @@ package gg.casualchallenge.application.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
 import gg.casualchallenge.application.model.type.Finish;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
@@ -17,11 +18,13 @@ import liquibase.integration.spring.SpringLiquibase;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.sql.DataSource;
@@ -271,6 +274,12 @@ class SeasonDraftRepositoryTest {
         assertEquals(draftId, seasonDraftRepository.findDraft().getId());
         assertEquals(21, seasonDraftRepository.findDraft().getSeasonNumber());
         assertEquals(SEASON_20_UPDATED_AT, seasonDraftRepository.findDraft().getPreviousSeasonUpdatedAt());
+        assertEquals(LocalDate.of(2026, 6, 7), seasonDraftRepository.findDraft().getMtgJsonDate());
+        assertEquals(MetaShareSource.MTGGOLDFISH, seasonDraftRepository.findDraft().getMetaSource());
+        assertEquals(
+                "mtggoldfish",
+                jdbcTemplate.queryForObject("SELECT meta_source FROM public.season_draft", String.class)
+        );
 
         List<SeasonDraftCardVO> cards = seasonDraftRepository.findDraftCards(draftId);
         assertEquals(4, cards.size());
@@ -296,6 +305,24 @@ class SeasonDraftRepositoryTest {
                 selectFromDraftCard("price_details #>> '{cardmarket,printings,0,finish}'", ANCESTORS_CHOSEN)
         );
         assertNull(selectFromDraftCard("price_details", FRESH_FACE));
+    }
+
+    @Test
+    void testMtgJsonDateMigration() {
+        seedPreviousSeason();
+        int draftId = replaceDraft();
+        jdbcTemplate.execute("ALTER TABLE public.season_draft ALTER COLUMN mtgjson_date TYPE character varying(31)");
+        jdbcTemplate.update("UPDATE public.season_draft SET mtgjson_date = '2026-06-07' WHERE id = ?", draftId);
+        ResourceDatabasePopulator migration = new ResourceDatabasePopulator(
+                new ClassPathResource("db/changelog/migrations/20261018_2200_alter_season_draft_mtgjson_date.sql"));
+
+        migration.execute(jdbcTemplate.getDataSource());
+
+        assertEquals(
+                "date",
+                jdbcTemplate.queryForObject("SELECT pg_typeof(mtgjson_date) FROM public.season_draft", String.class)
+        );
+        assertEquals(LocalDate.of(2026, 6, 7), seasonDraftRepository.findDraft().getMtgJsonDate());
     }
 
     @Test
@@ -518,8 +545,8 @@ class SeasonDraftRepositoryTest {
                 20,
                 SEASON_20_END_DATE,
                 SEASON_20_UPDATED_AT,
-                "2026-06-07",
-                "mtggoldfish",
+                LocalDate.of(2026, 6, 7),
+                MetaShareSource.MTGGOLDFISH,
                 PREPARED_AT,
                 "raoul_zander",
                 null,

@@ -420,8 +420,7 @@ public class MtgJsonClient {
         boolean isOversized = false;
         boolean isFunny = false;
         boolean isRebalanced = false;
-        boolean foil = false;
-        boolean nonFoil = false;
+        Set<Finish> finishes = EnumSet.noneOf(Finish.class);
 
         while (parser.nextToken() != JsonToken.END_OBJECT) {
             String fieldName = parser.currentName();
@@ -456,8 +455,8 @@ public class MtgJsonClient {
                 case "finishes":
                     while (parser.nextToken() != JsonToken.END_ARRAY) {
                         String finish = parser.getValueAsString();
-                        if ("foil".equals(finish)) foil = true;
-                        if ("nonfoil".equals(finish)) nonFoil = true;
+                        if ("foil".equals(finish)) finishes.add(Finish.FOIL);
+                        if ("nonfoil".equals(finish)) finishes.add(Finish.NONFOIL);
                     }
                     break;
                 case "identifiers":
@@ -486,10 +485,6 @@ public class MtgJsonClient {
         if (!isPaper || isOversized || "silver".equals(borderColor) || "gold".equals(borderColor)) return;
 
         UUID printingUuid = UUID.fromString(uuid);
-        MtgJsonPrinting printing = new MtgJsonPrinting(printingUuid, cardName, setCode, number, foil, nonFoil);
-        Set<Finish> finishes = EnumSet.noneOf(Finish.class);
-        if (foil) finishes.add(Finish.FOIL);
-        if (nonFoil) finishes.add(Finish.NONFOIL);
         Set<Finish> ignoredFinishes = EnumSet.noneOf(Finish.class);
         for (Finish finish : finishes) {
             if (isIgnoredForPrices(cardName, setCode, number, finish, ignoredPricesByCardName)) {
@@ -497,19 +492,16 @@ public class MtgJsonClient {
             }
         }
         if (ignoredFinishes.isEmpty()) {
+            MtgJsonPrinting printing = new MtgJsonPrinting(printingUuid, cardName, setCode, number, finishes);
             printingsByUuid.put(printingUuid, printing);
         } else {
-            boolean isFoilIgnored = ignoredFinishes.contains(Finish.FOIL);
-            boolean isNonFoilIgnored = ignoredFinishes.contains(Finish.NONFOIL);
             MtgJsonPrinting ignoredPrinting =
-                    new MtgJsonPrinting(printingUuid, cardName, setCode, number, isFoilIgnored, isNonFoilIgnored);
+                    new MtgJsonPrinting(printingUuid, cardName, setCode, number, ignoredFinishes);
             ignoredPrintingsByCardName.computeIfAbsent(cardName, name -> new ArrayList<>()).add(ignoredPrinting);
             finishes.removeAll(ignoredFinishes);
             if (!finishes.isEmpty()) {
-                boolean isFoilPriced = finishes.contains(Finish.FOIL);
-                boolean isNonFoilPriced = finishes.contains(Finish.NONFOIL);
                 MtgJsonPrinting pricedPrinting =
-                        new MtgJsonPrinting(printingUuid, cardName, setCode, number, isFoilPriced, isNonFoilPriced);
+                        new MtgJsonPrinting(printingUuid, cardName, setCode, number, finishes);
                 printingsByUuid.put(printingUuid, pricedPrinting);
             }
         }
@@ -556,7 +548,11 @@ public class MtgJsonClient {
             }
         }
 
-        return new MtgJsonSet.MtgJsonDeck(deckName, deckType, releaseDate);
+        // Free text, "Commander Deck" and "MTGO Commander Deck" are both a thing
+        boolean isCommanderDeck = false;
+        if (deckType != null) isCommanderDeck = deckType.contains("Commander");
+
+        return new MtgJsonSet.MtgJsonDeck(deckName, isCommanderDeck, releaseDate);
     }
 
     private static void readPricesOfPrinting(JsonParser parser, MtgJsonPrinting printing, PriceWindowVO window, Map<String, CardPrices> pricesByCardName, boolean[] pricedDays) throws IOException {
@@ -590,16 +586,19 @@ public class MtgJsonClient {
                 continue;
             }
             while (parser.nextToken() != JsonToken.END_OBJECT) {
-                String finish = parser.currentName();
+                String finishKey = parser.currentName();
                 parser.nextToken();
+                // MTGJSON's finishes say nonfoil, only its prices call it normal
+                Finish finish = null;
+                if ("normal".equals(finishKey)) finish = Finish.NONFOIL;
+                if ("foil".equals(finishKey)) finish = Finish.FOIL;
+                if (finish == null) {
+                    parser.skipChildren();
+                    continue;
+                }
                 // Foil and non-foil are two separate "printings" for the price calculation
-                if ("normal".equals(finish) && printing.isNonFoil() || "foil".equals(finish) && printing.isFoil()) {
-                    // MTGJSON's finishes say nonfoil, only its prices call it normal
-                    series.addPrinting(
-                            printing,
-                            "foil".equals(finish) ? Finish.FOIL : Finish.NONFOIL,
-                            readPricesPerDay(parser, window, pricedDays)
-                    );
+                if (printing.getFinishes().contains(finish)) {
+                    series.addPrinting(printing, finish, readPricesPerDay(parser, window, pricedDays));
                 } else {
                     parser.skipChildren();
                 }

@@ -1,5 +1,6 @@
 package gg.casualchallenge.application.dataprocessor;
 
+import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
 import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
@@ -168,8 +169,8 @@ class SeasonMigrationSqlTest {
                 20,
                 LocalDate.of(2026, 6, 7),
                 LocalDateTime.of(2026, 4, 5, 10, 59),
-                "2026-09-13",
-                "mtggoldfish",
+                LocalDate.of(2026, 9, 13),
+                MetaShareSource.MTGGOLDFISH,
                 PREPARED_AT,
                 "raoul_zander",
                 null,

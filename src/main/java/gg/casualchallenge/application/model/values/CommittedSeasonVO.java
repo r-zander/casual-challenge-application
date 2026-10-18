@@ -16,5 +16,6 @@ public class CommittedSeasonVO {
     List<MtgSetVO> newSets;
     SeasonDraftReportVO.ScryfallDecksVO scryfallDecks;
     CommittedSeasonCountsVO counts;
-    PullRequestVO pullRequest; // null when the migrations were not pushed to GitHub
+    /** Null when the migrations were not pushed to GitHub */
+    PullRequestVO pullRequest;
 }

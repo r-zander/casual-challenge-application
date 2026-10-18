@@ -13,7 +13,8 @@ public class MtgSetVO {
     LocalDate releaseDate;
     MtgSetType type;
     List<String> commanderDecks;
-    List<ChildSetVO> childSets; // commander set, promos etc. whose new cards are counted in here
+    /** Commander set, promos etc. whose new cards are counted in here */
+    List<ChildSetVO> childSets;
     int newCardCount;
 
     @Value

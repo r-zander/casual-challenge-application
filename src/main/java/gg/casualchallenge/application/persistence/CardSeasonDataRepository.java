@@ -16,22 +16,22 @@ public interface CardSeasonDataRepository  extends ListCrudRepository<CardSeason
 
     List<CardSeasonData> findAllBySeason(Season season);
 
-    @Query(value = "SELECT csd FROM CardSeasonData csd WHERE csd.season = :season AND csd.legality = :legality" +
-            " AND (csd.metaShareStandard IS NOT NULL" +
-            " OR csd.metaSharePioneer IS NOT NULL" +
-            " OR csd.metaShareModern IS NOT NULL" +
-            " OR csd.metaShareLegacy IS NOT NULL" +
-            " OR csd.metaShareVintage IS NOT NULL" +
-            " OR csd.metaSharePauper IS NOT NULL)" /*+
+    @Query(value = "SELECT csd FROM CardSeasonData csd WHERE csd.season = :season AND csd.legality = :legality"
+            + " AND (csd.metaShareStandard IS NOT NULL"
+            + " OR csd.metaSharePioneer IS NOT NULL"
+            + " OR csd.metaShareModern IS NOT NULL"
+            + " OR csd.metaShareLegacy IS NOT NULL"
+            + " OR csd.metaShareVintage IS NOT NULL"
+            + " OR csd.metaSharePauper IS NOT NULL)" /*+
             " AND csd.bannedIn IS NULL" +
             " AND csd.vintageRestricted = FALSE"*/)
     List<CardSeasonData> findAllByMetaBan(Season season, Legality legality);
 
-    @Query(value = "SELECT new gg.casualchallenge.application.model.values.BanListCardVO(" +
-            " card.name, csd.metaShareStandard, csd.metaSharePioneer, csd.metaSharePauper," +
-            " csd.metaShareModern, csd.metaShareLegacy, csd.metaShareVintage, csd.bannedIn, csd.vintageRestricted)" +
-            " FROM CardSeasonData csd JOIN Card card ON card.oracleId = csd.cardOracleId" +
-            " WHERE csd.season = :season AND csd.legality = :legality" +
-            " ORDER BY card.name")
+    @Query(value = "SELECT new gg.casualchallenge.application.model.values.BanListCardVO("
+            + " card.name, csd.metaShareStandard, csd.metaSharePioneer, csd.metaSharePauper,"
+            + " csd.metaShareModern, csd.metaShareLegacy, csd.metaShareVintage, csd.bannedIn, csd.vintageRestricted)"
+            + " FROM CardSeasonData csd JOIN Card card ON card.oracleId = csd.cardOracleId"
+            + " WHERE csd.season = :season AND csd.legality = :legality"
+            + " ORDER BY card.name")
     List<BanListCardVO> findAllForBanList(Season season, Legality legality);
 }

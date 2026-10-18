@@ -8,8 +8,13 @@ public final class RomanNumeral {
     private RomanNumeral() {}
 
     public static String of(int number) {
-        if (number < 1 || number > 3999) {
-            throw new IllegalArgumentException("Can't write '" + number + "' as a roman numeral, only 1 to 3999 are supported.");
+        if (number < 1) {
+            throw new IllegalArgumentException("Can't write '" + number + "' as a roman numeral,"
+                    + " only 1 to 3999 are supported.");
+        }
+        if (number > 3999) {
+            throw new IllegalArgumentException("Can't write '" + number + "' as a roman numeral,"
+                    + " only 1 to 3999 are supported.");
         }
 
         StringBuilder romanNumeral = new StringBuilder();

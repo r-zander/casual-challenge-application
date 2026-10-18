@@ -43,11 +43,13 @@ public class BanListCardVO {
 
     private void addMetaShare(List<String> reasons, MtgFormat mtgFormat, BigDecimal metaShare) {
         if (metaShare == null) return;
-        if (metaShare.signum() == 0) { // MtgGoldfish rounds down to full percent --> a card at the end of the list has a share of 0
+        // MtgGoldfish rounds down to full percent --> a card at the end of the list has a share of 0
+        if (metaShare.signum() == 0) {
             reasons.add(mtgFormat.getDisplayName() + " (< 1%)");
             return;
         }
 
-        reasons.add(mtgFormat.getDisplayName() + " (" + metaShare.movePointRight(2).stripTrailingZeros().toPlainString() + "%)");
+        String percentage = metaShare.movePointRight(2).stripTrailingZeros().toPlainString();
+        reasons.add(mtgFormat.getDisplayName() + " (" + percentage + "%)");
     }
 }

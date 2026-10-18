@@ -5,8 +5,10 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+/** Annotation targets enum fields. */
 @Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.FIELD) // Annotation targets enum fields
+@Target(ElementType.FIELD)
 public @interface DbEnumValue {
-    String value(); // The database value for the enum constant
+    /** The database value for the enum constant */
+    String value();
 }

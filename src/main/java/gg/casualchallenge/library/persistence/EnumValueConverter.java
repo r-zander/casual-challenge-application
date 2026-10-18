@@ -42,7 +42,7 @@ public class EnumValueConverter<T extends Enum<T>> implements AttributeConverter
         if (attribute == null) {
             return null;
         }
-        return enumToDbValue.get(attribute); // Lookup the database value
+        return enumToDbValue.get(attribute);
     }
 
     @Override
@@ -50,6 +50,6 @@ public class EnumValueConverter<T extends Enum<T>> implements AttributeConverter
         if (dbData == null) {
             return null;
         }
-        return dbValueToEnum.get(dbData); // Lookup the enum constant
+        return dbValueToEnum.get(dbData);
     }
 }

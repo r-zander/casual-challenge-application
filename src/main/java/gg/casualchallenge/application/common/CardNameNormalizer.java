@@ -9,20 +9,18 @@ public final class CardNameNormalizer {
 
     /**
      * Normalize a card name by performing the following transformations:
-     * 1. Replace diacritic characters (e.g. accents) with their base characters.
-     * 2. Strip single quotes (according to scryfall's rules)
-     * 3. Replace all non-alphanumeric characters with a dash '-' (e.g. "Card!" -> "Card-").
-     * 4. Replace repeated dashes ("---") with a single dash ("-").
-     * 5. Remove leading and trailing dashes.
-     * 6. Convert the resulting string to lowercase.
-     *
-     * @param cardName The original card name to normalize
-     * @return The normalized card name
+     * <ol>
+     *     <li>Replace diacritic characters (e.g. accents) with their base characters.</li>
+     *     <li>Strip single quotes (according to scryfall's rules)</li>
+     *     <li>Replace all non-alphanumeric characters with a dash '-' (e.g. {@code "Card!" -> "Card-"}).</li>
+     *     <li>Replace repeated dashes ("---") with a single dash ("-").</li>
+     *     <li>Remove leading and trailing dashes.</li>
+     *     <li>Convert the resulting string to lowercase.</li>
+     * </ol>
      */
     public static String normalize(String cardName) {
-        if (cardName == null || cardName.isEmpty()) {
-            return "";
-        }
+        if (cardName == null) return "";
+        if (cardName.isEmpty()) return "";
 
         // Step: Decompose the string into its base characters and remove diacritic marks
         String normalized = Normalizer.normalize(cardName, Normalizer.Form.NFD);

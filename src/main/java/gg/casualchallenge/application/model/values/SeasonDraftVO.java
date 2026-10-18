@@ -22,8 +22,12 @@ public class SeasonDraftVO {
     MetaShareSource metaSource;
     LocalDateTime preparedAt;
     String preparedBy;
+    /**
+     * The migration files are named after the commit,
+     * so they have to be built with the value the commit is about to write.
+     */
     @With
-    LocalDateTime committedAt; // the migration files are named after the commit, so they have to be built with the value the commit is about to write
+    LocalDateTime committedAt;
     @With
     String committedBy;
     String migrationBranch;

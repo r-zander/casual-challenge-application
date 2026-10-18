@@ -13,8 +13,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/** Everything you need to decide whether the draft is good enough to commit */
 @Value
-public class SeasonDraftReportVO { // everything you need to decide whether the draft is good enough to commit
+public class SeasonDraftReportVO {
     int seasonNumber;
     String romanSeasonNumber;
     LocalDate startDate;
@@ -29,12 +30,14 @@ public class SeasonDraftReportVO { // everything you need to decide whether the 
     int previousSeasonNumber;
     LocalDateTime preparedAt;
     String preparedBy;
+    // The report is stored before the commit, SeasonDraftService fills these two from season_draft
     @With
-    LocalDateTime committedAt; // the report is stored before the commit, SeasonDraftService fills these two from season_draft
+    LocalDateTime committedAt;
     @With
     String committedBy;
+    /** Where the migrations went, null when they were downloaded by hand */
     @With
-    String pullRequestUrl; // where the migrations went, null when they were downloaded by hand
+    String pullRequestUrl;
     CountsVO counts;
     List<String> duplicateMetaShareNames;
     List<BanChangeVO> newBans;
@@ -94,8 +97,9 @@ public class SeasonDraftReportVO { // everything you need to decide whether the 
         int change;
     }
 
+    /** A card that did not make it into the season, with the reason why */
     @Value
-    public static class LeftOutCardVO { // a card that did not make it into the season, with the reason why
+    public static class LeftOutCardVO {
         String name;
         UUID oracleId;
         String reason;
@@ -118,8 +122,9 @@ public class SeasonDraftReportVO { // everything you need to decide whether the 
         String normalizedName;
     }
 
+    /** The three lists that get pasted into Scryfall to build the season decks */
     @Value
-    public static class ScryfallDecksVO { // the three lists that get pasted into Scryfall to build the season decks
+    public static class ScryfallDecksVO {
         String newBans;
         String unbans;
         String currentBans;

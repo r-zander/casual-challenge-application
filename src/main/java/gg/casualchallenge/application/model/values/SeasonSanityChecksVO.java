@@ -6,8 +6,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+/** Does the draft add up? The wizard shows these above the report and locks the commit on a blocking one. */
 @Value
-public class SeasonSanityChecksVO { // does the draft add up? the wizard shows these above the report and locks the commit on a blocking one
+public class SeasonSanityChecksVO {
     List<SanityCheckVO> checks;
 
     public boolean isCommitBlocked() {
@@ -17,7 +18,10 @@ public class SeasonSanityChecksVO { // does the draft add up? the wizard shows t
     public List<String> getBlockingLabels() {
         List<String> labels = new ArrayList<>();
         for (SanityCheckVO check : this.checks) {
-            if (check.isBlocking() && !check.isPassing()) labels.add(check.getLabel().toLowerCase(Locale.ENGLISH));
+            if (!check.isBlocking()) continue;
+            if (check.isPassing()) continue;
+
+            labels.add(check.getLabel().toLowerCase(Locale.ENGLISH));
         }
 
         return labels;
@@ -29,6 +33,7 @@ public class SeasonSanityChecksVO { // does the draft add up? the wizard shows t
         String actual;
         String expectation;
         boolean passing;
-        boolean blocking; // a failing one of these means the numbers are wrong, not just surprising
+        /** A failing one of these means the numbers are wrong, not just surprising. */
+        boolean blocking;
     }
 }

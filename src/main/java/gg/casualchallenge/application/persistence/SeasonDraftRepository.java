@@ -30,7 +30,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-@Component // not @Repository: the exception translation turns the IllegalStateExceptions below into data access exceptions, and the 409 becomes a 500
+// Not @Repository: the exception translation turns the IllegalStateExceptions below into data access exceptions,
+// and the 409 becomes a 500
+@Component
 public class SeasonDraftRepository {
 
     private static final int BATCH_SIZE = 1000;
@@ -40,7 +42,11 @@ public class SeasonDraftRepository {
     private static final EnumValueConverter<MetaShareSource> META_SHARE_SOURCE_CONVERTER =
             new EnumValueConverter<>(MetaShareSource.class);
 
-    private static final String SELECT_DRAFT = "SELECT id, season_number, start_date, end_date, price_window_start, price_window_end, previous_season_id, previous_season_end_date, previous_season_updated_at, mtgjson_date, meta_source, prepared_at, prepared_by, committed_at, committed_by, migration_branch, pull_request_url, removed_at, removed_by, report FROM public.season_draft";
+    private static final String SELECT_DRAFT = "SELECT id, season_number, start_date, end_date, price_window_start,"
+            + " price_window_end, previous_season_id, previous_season_end_date, previous_season_updated_at,"
+            + " mtgjson_date, meta_source, prepared_at, prepared_by, committed_at, committed_by, migration_branch,"
+            + " pull_request_url, removed_at, removed_by, report"
+            + " FROM public.season_draft";
 
     private static final String INSERT_DRAFT_CARD = "INSERT INTO public.season_draft_card"
             + " (season_draft_id, oracle_id, previous_oracle_id, name, normalized_name, budget_points, legality,"
@@ -60,17 +66,25 @@ public class SeasonDraftRepository {
         this.objectMapper = objectMapper;
     }
 
-    /** There is only ever one draft to work on, so the old one is dropped. Committed drafts stay, they are the only record of a season start. */
+    /**
+     * There is only ever one draft to work on, so the old one is dropped.
+     * Committed drafts stay, they are the only record of a season start.
+     */
     @Transactional
     public void replace(SeasonDraftVO draft, List<SeasonDraftCardVO> cards) {
-        jdbcTemplate.update("DELETE FROM public.season_draft WHERE committed_at IS NULL"); // season_draft_card is cascaded
-        // 32k card rows per season start add up. The newest committed draft keeps them so its migration files can still be downloaded, the older ones only keep their report.
+        // season_draft_card is cascaded
+        jdbcTemplate.update("DELETE FROM public.season_draft WHERE committed_at IS NULL");
+        // 32k card rows per season start add up. The newest committed draft keeps them so its migration files
+        // can still be downloaded, the older ones only keep their report.
         jdbcTemplate.update("DELETE FROM public.season_draft_card WHERE season_draft_id IN"
-                + " (SELECT id FROM public.season_draft WHERE committed_at IS NOT NULL AND id <> (SELECT MAX(id) FROM public.season_draft WHERE committed_at IS NOT NULL))");
+                + " (SELECT id FROM public.season_draft WHERE committed_at IS NOT NULL"
+                + " AND id <> (SELECT MAX(id) FROM public.season_draft WHERE committed_at IS NOT NULL))");
 
         Integer draftId = jdbcTemplate.queryForObject(
-                "INSERT INTO public.season_draft (season_number, start_date, end_date, price_window_start, price_window_end, previous_season_id, previous_season_end_date, previous_season_updated_at, mtgjson_date, meta_source, prepared_at, prepared_by, report)" +
-                        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                "INSERT INTO public.season_draft (season_number, start_date, end_date, price_window_start,"
+                        + " price_window_end, previous_season_id, previous_season_end_date,"
+                        + " previous_season_updated_at, mtgjson_date, meta_source, prepared_at, prepared_by, report)"
+                        + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
                 Integer.class,
                 draft.getSeasonNumber(),
                 draft.getStartDate(),
@@ -84,7 +98,8 @@ public class SeasonDraftRepository {
                 META_SHARE_SOURCE_CONVERTER.convertToDatabaseColumn(draft.getMetaSource()),
                 draft.getPreparedAt(),
                 draft.getPreparedBy(),
-                draft.getReport());
+                draft.getReport()
+        );
 
         List<Object[]> batch = new ArrayList<>(BATCH_SIZE);
         for (SeasonDraftCardVO card : cards) {
@@ -120,23 +135,33 @@ public class SeasonDraftRepository {
 
     public SeasonDraftVO findDraft() {
         // A removed season's draft stays as the record of that start, it just isn't the draft any more
-        List<SeasonDraftVO> drafts = jdbcTemplate.query(SELECT_DRAFT + " WHERE removed_at IS NULL ORDER BY id DESC LIMIT 1", SeasonDraftRepository::toDraftVO);
+        List<SeasonDraftVO> drafts = jdbcTemplate.query(
+                SELECT_DRAFT + " WHERE removed_at IS NULL ORDER BY id DESC LIMIT 1",
+                SeasonDraftRepository::toDraftVO
+        );
         if (drafts.isEmpty()) return null;
         return drafts.get(0);
     }
 
     public SeasonDraftVO findUncommittedDraft() {
-        List<SeasonDraftVO> drafts = jdbcTemplate.query(SELECT_DRAFT + " WHERE committed_at IS NULL ORDER BY id DESC LIMIT 1", SeasonDraftRepository::toDraftVO);
+        List<SeasonDraftVO> drafts = jdbcTemplate.query(
+                SELECT_DRAFT + " WHERE committed_at IS NULL ORDER BY id DESC LIMIT 1",
+                SeasonDraftRepository::toDraftVO
+        );
         if (drafts.isEmpty()) return null;
         return drafts.get(0);
     }
 
     public List<SeasonDraftCardVO> findDraftCards(int draftId) {
         return jdbcTemplate.query(
-                "SELECT oracle_id, previous_oracle_id, name, normalized_name, budget_points, legality, meta_share_standard, meta_share_pioneer, meta_share_modern, meta_share_legacy, meta_share_vintage, meta_share_pauper, banned_in, vintage_restricted, is_new_card, skip_reason" +
-                        " FROM public.season_draft_card WHERE season_draft_id = ? ORDER BY id",
+                "SELECT oracle_id, previous_oracle_id, name, normalized_name, budget_points, legality,"
+                        + " meta_share_standard, meta_share_pioneer, meta_share_modern, meta_share_legacy,"
+                        + " meta_share_vintage, meta_share_pauper, banned_in, vintage_restricted, is_new_card,"
+                        + " skip_reason"
+                        + " FROM public.season_draft_card WHERE season_draft_id = ? ORDER BY id",
                 SeasonDraftRepository::toDraftCardVO,
-                draftId);
+                draftId
+        );
     }
 
     /** null = not in the draft */
@@ -154,7 +179,8 @@ public class SeasonDraftRepository {
                     return toDraftCardVO(resultSet, rowNumber).withPriceDetails(priceDetails);
                 },
                 draftId,
-                normalizedName);
+                normalizedName
+        );
         if (cards.isEmpty()) return null;
         return cards.get(0);
     }
@@ -163,7 +189,8 @@ public class SeasonDraftRepository {
         List<String> priceDetails = jdbcTemplate.queryForList(
                 "SELECT details FROM public.card_season_price_details WHERE card_season_data_id = ?",
                 String.class,
-                cardSeasonDataId);
+                cardSeasonDataId
+        );
         if (priceDetails.isEmpty()) return null;
         return fromJson(priceDetails.get(0), cardSeasonDataId);
     }
@@ -178,7 +205,11 @@ public class SeasonDraftRepository {
             String pullRequestUrl,
             int priceDetailsSeasons
     ) {
-        List<SeasonDraftVO> drafts = jdbcTemplate.query(SELECT_DRAFT + " WHERE id = ? FOR UPDATE", SeasonDraftRepository::toDraftVO, draftId);
+        List<SeasonDraftVO> drafts = jdbcTemplate.query(
+                SELECT_DRAFT + " WHERE id = ? FOR UPDATE",
+                SeasonDraftRepository::toDraftVO,
+                draftId
+        );
         if (drafts.isEmpty()) {
             throw new IllegalStateException("There is no season draft with id '" + draftId + "'.");
         }
@@ -190,105 +221,181 @@ public class SeasonDraftRepository {
         }
 
         // The current season is the one with the latest start date, same as everywhere else in the application
-        List<SeasonVO> currentSeasons = jdbcTemplate.query("SELECT id, season_number, start_date, end_date, updated_at FROM public.season ORDER BY start_date DESC LIMIT 1", SeasonDraftRepository::toSeasonVO);
+        List<SeasonVO> currentSeasons = jdbcTemplate.query(
+                "SELECT id, season_number, start_date, end_date, updated_at FROM public.season"
+                        + " ORDER BY start_date DESC LIMIT 1",
+                SeasonDraftRepository::toSeasonVO
+        );
         if (currentSeasons.isEmpty()) {
             throw new IllegalStateException("Draft for season " + seasonNumber + " has no season to continue.");
         }
 
         SeasonVO currentSeason = currentSeasons.get(0);
         if (seasonNumber != currentSeason.getSeasonNumber() + 1) {
-            throw new IllegalStateException("Draft for season " + seasonNumber + " does not continue the current season " + currentSeason.getSeasonNumber() + ".");
+            throw new IllegalStateException("Draft for season " + seasonNumber
+                    + " does not continue the current season " + currentSeason.getSeasonNumber() + ".");
         }
         if (draft.getPreviousSeasonId() != currentSeason.getId()) {
-            throw new IllegalStateException("Draft for season " + seasonNumber + " was prepared against season " + draft.getPreviousSeasonId() + ", but the current season is " + currentSeason.getId() + ".");
+            throw new IllegalStateException("Draft for season " + seasonNumber
+                    + " was prepared against season " + draft.getPreviousSeasonId()
+                    + ", but the current season is " + currentSeason.getId() + ".");
         }
 
-        Integer existingSeasons = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.season WHERE id = ? OR season_number = ?", Integer.class, seasonNumber, seasonNumber);
-        if (existingSeasons != null && existingSeasons > 0) {
-            throw new IllegalStateException("Season " + seasonNumber + " already exists.");
+        Integer existingSeasons = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM public.season WHERE id = ? OR season_number = ?",
+                Integer.class,
+                seasonNumber,
+                seasonNumber
+        );
+        if (existingSeasons != null) {
+            if (existingSeasons > 0) {
+                throw new IllegalStateException("Season " + seasonNumber + " already exists.");
+            }
         }
         if (!Objects.equals(currentSeason.getUpdatedAt(), draft.getPreviousSeasonUpdatedAt())) {
-            throw new IllegalStateException("Draft for season " + seasonNumber + " is stale, season " + currentSeason.getId() + " changed since the draft was prepared.");
+            throw new IllegalStateException("Draft for season " + seasonNumber
+                    + " is stale, season " + currentSeason.getId()
+                    + " changed since the draft was prepared.");
         }
 
-        List<Map<String, Object>> remaps = jdbcTemplate.queryForList("SELECT oracle_id, previous_oracle_id, name FROM public.season_draft_card WHERE season_draft_id = ? AND previous_oracle_id IS NOT NULL AND skip_reason IS NULL ORDER BY id", draftId);
+        List<Map<String, Object>> remaps = jdbcTemplate.queryForList(
+                "SELECT oracle_id, previous_oracle_id, name FROM public.season_draft_card"
+                        + " WHERE season_draft_id = ? AND previous_oracle_id IS NOT NULL AND skip_reason IS NULL"
+                        + " ORDER BY id",
+                draftId
+        );
         Set<Object> remappedOracleIds = new HashSet<>(remaps.size());
         for (Map<String, Object> remap : remaps) {
-            Integer cardsToRemap = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card WHERE oracle_id = ?", Integer.class, remap.get("previous_oracle_id"));
-            if (cardsToRemap == null || cardsToRemap == 0) {
-                throw new IllegalStateException("Card '" + remap.get("name") + "' is remapped from oracle id '" + remap.get("previous_oracle_id") + "', but no card has that oracle id.");
+            Integer cardsToRemap = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM public.card WHERE oracle_id = ?",
+                    Integer.class,
+                    remap.get("previous_oracle_id")
+            );
+            if (cardsToRemap == null) cardsToRemap = 0;
+            if (cardsToRemap == 0) {
+                throw new IllegalStateException("Card '" + remap.get("name")
+                        + "' is remapped from oracle id '" + remap.get("previous_oracle_id")
+                        + "', but no card has that oracle id.");
             }
             if (!remappedOracleIds.add(remap.get("oracle_id"))) {
-                throw new IllegalStateException("Card '" + remap.get("name") + "' is remapped to oracle id '" + remap.get("oracle_id") + "', which another card of this draft claims as well.");
+                throw new IllegalStateException("Card '" + remap.get("name")
+                        + "' is remapped to oracle id '" + remap.get("oracle_id")
+                        + "', which another card of this draft claims as well.");
             }
-            List<String> otherNames = jdbcTemplate.queryForList("SELECT name FROM public.card WHERE oracle_id = ? AND name <> ?", String.class, remap.get("oracle_id"), remap.get("name"));
+            List<String> otherNames = jdbcTemplate.queryForList(
+                    "SELECT name FROM public.card WHERE oracle_id = ? AND name <> ?",
+                    String.class,
+                    remap.get("oracle_id"),
+                    remap.get("name")
+            );
             if (!otherNames.isEmpty()) {
-                throw new IllegalStateException("Card '" + remap.get("name") + "' is remapped to oracle id '" + remap.get("oracle_id") + "', which already belongs to '" + otherNames.get(0) + "'.");
+                throw new IllegalStateException("Card '" + remap.get("name")
+                        + "' is remapped to oracle id '" + remap.get("oracle_id")
+                        + "', which already belongs to '" + otherNames.get(0) + "'.");
             }
         }
 
         List<Map<String, Object>> renames = jdbcTemplate.queryForList(
-                "SELECT card.oracle_id, card.name AS previous_name, draft_card.name, draft_card.normalized_name" +
-                        " FROM public.season_draft_card draft_card JOIN public.card ON card.oracle_id = COALESCE(draft_card.previous_oracle_id, draft_card.oracle_id)" +
-                        " WHERE draft_card.season_draft_id = ? AND draft_card.skip_reason IS NULL" +
-                        " AND (card.name <> draft_card.name OR card.normalized_name <> draft_card.normalized_name) ORDER BY draft_card.id",
-                draftId);
+                "SELECT card.oracle_id, card.name AS previous_name, draft_card.name, draft_card.normalized_name"
+                        + " FROM public.season_draft_card draft_card"
+                        + " JOIN public.card"
+                        + " ON card.oracle_id = COALESCE(draft_card.previous_oracle_id, draft_card.oracle_id)"
+                        + " WHERE draft_card.season_draft_id = ? AND draft_card.skip_reason IS NULL"
+                        + " AND (card.name <> draft_card.name OR card.normalized_name <> draft_card.normalized_name)"
+                        + " ORDER BY draft_card.id",
+                draftId
+        );
         for (Map<String, Object> rename : renames) {
-            List<String> otherNames = jdbcTemplate.queryForList("SELECT name FROM public.card WHERE (name = ? OR normalized_name = ?) AND oracle_id <> ?",
-                    String.class, rename.get("name"), rename.get("normalized_name"), rename.get("oracle_id"));
+            List<String> otherNames = jdbcTemplate.queryForList(
+                    "SELECT name FROM public.card WHERE (name = ? OR normalized_name = ?) AND oracle_id <> ?",
+                    String.class,
+                    rename.get("name"),
+                    rename.get("normalized_name"),
+                    rename.get("oracle_id")
+            );
             if (!otherNames.isEmpty()) {
-                throw new IllegalStateException("Card '" + rename.get("previous_name") + "' would be renamed to '" + rename.get("name") + "', which already belongs to '" + otherNames.get(0) + "'.");
+                throw new IllegalStateException("Card '" + rename.get("previous_name")
+                        + "' would be renamed to '" + rename.get("name")
+                        + "', which already belongs to '" + otherNames.get(0) + "'.");
             }
         }
 
         // Step: close the previous season and open the new one
-        jdbcTemplate.update("UPDATE public.season SET end_date = ?, updated_at = now() WHERE id = ?", draft.getStartDate().minusDays(1), draft.getPreviousSeasonId());
-        jdbcTemplate.update("INSERT INTO public.season (id, season_number, start_date, end_date, updated_at) VALUES (?, ?, ?, ?, now())", seasonNumber, seasonNumber, draft.getStartDate(), draft.getEndDate());
+        jdbcTemplate.update(
+                "UPDATE public.season SET end_date = ?, updated_at = now() WHERE id = ?",
+                draft.getStartDate().minusDays(1),
+                draft.getPreviousSeasonId()
+        );
+        jdbcTemplate.update(
+                "INSERT INTO public.season (id, season_number, start_date, end_date, updated_at)"
+                        + " VALUES (?, ?, ?, ?, now())",
+                seasonNumber,
+                seasonNumber,
+                draft.getStartDate(),
+                draft.getEndDate()
+        );
         jdbcTemplate.execute("SELECT setval('season_id_seq', (SELECT MAX(id) FROM public.season))");
 
         // Step: cards that got a new oracle id keep their old rows
         for (Map<String, Object> remap : remaps) {
-            // card_season_data references card.oracle_id without ON UPDATE CASCADE and the foreign key is checked at the end of the statement --> both updates have to be one statement
-            jdbcTemplate.update("WITH remapped_card AS (UPDATE public.card SET oracle_id = ? WHERE oracle_id = ?) UPDATE public.card_season_data SET card_oracle_id = ? WHERE card_oracle_id = ?",
+            /*
+             * card_season_data references card.oracle_id without ON UPDATE CASCADE and the foreign key is checked
+             * at the end of the statement --> both updates have to be one statement
+             */
+            jdbcTemplate.update(
+                    "WITH remapped_card AS (UPDATE public.card SET oracle_id = ? WHERE oracle_id = ?)"
+                            + " UPDATE public.card_season_data SET card_oracle_id = ? WHERE card_oracle_id = ?",
                     remap.get("oracle_id"),
                     remap.get("previous_oracle_id"),
                     remap.get("oracle_id"),
-                    remap.get("previous_oracle_id"));
+                    remap.get("previous_oracle_id")
+            );
         }
 
         // Step: MTGJSON renames cards from time to time, the card table has to follow or the API stops finding them
-        // keep in sync with SeasonMigrationSql.addSeason
+        // Keep in sync with SeasonMigrationSql.addSeason
         int updatedCardNames = jdbcTemplate.update(
-                "UPDATE public.card SET name = draft_card.name, normalized_name = draft_card.normalized_name" +
-                        " FROM public.season_draft_card draft_card" +
-                        " WHERE card.oracle_id = draft_card.oracle_id AND draft_card.season_draft_id = ? AND draft_card.skip_reason IS NULL" +
-                        " AND (card.name <> draft_card.name OR card.normalized_name <> draft_card.normalized_name)",
-                draftId);
+                "UPDATE public.card SET name = draft_card.name, normalized_name = draft_card.normalized_name"
+                        + " FROM public.season_draft_card draft_card"
+                        + " WHERE card.oracle_id = draft_card.oracle_id AND draft_card.season_draft_id = ?"
+                        + " AND draft_card.skip_reason IS NULL"
+                        + " AND (card.name <> draft_card.name OR card.normalized_name <> draft_card.normalized_name)",
+                draftId
+        );
 
-        int insertedCards = jdbcTemplate.update( // keep in sync with SeasonMigrationSql.insertCards
-                "INSERT INTO public.card (oracle_id, name, normalized_name, added_at)" +
-                        " SELECT oracle_id, name, normalized_name, ? FROM public.season_draft_card WHERE season_draft_id = ? AND is_new_card AND skip_reason IS NULL" +
-                        " ON CONFLICT (oracle_id) DO NOTHING",
+        // Keep in sync with SeasonMigrationSql.insertCards
+        int insertedCards = jdbcTemplate.update(
+                "INSERT INTO public.card (oracle_id, name, normalized_name, added_at)"
+                        + " SELECT oracle_id, name, normalized_name, ? FROM public.season_draft_card"
+                        + " WHERE season_draft_id = ? AND is_new_card AND skip_reason IS NULL"
+                        + " ON CONFLICT (oracle_id) DO NOTHING",
                 addedAt,
-                draftId);
+                draftId
+        );
 
-        int upsertedCardSeasonData = jdbcTemplate.update( // keep in sync with SeasonMigrationSql.insertCardSeasonData
-                "INSERT INTO public.card_season_data (season_id, card_oracle_id, budget_points, legality, meta_share_standard, meta_share_pioneer, meta_share_modern, meta_share_legacy, meta_share_vintage, meta_share_pauper, banned_in, vintage_restricted)" +
-                        " SELECT ?, oracle_id, budget_points, legality, meta_share_standard, meta_share_pioneer, meta_share_modern, meta_share_legacy, meta_share_vintage, meta_share_pauper, banned_in, vintage_restricted" +
-                        " FROM public.season_draft_card WHERE season_draft_id = ? AND skip_reason IS NULL" +
-                        " ON CONFLICT (season_id, card_oracle_id) DO UPDATE SET" +
-                        " budget_points = EXCLUDED.budget_points," +
-                        " legality = EXCLUDED.legality," +
-                        " meta_share_standard = EXCLUDED.meta_share_standard," +
-                        " meta_share_pioneer = EXCLUDED.meta_share_pioneer," +
-                        " meta_share_modern = EXCLUDED.meta_share_modern," +
-                        " meta_share_legacy = EXCLUDED.meta_share_legacy," +
-                        " meta_share_vintage = EXCLUDED.meta_share_vintage," +
-                        " meta_share_pauper = EXCLUDED.meta_share_pauper," +
-                        " banned_in = EXCLUDED.banned_in," +
-                        " vintage_restricted = EXCLUDED.vintage_restricted",
+        // Keep in sync with SeasonMigrationSql.insertCardSeasonData
+        int upsertedCardSeasonData = jdbcTemplate.update(
+                "INSERT INTO public.card_season_data (season_id, card_oracle_id, budget_points, legality,"
+                        + " meta_share_standard, meta_share_pioneer, meta_share_modern, meta_share_legacy,"
+                        + " meta_share_vintage, meta_share_pauper, banned_in, vintage_restricted)"
+                        + " SELECT ?, oracle_id, budget_points, legality, meta_share_standard, meta_share_pioneer,"
+                        + " meta_share_modern, meta_share_legacy, meta_share_vintage, meta_share_pauper, banned_in,"
+                        + " vintage_restricted"
+                        + " FROM public.season_draft_card WHERE season_draft_id = ? AND skip_reason IS NULL"
+                        + " ON CONFLICT (season_id, card_oracle_id) DO UPDATE SET"
+                        + " budget_points = EXCLUDED.budget_points,"
+                        + " legality = EXCLUDED.legality,"
+                        + " meta_share_standard = EXCLUDED.meta_share_standard,"
+                        + " meta_share_pioneer = EXCLUDED.meta_share_pioneer,"
+                        + " meta_share_modern = EXCLUDED.meta_share_modern,"
+                        + " meta_share_legacy = EXCLUDED.meta_share_legacy,"
+                        + " meta_share_vintage = EXCLUDED.meta_share_vintage,"
+                        + " meta_share_pauper = EXCLUDED.meta_share_pauper,"
+                        + " banned_in = EXCLUDED.banned_in,"
+                        + " vintage_restricted = EXCLUDED.vintage_restricted",
                 seasonNumber,
-                draftId);
+                draftId
+        );
 
         // Step: the price details move over to the season data, the draft has no use for its copy any more
         jdbcTemplate.update(
@@ -301,62 +408,93 @@ public class SeasonDraftRepository {
                         + " AND draft_card.price_details IS NOT NULL"
                         + " ON CONFLICT (card_season_data_id) DO UPDATE SET details = EXCLUDED.details",
                 seasonNumber,
-                draftId);
+                draftId
+        );
         jdbcTemplate.update(
                 "UPDATE public.season_draft_card SET price_details = NULL"
                         + " WHERE season_draft_id = ? AND price_details IS NOT NULL",
-                draftId);
+                draftId
+        );
         // A season's worth of details is big, and beyond the archive there is nothing to rebuild them from anyway
         // --> only the newest seasons keep theirs
         jdbcTemplate.update(
                 "DELETE FROM public.card_season_price_details price_details USING public.card_season_data data"
                         + " WHERE data.id = price_details.card_season_data_id"
                         + " AND data.season_id NOT IN (SELECT id FROM public.season ORDER BY start_date DESC LIMIT ?)",
-                priceDetailsSeasons);
+                priceDetailsSeasons
+        );
 
-        // Not now(): the database runs in local time while prepared_at is UTC, and the two of them name the migration files
-        jdbcTemplate.update("UPDATE public.season_draft SET committed_at = ?, committed_by = ?, migration_branch = ?, pull_request_url = ? WHERE id = ?",
-                committedAt, committedBy, migrationBranch, pullRequestUrl, draftId);
+        // Not now(): the database runs in local time while prepared_at is UTC,
+        // and the two of them name the migration files
+        jdbcTemplate.update(
+                "UPDATE public.season_draft SET committed_at = ?, committed_by = ?, migration_branch = ?,"
+                        + " pull_request_url = ? WHERE id = ?",
+                committedAt,
+                committedBy,
+                migrationBranch,
+                pullRequestUrl,
+                draftId
+        );
 
         return new CommittedSeasonCountsVO(remaps.size(), updatedCardNames, insertedCards, upsertedCardSeasonData);
     }
 
     @Transactional
     public void discard() {
-        jdbcTemplate.update("DELETE FROM public.season_draft WHERE committed_at IS NULL"); // season_draft_card is cascaded
+        // season_draft_card is cascaded
+        jdbcTemplate.update("DELETE FROM public.season_draft WHERE committed_at IS NULL");
     }
 
     public SeasonDraftVO findCommittedDraft(int seasonNumber) {
-        List<SeasonDraftVO> drafts = jdbcTemplate.query(SELECT_DRAFT + " WHERE season_number = ? AND committed_at IS NOT NULL AND removed_at IS NULL ORDER BY id DESC LIMIT 1", SeasonDraftRepository::toDraftVO, seasonNumber);
+        List<SeasonDraftVO> drafts = jdbcTemplate.query(
+                SELECT_DRAFT + " WHERE season_number = ? AND committed_at IS NOT NULL AND removed_at IS NULL"
+                        + " ORDER BY id DESC LIMIT 1",
+                SeasonDraftRepository::toDraftVO,
+                seasonNumber
+        );
         if (drafts.isEmpty()) return null;
         return drafts.get(0);
     }
 
-    /** Liquibase's own bookkeeping. Once a season migration ran here the season belongs to the repository, and removing it would last until the next deployment. */
+    /**
+     * Liquibase's own bookkeeping. Once a season migration ran here the season belongs to the repository,
+     * and removing it would last until the next deployment.
+     */
     public boolean hasAppliedSeasonMigration(int seasonNumber) {
         Integer changeSets = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM public.databasechangelog WHERE filename LIKE ? OR filename LIKE ?",
                 Integer.class,
                 "%_00_add_season_" + seasonNumber + ".sql",
-                "%_for_season_" + seasonNumber + ".sql");
+                "%_for_season_" + seasonNumber + ".sql"
+        );
 
-        return changeSets != null && changeSets > 0;
+        if (changeSets == null) return false;
+        return changeSets > 0;
     }
 
     public int countCardSeasonData(int seasonId) {
-        Integer rows = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM public.card_season_data WHERE season_id = ?", Integer.class, seasonId);
-        return rows != null ? rows : 0;
+        Integer rows = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM public.card_season_data WHERE season_id = ?",
+                Integer.class,
+                seasonId
+        );
+        if (rows == null) return 0;
+        return rows;
     }
 
-    // Same condition the removal deletes by, only that the season data is still there while we are counting
+    /** Same condition the removal deletes by, only that the season data is still there while we are counting. */
     public int countCardsAddedAt(LocalDateTime addedAt, int seasonId) {
         Integer cards = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM public.card WHERE added_at = ? AND NOT EXISTS (SELECT 1 FROM public.card_season_data WHERE card_oracle_id = card.oracle_id AND season_id <> ?)",
+                "SELECT COUNT(*) FROM public.card WHERE added_at = ? AND NOT EXISTS"
+                        + " (SELECT 1 FROM public.card_season_data"
+                        + " WHERE card_oracle_id = card.oracle_id AND season_id <> ?)",
                 Integer.class,
                 addedAt,
-                seasonId);
+                seasonId
+        );
 
-        return cards != null ? cards : 0;
+        if (cards == null) return 0;
+        return cards;
     }
 
     /** The inverse of commit, driven by what that commit recorded. Keep the two in sync. */
@@ -368,7 +506,11 @@ public class SeasonDraftRepository {
             LocalDateTime removedAt,
             String removedBy
     ) {
-        List<SeasonDraftVO> drafts = jdbcTemplate.query(SELECT_DRAFT + " WHERE id = ? FOR UPDATE", SeasonDraftRepository::toDraftVO, draftId);
+        List<SeasonDraftVO> drafts = jdbcTemplate.query(
+                SELECT_DRAFT + " WHERE id = ? FOR UPDATE",
+                SeasonDraftRepository::toDraftVO,
+                draftId
+        );
         if (drafts.isEmpty()) {
             throw new IllegalStateException("There is no season draft with id '" + draftId + "'.");
         }
@@ -379,56 +521,94 @@ public class SeasonDraftRepository {
             throw new IllegalStateException("The draft for season " + seasonNumber + " was never committed.");
         }
         if (draft.getRemovedAt() != null) {
-            throw new IllegalStateException("Season " + seasonNumber + " was removed already, on " + draft.getRemovedAt() + ".");
+            throw new IllegalStateException("Season " + seasonNumber
+                    + " was removed already, on " + draft.getRemovedAt() + ".");
         }
         if (draft.getPreviousSeasonEndDate() == null) {
-            throw new IllegalStateException("The draft for season " + seasonNumber + " was prepared by an older build, it never stored the end date season " + draft.getPreviousSeasonId() + " had before the commit.");
+            throw new IllegalStateException("The draft for season " + seasonNumber
+                    + " was prepared by an older build, it never stored the end date"
+                    + " season " + draft.getPreviousSeasonId() + " had before the commit.");
         }
         if (hasAppliedSeasonMigration(seasonNumber)) {
-            throw new IllegalStateException("A migration for season " + seasonNumber + " has run on this database --> the season is part of the repository and the next deployment would write it again.");
+            throw new IllegalStateException("A migration for season " + seasonNumber
+                    + " has run on this database --> the season is part of the repository"
+                    + " and the next deployment would write it again.");
         }
 
         // The current season is the one with the latest start date, same as everywhere else in the application
-        List<SeasonVO> currentSeasons = jdbcTemplate.query("SELECT id, season_number, start_date, end_date, updated_at FROM public.season ORDER BY start_date DESC LIMIT 1", SeasonDraftRepository::toSeasonVO);
-        if (currentSeasons.isEmpty() || currentSeasons.get(0).getSeasonNumber() != seasonNumber) {
-            throw new IllegalStateException("Season " + seasonNumber + " is not the current season, and only the newest one can be removed.");
+        List<SeasonVO> currentSeasons = jdbcTemplate.query(
+                "SELECT id, season_number, start_date, end_date, updated_at FROM public.season"
+                        + " ORDER BY start_date DESC LIMIT 1",
+                SeasonDraftRepository::toSeasonVO
+        );
+        if (currentSeasons.isEmpty()) {
+            throw new IllegalStateException("Season " + seasonNumber
+                    + " is not the current season, and only the newest one can be removed.");
         }
 
         SeasonVO season = currentSeasons.get(0);
-        int cardSeasonDataRows = jdbcTemplate.update("DELETE FROM public.card_season_data WHERE season_id = ?", season.getId());
+        if (season.getSeasonNumber() != seasonNumber) {
+            throw new IllegalStateException("Season " + seasonNumber
+                    + " is not the current season, and only the newest one can be removed.");
+        }
+
+        int cardSeasonDataRows = jdbcTemplate.update(
+                "DELETE FROM public.card_season_data WHERE season_id = ?",
+                season.getId()
+        );
 
         // Step: MTGJSON's renames go back, but only where the name is still the one the commit wrote
         int undoneRenames = 0;
         for (SeasonDraftReportVO.RenamedCardVO renamedCard : renamedCards) {
-            undoneRenames += jdbcTemplate.update("UPDATE public.card SET name = ?, normalized_name = ? WHERE oracle_id = ? AND name = ? AND normalized_name = ?",
+            undoneRenames += jdbcTemplate.update(
+                    "UPDATE public.card"
+                            + " SET name = ?, normalized_name = ?"
+                            + " WHERE oracle_id = ? AND name = ? AND normalized_name = ?",
                     renamedCard.getPreviousName(),
                     renamedCard.getPreviousNormalizedName(),
                     renamedCard.getOracleId(),
                     renamedCard.getName(),
-                    renamedCard.getNormalizedName());
+                    renamedCard.getNormalizedName()
+            );
         }
 
-        // Step: the cards this season brought. added_at is the draft's prepared_at for every one of them, and the NOT EXISTS keeps whatever another season still needs
+        // Step: the cards this season brought. added_at is the draft's prepared_at for every one of them,
+        // and the NOT EXISTS keeps whatever another season still needs
         int deletedCards = jdbcTemplate.update(
-                "DELETE FROM public.card WHERE added_at = ? AND NOT EXISTS (SELECT 1 FROM public.card_season_data WHERE card_oracle_id = card.oracle_id)",
-                draft.getPreparedAt());
+                "DELETE FROM public.card WHERE added_at = ? AND NOT EXISTS"
+                        + " (SELECT 1 FROM public.card_season_data WHERE card_oracle_id = card.oracle_id)",
+                draft.getPreparedAt()
+        );
 
         for (SeasonDraftReportVO.OracleIdChangeVO oracleIdChange : oracleIdChanges) {
             // Both updates in one statement, same reason as in commit
-            jdbcTemplate.update("WITH remapped_card AS (UPDATE public.card SET oracle_id = ? WHERE oracle_id = ?) UPDATE public.card_season_data SET card_oracle_id = ? WHERE card_oracle_id = ?",
+            jdbcTemplate.update(
+                    "WITH remapped_card AS (UPDATE public.card SET oracle_id = ? WHERE oracle_id = ?)"
+                            + " UPDATE public.card_season_data SET card_oracle_id = ? WHERE card_oracle_id = ?",
                     oracleIdChange.getPreviousOracleId(),
                     oracleIdChange.getOracleId(),
                     oracleIdChange.getPreviousOracleId(),
-                    oracleIdChange.getOracleId());
+                    oracleIdChange.getOracleId()
+            );
         }
 
-        // Step: open the previous season again and drop this one. updated_at is new, not restored, or nobody out there notices that the season went away
-        jdbcTemplate.update("UPDATE public.season SET end_date = ?, updated_at = now() WHERE id = ?", draft.getPreviousSeasonEndDate(), draft.getPreviousSeasonId());
+        // Step: open the previous season again and drop this one. updated_at is new, not restored,
+        // or nobody out there notices that the season went away
+        jdbcTemplate.update(
+                "UPDATE public.season SET end_date = ?, updated_at = now() WHERE id = ?",
+                draft.getPreviousSeasonEndDate(),
+                draft.getPreviousSeasonId()
+        );
         jdbcTemplate.update("DELETE FROM public.season WHERE id = ?", season.getId());
         jdbcTemplate.execute("SELECT setval('season_id_seq', (SELECT MAX(id) FROM public.season))");
 
         // The draft stays, it is the only record of the season start. It just says now that the season is gone again.
-        jdbcTemplate.update("UPDATE public.season_draft SET removed_at = ?, removed_by = ? WHERE id = ?", removedAt, removedBy, draftId);
+        jdbcTemplate.update(
+                "UPDATE public.season_draft SET removed_at = ?, removed_by = ? WHERE id = ?",
+                removedAt,
+                removedBy,
+                draftId
+        );
 
         return new SeasonRemovalCountsVO(cardSeasonDataRows, deletedCards, oracleIdChanges.size(), undoneRenames);
     }
@@ -459,7 +639,8 @@ public class SeasonDraftRepository {
         jdbcTemplate.update(
                 "DELETE FROM public.card_season_price_details price_details USING public.card_season_data data"
                         + " WHERE data.id = price_details.card_season_data_id AND data.season_id = ?",
-                seasonId);
+                seasonId
+        );
 
         List<Object[]> batch = new ArrayList<>(BATCH_SIZE);
         for (Map.Entry<UUID, CardPriceDetailsVO> entry : priceDetailsByOracleId.entrySet()) {
@@ -478,8 +659,10 @@ public class SeasonDraftRepository {
                         + " JOIN public.card_season_data data ON data.id = price_details.card_season_data_id"
                         + " WHERE data.season_id = ?",
                 Integer.class,
-                seasonId);
-        return storedCount != null ? storedCount : 0;
+                seasonId
+        );
+        if (storedCount == null) return 0;
+        return storedCount;
     }
 
     private static SeasonVO toSeasonVO(ResultSet resultSet, int rowNumber) throws SQLException {
@@ -488,7 +671,8 @@ public class SeasonDraftRepository {
                 resultSet.getInt("season_number"),
                 resultSet.getObject("start_date", LocalDate.class),
                 resultSet.getObject("end_date", LocalDate.class),
-                resultSet.getObject("updated_at", LocalDateTime.class));
+                resultSet.getObject("updated_at", LocalDateTime.class)
+        );
     }
 
     private static SeasonDraftVO toDraftVO(ResultSet resultSet, int rowNumber) throws SQLException {
@@ -512,7 +696,8 @@ public class SeasonDraftRepository {
                 resultSet.getString("pull_request_url"),
                 resultSet.getObject("removed_at", LocalDateTime.class),
                 resultSet.getString("removed_by"),
-                resultSet.getString("report"));
+                resultSet.getString("report")
+        );
     }
 
     private static SeasonDraftCardVO toDraftCardVO(ResultSet resultSet, int rowNumber) throws SQLException {
@@ -533,6 +718,7 @@ public class SeasonDraftRepository {
                 resultSet.getBoolean("vintage_restricted"),
                 resultSet.getBoolean("is_new_card"),
                 resultSet.getString("skip_reason"),
-                null);
+                null
+        );
     }
 }

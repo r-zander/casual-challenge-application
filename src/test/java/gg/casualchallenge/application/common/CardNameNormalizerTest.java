@@ -12,7 +12,10 @@ class CardNameNormalizerTest {
         assertEquals("black-lotus", CardNameNormalizer.normalize("BLACK LOTUS"));
         assertEquals("innkeepers-talent", CardNameNormalizer.normalize("Innkeeper's Talent"));
         assertEquals("fire-ice", CardNameNormalizer.normalize("Fire // Ice"));
-        assertEquals("delver-of-secrets-insectile-aberration", CardNameNormalizer.normalize("Delver of Secrets // Insectile Aberration"));
+        assertEquals(
+                "delver-of-secrets-insectile-aberration",
+                CardNameNormalizer.normalize("Delver of Secrets // Insectile Aberration")
+        );
         assertEquals("a-b", CardNameNormalizer.normalize("A---B"));
         assertEquals("test", CardNameNormalizer.normalize("-test-"));
         assertEquals("", CardNameNormalizer.normalize(null));

@@ -32,7 +32,8 @@ public class CliTools {
             case "generate-jwt":
             case "generate-admin-jwt": {
                 if (args.length < 2) {
-                    System.err.println("Please provide a name that's used as jwt username as 2nd parameter, e.g. 'discord-bot'.");
+                    System.err.println("Please provide a name that's used as jwt username as 2nd parameter,"
+                            + " e.g. 'discord-bot'.");
                     return;
                 }
                 boolean isAdminJwt = command.equals("generate-admin-jwt");

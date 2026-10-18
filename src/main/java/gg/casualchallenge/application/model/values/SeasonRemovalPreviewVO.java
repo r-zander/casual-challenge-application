@@ -6,8 +6,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/** What a removal would do, and everything that stands in its way */
 @Value
-public class SeasonRemovalPreviewVO { // what a removal would do, and everything that stands in its way
+public class SeasonRemovalPreviewVO {
     int seasonNumber;
     LocalDate startDate;
     LocalDate endDate;

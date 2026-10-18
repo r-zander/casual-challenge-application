@@ -1,595 +1,595 @@
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="dark" xmlns:th="http://www.thymeleaf.org">
 <head>
-  <th:block th:replace="~{fragments/layout :: pageHead('Casual Challenge Season Start')}"></th:block>
-  <link href="./css/season-wizard.css" rel="stylesheet">
+    <th:block th:replace="~{fragments/layout :: pageHead('Casual Challenge Season Start')}"></th:block>
+    <link href="./css/season-wizard.css" rel="stylesheet">
 </head>
 <body>
 <div class="container py-5 d-flex flex-column min-vh-100" style="max-width: 72em;">
-  <header class="text-center mb-5">
-    <h1 class="display-4">Casual Challenge API</h1>
-    <p class="lead">Is it time for a new season?</p>
-  </header>
+    <header class="text-center mb-5">
+        <h1 class="display-4">Casual Challenge API</h1>
+        <p class="lead">Is it time for a new season?</p>
+    </header>
 
-  <main>
-    <section id="tokenGate" class="mb-4">
-      <div class="card">
-        <div class="card-body">
-          <h2 class="card-title h4">Admin token required</h2>
+    <main>
+        <section id="tokenGate" class="mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="card-title h4">Admin token required</h2>
 
-          <div class="row g-2 align-items-start">
-            <div class="col">
-              <input type="password" class="form-control" id="tokenInput" autocomplete="off" spellcheck="false"
-                     placeholder="Token eyJhbGciOiJIUzI1NiJ9.eyJzd...">
-            </div>
-            <div class="col-auto align-self-end">
-              <button type="button" class="btn btn-primary" id="tokenSubmit">Start</button>
-            </div>
-          </div>
-          <div id="tokenError" class="alert alert-danger mt-3 d-none" role="alert"></div>
-
-          <p class="mt-3">
-            Everything here runs against <code>/admin/v1/...</code>. Get a token on the server, in
-            <code>/opt/casual-challenge-application</code>:
-          </p>
-          <pre class="command bg-body-tertiary p-3 rounded"><code>java -cp build/libs/casual-challenge-application-0.0.1-SNAPSHOT.jar -Dloader.main=gg.casualchallenge.application.CliTools org.springframework.boot.loader.launch.PropertiesLauncher generate-admin-jwt &lt;your_name&gt;</code></pre>
-          <p>
-            <code>&lt;your_name&gt;</code> = author of the season migrations, same style as the existing ones:
-            <strong>raoul_zander</strong>, <strong>janik_nissen</strong>. No spaces, no colons. Valid for a
-            year and not revocable on its own --&gt; keep it safe.
-          </p>
-        </div>
-      </div>
-    </section>
-
-    <div id="wizard" class="d-none">
-      <div class="card mb-4" id="currentSeason">
-        <div class="card-body">
-          <div id="currentSeasonEmpty" class="text-body-secondary d-none">
-            <code>/legacy/season/current</code> has no season for us.
-          </div>
-          <div id="currentSeasonData">
-            <h2 class="card-title h5">Season <span id="currentSeasonNumber"></span></h2>
-            <table class="table table-sm data-table mb-0">
-              <tr>
-                <th class="fw-normal text-body-secondary">Started</th>
-                <td id="currentSeasonStarted"></td>
-              </tr>
-              <tr>
-                <th class="fw-normal text-body-secondary">Scheduled</th>
-                <td id="currentSeasonScheduled"></td>
-              </tr>
-              <tr>
-                <th class="fw-normal text-body-secondary">Running</th>
-                <td id="currentSeasonRunning"></td>
-              </tr>
-              <tr>
-                <th class="fw-normal text-body-secondary">Data</th>
-                <td id="currentSeasonUpdated"></td>
-              </tr>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <div class="accordion" id="stepAccordion">
-
-        <div class="accordion-item">
-          <h2 class="accordion-header">
-            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                    data-bs-target="#step0Body">
-              <span class="step-number">0</span>
-              <span class="step-check"></span>
-              <span class="step-title">Admin token</span>
-              <span class="step-outcome text-body-secondary" id="step0Outcome"></span>
-            </button>
-          </h2>
-          <div id="step0Body" class="accordion-collapse collapse" data-bs-parent="#stepAccordion">
-            <div class="accordion-body">
-              <p>
-                Signed in as <strong id="tokenSubject"></strong>. Will be used for:
-              </p>
-              <ul>
-                <li>SQL migrations author</li>
-                <li><code>preparedBy</code> / <code>committedBy</code> in the report</li>
-              </ul>
-              <p id="tokenExpiry" class="text-body-secondary"></p>
-              <button type="button" class="btn btn-outline-secondary btn-sm" id="tokenForget">Forget the token</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="accordion-item">
-          <h2 class="accordion-header">
-            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                    data-bs-target="#step1Body">
-              <span class="step-number">1</span>
-              <span class="step-check"></span>
-              <span class="step-title">Prepare the season</span>
-              <span class="step-outcome text-body-secondary" id="step1Outcome"></span>
-            </button>
-          </h2>
-          <div id="step1Body" class="accordion-collapse collapse" data-bs-parent="#stepAccordion">
-            <div class="accordion-body">
-              <p class="text-body-secondary">Only fill fields to override defaults.</p>
-
-              <div class="row g-3">
-                <div class="col-sm-6">
-                  <label for="startDate" class="form-label">Start date</label>
-                  <input type="date" class="form-control" id="startDate">
-                  <div class="form-text" id="startDateDefault"></div>
-                </div>
-                <div class="col-sm-6">
-                  <label for="endDate" class="form-label">End date</label>
-                  <input type="date" class="form-control" id="endDate">
-                  <div class="form-text" id="endDateDefault"></div>
-                </div>
-                <div class="col-sm-6">
-                  <label for="priceWindowStart" class="form-label">Price window start</label>
-                  <input type="date" class="form-control" id="priceWindowStart">
-                  <div class="form-text" id="priceWindowStartDefault"></div>
-                </div>
-                <div class="col-sm-6">
-                  <label for="priceWindowEnd" class="form-label">Price window end</label>
-                  <input type="date" class="form-control" id="priceWindowEnd">
-                  <div class="form-text" id="priceWindowEndDefault"></div>
-                </div>
-              </div>
-
-              <fieldset class="mt-4">
-                <legend class="form-label fs-6">Staples from</legend>
-                <div class="form-check form-check-inline">
-                  <input class="form-check-input" type="radio" name="metaSource" id="metaSourceMtgGoldfish"
-                         value="mtggoldfish" checked>
-                  <label class="form-check-label" for="metaSourceMtgGoldfish">MtgGoldfish</label>
-                </div>
-                <div class="form-check form-check-inline">
-                  <input class="form-check-input" type="radio" name="metaSource" id="metaSourceMtgTop8" value="mtgtop8">
-                  <label class="form-check-label" for="metaSourceMtgTop8">MTGTop8</label>
-                </div>
-                <div class="form-check form-check-inline">
-                  <input class="form-check-input" type="radio" name="metaSource" id="metaSourceFiles" value="files">
-                  <label class="form-check-label" for="metaSourceFiles">Uploaded files</label>
-                </div>
-              </fieldset>
-
-              <p id="mtgTop8warning" class="mt-3 text-warning d-none">
-                MTGTop8 does not necessarily arrive at the same meta share numbers as MtgGoldfish, compare the results.
-              </p>
-
-              <div id="banFileInputs" class="row g-3 d-none">
-                <div class="col-sm-6">
-                  <label for="bansFile" class="form-label">bans.json</label>
-                  <input type="file" class="form-control" id="bansFile" accept=".json,application/json">
-                </div>
-                <div class="col-sm-6">
-                  <label for="extendedBansFile" class="form-label">extended-bans.json</label>
-                  <input type="file" class="form-control" id="extendedBansFile" accept=".json,application/json">
-                </div>
-                <p class="col-sm-12">Same format as <code>/legacy/season/##/bans.json</code>.</p>
-              </div>
-
-              <div class="d-flex justify-content-end gap-2 mt-4">
-                <button type="button" class="btn btn-outline-secondary d-none" id="cancelButton">Give up on it</button>
-                <button type="button" class="btn btn-primary" id="prepareButton">Prepare</button>
-              </div>
-
-              <div id="prepareError" class="alert alert-danger mt-3 d-none" role="alert"></div>
-
-              <div id="preparationProgress" class="mt-4 d-none">
-                <ol class="list-unstyled" id="preparationSteps">
-                  <li class="preparation-step" data-step="1">Reading AllPrintings.json</li>
-                  <li class="preparation-step" data-step="2">Reading AllPrices.json</li>
-                  <li class="preparation-step" data-step="3">Reading the meta shares</li>
-                  <li class="preparation-step" data-step="4">Calculating budget points and assembling the draft</li>
-                  <li class="preparation-step" data-step="5">Storing the season draft</li>
-                </ol>
-                <p class="text-body-secondary mb-0" id="preparationClock"></p>
-                <p class="text-body-secondary">
-                  This takes a few minutes.<br />
-                  Cancelling still finishes the current step before discarding the progress.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="accordion-item">
-          <h2 class="accordion-header">
-            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                    data-bs-target="#step2Body">
-              <span class="step-number">2</span>
-              <span class="step-check"></span>
-              <span class="step-title">Review the draft</span>
-              <span class="step-outcome text-body-secondary" id="step2Outcome"></span>
-            </button>
-          </h2>
-          <div id="step2Body" class="accordion-collapse collapse" data-bs-parent="#stepAccordion">
-            <div class="accordion-body">
-              <div id="step2Empty" class="text-body-secondary">No draft yet.</div>
-              <div id="step2Data" class="d-none">
-                <div id="draftError" class="alert alert-danger mt-3 d-none" role="alert"></div>
-                <div id="draftHeader" class="mb-4"></div>
-
-                <h3>Sanity check</h3>
-                <p class="text-body-secondary">
-                  50 and 150 rows per format, one price per day, no card counted twice. Doesn't add up?
-                  MtgGoldfish changed their page or blocked half the requests --> don't commit that.
-                </p>
-                <ul class="list-unstyled" id="sanityChecks"></ul>
-
-                <div id="reportSections"></div>
-
-                <hr>
-                <div class="d-flex justify-content-between align-items-center gap-2">
-                  <div>
-                    <button type="button" class="btn btn-outline-danger btn-sm" id="discardButton">
-                      Discard draft
-                    </button>
-                  </div>
-                  <button type="button" class="btn btn-primary" data-done-step="2" title="Looks good to me">
-                    LGTM
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="accordion-item">
-          <h2 class="accordion-header">
-            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                    data-bs-target="#step3Body">
-              <span class="step-number">3</span>
-              <span class="step-check"></span>
-              <span class="step-title">Commit</span>
-              <span class="step-outcome text-body-secondary" id="step3Outcome"></span>
-            </button>
-          </h2>
-          <div id="step3Body" class="accordion-collapse collapse" data-bs-parent="#stepAccordion">
-            <div class="accordion-body">
-              <p>
-                Hot phase!<br />
-                This is not instant, as the caches will be warmed with the new season data.
-                Clients get the new season data as soon as you see the loading here finished.
-              </p>
-
-              <div class="mb-3">
-                <label for="githubTokenInput" class="form-label">GitHub token <span
-                    class="text-body-secondary">(optional)</span></label>
-                <div class="form-text">
-                  Create a <a href="https://github.com/settings/personal-access-tokens/new" target="_blank">new GitHub
-                  Access Token</a> if you don't have one.
-                </div>
-                <input type="password" class="form-control" id="githubTokenInput" autocomplete="off"
-                       placeholder="github_pat_...">
-                <div class="form-text">
-                  If a token is provided, the new season migrations becomes a Pull Request, so Step 4 becomes a single
-                  click.
-                </div>
-              </div>
-
-              <div id="commitBlocked" class="alert alert-warning d-none" role="alert">
-                <div id="commitBlockedReason"></div>
-                <div class="form-check mt-2">
-                  <input class="form-check-input" type="checkbox" id="commitAnyway">
-                  <label class="form-check-label" for="commitAnyway">I've looked at it, commit anyway</label>
-                </div>
-              </div>
-
-              <div class="d-flex justify-content-end gap-2 mt-4">
-                <button type="button" class="btn btn-outline-secondary d-none" id="reloadCacheButton">Reload the card
-                  cache
-                </button>
-                <button type="button" class="btn btn-danger" id="commitButton" disabled="disabled">Commit the season</button>
-              </div>
-
-              <div id="commitError" class="alert alert-danger mt-3 d-none" role="alert"></div>
-              <div id="commitResult" class="mt-4 d-none">
-                <div class="alert alert-success">Season <span id="committedAlertSeason"></span> is live.</div>
-                <table class="table table-sm data-table">
-                  <tr>
-                    <th class="fw-normal text-body-secondary">Season</th>
-                    <td id="committedSeason"></td>
-                  </tr>
-                  <tr>
-                    <th class="fw-normal text-body-secondary">Starts</th>
-                    <td id="committedStartDate"></td>
-                  </tr>
-                  <tr>
-                    <th class="fw-normal text-body-secondary">Finals Friday</th>
-                    <td id="committedFinalsFriday"></td>
-                  </tr>
-                  <tr>
-                    <th class="fw-normal text-body-secondary">Ends</th>
-                    <td id="committedEndDate"></td>
-                  </tr>
-                  <tr>
-                    <th class="fw-normal text-body-secondary">Next season starts</th>
-                    <td id="committedNextSeasonStart"></td>
-                  </tr>
-                  <tr>
-                    <th class="fw-normal text-body-secondary">Cards inserted</th>
-                    <td id="committedInsertedCards"></td>
-                  </tr>
-                  <tr>
-                    <th class="fw-normal text-body-secondary">Card season data</th>
-                    <td id="committedCardSeasonData"></td>
-                  </tr>
-                  <tr>
-                    <th class="fw-normal text-body-secondary">Cards remapped</th>
-                    <td id="committedRemappedCards"></td>
-                  </tr>
-                  <tr>
-                    <th class="fw-normal text-body-secondary">Names updated</th>
-                    <td id="committedUpdatedCardNames"></td>
-                  </tr>
-                  <tr id="committedPullRequestRow" class="d-none">
-                    <th class="fw-normal text-body-secondary">Pull request</th>
-                    <td id="committedPullRequest"></td>
-                  </tr>
-                </table>
-              </div>
-
-              <div id="liveChecks" class="mt-4 d-none">
-                <h3>Verification</h3>
-                <p class="text-body-secondary" id="liveCheckSeason"></p>
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="banListChecked">
-                  <label class="form-check-label" for="banListChecked">
-                    <a href="./bans" target="_blank" rel="noreferrer">The ban list page</a> shows the new season
-                  </label>
-                </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="extensionChecked">
-                  <label class="form-check-label" for="extensionChecked">A card looked up with the extension on
-                    Scryfall shows the new budget points</label>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="accordion-item">
-          <h2 class="accordion-header">
-            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                    data-bs-target="#step4Body">
-              <span class="step-number">4</span>
-              <span class="step-check"></span>
-              <span class="step-title">Migrations into git</span>
-              <span class="step-outcome text-body-secondary" id="step4Outcome"></span>
-            </button>
-          </h2>
-          <div id="step4Body" class="accordion-collapse collapse" data-bs-parent="#stepAccordion">
-            <div class="accordion-body">
-              <div id="step4Empty" class="text-body-secondary">No draft yet.</div>
-              <div id="step4Data" class="d-none">
-                <div id="pullRequestResult" class="alert alert-success d-none" role="alert">
-                  1 to 4 are done: the three migrations are in
-                  <a id="pullRequestLink" target="_blank" rel="noreferrer">pull request #<span
-                      id="pullRequestNumber"></span></a>. Merge it, then run the deploy workflow. The
-                  downloads are still here if you want them anyway.
-                </div>
-                <div id="downloadWarning" class="alert alert-warning d-none" role="alert">
-                  Before the commit these carry the preparation time and name, not the commit ones. Works
-                  too, just don't mix the two.
-                </div>
-                <ol id="gitChecklist">
-                  <li class="checklist-step" data-checklist-step="1">
-                    Download the three migration files
-                    <div class="d-flex flex-wrap gap-2 my-2">
-                      <button type="button" class="btn btn-primary btn-sm" id="downloadAllButton">Download all
-                        three
-                      </button>
-                      <button type="button" class="btn btn-outline-primary btn-sm" data-sql-part="00_add_season">00_add_season</button>
-                      <button type="button" class="btn btn-outline-primary btn-sm" data-sql-part="01_insert_cards">01_insert_cards</button>
-                      <button type="button" class="btn btn-outline-primary btn-sm" data-sql-part="02_insert_card_season_data">02_insert_card_season_data</button>
+                    <div class="row g-2 align-items-start">
+                        <div class="col">
+                            <input type="password" class="form-control" id="tokenInput" autocomplete="off" spellcheck="false"
+                                   placeholder="Token eyJhbGciOiJIUzI1NiJ9.eyJzd...">
+                        </div>
+                        <div class="col-auto align-self-end">
+                            <button type="button" class="btn btn-primary" id="tokenSubmit">Start</button>
+                        </div>
                     </div>
-                    <div class="form-text">
-                      All three share the timestamp, so <code>00</code> runs first. The browser asks once
-                      whether it may save several files - say yes.
+                    <div id="tokenError" class="alert alert-danger mt-3 d-none" role="alert"></div>
+
+                    <p class="mt-3">
+                        Everything here runs against <code>/admin/v1/...</code>. Get a token on the server, in
+                        <code>/opt/casual-challenge-application</code>:
+                    </p>
+                    <pre class="command bg-body-tertiary p-3 rounded"><code>java -cp build/libs/casual-challenge-application-0.0.1-SNAPSHOT.jar -Dloader.main=gg.casualchallenge.application.CliTools org.springframework.boot.loader.launch.PropertiesLauncher generate-admin-jwt &lt;your_name&gt;</code></pre>
+                    <p>
+                        <code>&lt;your_name&gt;</code> = author of the season migrations, same style as the existing ones:
+                        <strong>raoul_zander</strong>, <strong>janik_nissen</strong>. No spaces, no colons. Valid for a
+                        year and not revocable on its own --&gt; keep it safe.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <div id="wizard" class="d-none">
+            <div class="card mb-4" id="currentSeason">
+                <div class="card-body">
+                    <div id="currentSeasonEmpty" class="text-body-secondary d-none">
+                        <code>/legacy/season/current</code> has no season for us.
                     </div>
-                    <div id="downloadError" class="alert alert-danger mt-2 d-none" role="alert"></div>
-                  </li>
-                  <li class="checklist-step" data-checklist-step="2">
-                    Copy them into
-                    <code>casual-challenge-application/src/main/resources/db/changelog/migrations</code>
-                  </li>
-                  <li class="checklist-step" data-checklist-step="3">Commit them</li>
-                  <li class="checklist-step" data-checklist-step="4">Push to master</li>
-                  <li class="checklist-step" data-checklist-step="5">
-                    Run the
-                    <a href="https://github.com/r-zander/casual-challenge-application/actions/workflows/spring-boot-workflow.yml"
-                       target="_blank" rel="noreferrer">deploy workflow</a>
-                    <div class="form-text">
-                      On the server the migrations change nothing, the commit already wrote all of it -
-                      they're there so the database can be rebuilt from the repository alone. If the app
-                      doesn't come back up afterwards, it's them. Time to hit up Raoul.
+                    <div id="currentSeasonData">
+                        <h2 class="card-title h5">Season <span id="currentSeasonNumber"></span></h2>
+                        <table class="table table-sm data-table mb-0">
+                            <tr>
+                                <th class="fw-normal text-body-secondary">Started</th>
+                                <td id="currentSeasonStarted"></td>
+                            </tr>
+                            <tr>
+                                <th class="fw-normal text-body-secondary">Scheduled</th>
+                                <td id="currentSeasonScheduled"></td>
+                            </tr>
+                            <tr>
+                                <th class="fw-normal text-body-secondary">Running</th>
+                                <td id="currentSeasonRunning"></td>
+                            </tr>
+                            <tr>
+                                <th class="fw-normal text-body-secondary">Data</th>
+                                <td id="currentSeasonUpdated"></td>
+                            </tr>
+                        </table>
                     </div>
-                  </li>
-                </ol>
-                <div class="d-flex justify-content-end mt-4">
-                  <button type="button" class="btn btn-primary" data-done-step="4">Done</button>
                 </div>
-              </div>
             </div>
-          </div>
-        </div>
 
-        <div class="accordion-item">
-          <h2 class="accordion-header">
-            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                    data-bs-target="#step5Body">
-              <span class="step-number">5</span>
-              <span class="step-check"></span>
-              <span class="step-title">Update Season History</span>
-              <span class="step-outcome text-body-secondary" id="step5Outcome"></span>
-            </button>
-          </h2>
-          <div id="step5Body" class="accordion-collapse collapse" data-bs-parent="#stepAccordion">
-            <div class="accordion-body">
-              <div id="step5Empty" class="text-body-secondary">No draft yet.</div>
-              <div id="step5Data" class="d-none">
-                <p>
-                  Add the new season as top most row in
-                  <a href="https://docs.google.com/document/d/1gaq2iZPVopdZGCNhQEgCsbry6gziJ5KgHM5VzrBYOdc/edit?tab=t.0#heading=h.442edbgnzano"
-                     target="_blank" rel="noreferrer"><b>CC - Organisation</b> &gt; Season History</a>.
-                </p>
-                <div id="seasonHistoryTable"></div>
-                <p class="text-body-secondary">
-                  Insert an empty row at the top of the table, select its six cells, then paste - the row lands
-                  cell by cell.
-                </p>
-                <div class="d-flex justify-content-end gap-2 mt-4">
-                  <button type="button" class="btn btn-outline-secondary" data-copy-html="seasonHistoryRow">
-                    Copy the row
-                  </button>
-                  <button type="button" class="btn btn-primary" data-done-step="5">Done</button>
+            <div class="accordion" id="stepAccordion">
+
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                        data-bs-target="#step0Body">
+                            <span class="step-number">0</span>
+                            <span class="step-check"></span>
+                            <span class="step-title">Admin token</span>
+                            <span class="step-outcome text-body-secondary" id="step0Outcome"></span>
+                        </button>
+                    </h2>
+                    <div id="step0Body" class="accordion-collapse collapse" data-bs-parent="#stepAccordion">
+                        <div class="accordion-body">
+                            <p>
+                                Signed in as <strong id="tokenSubject"></strong>. Will be used for:
+                            </p>
+                            <ul>
+                                <li>SQL migrations author</li>
+                                <li><code>preparedBy</code> / <code>committedBy</code> in the report</li>
+                            </ul>
+                            <p id="tokenExpiry" class="text-body-secondary"></p>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="tokenForget">Forget the token</button>
+                        </div>
+                    </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        <div class="accordion-item">
-          <h2 class="accordion-header">
-            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                    data-bs-target="#step6Body">
-              <span class="step-number">6</span>
-              <span class="step-check"></span>
-              <span class="step-title">Scryfall decks</span>
-              <span class="step-outcome text-body-secondary" id="step6Outcome"></span>
-            </button>
-          </h2>
-          <div id="step6Body" class="accordion-collapse collapse" data-bs-parent="#stepAccordion">
-            <div class="accordion-body">
-              <div id="step6Empty" class="text-body-secondary">No draft yet.</div>
-              <div id="step6Data" class="text-body-secondary d-none">
-                <p>
-                  Already filtered: unbans without the paper bans, the restricted ones and anything above
-                  2500 BP, current bans without anything above 2500 BP.<br />
-                  Paste as they are.<br />
-                  Replace the current bans deck, don't add a new one.
-                </p>
-                <div id="scryfallDecks"></div>
-                <div class="d-flex justify-content-end mt-4">
-                  <button type="button" class="btn btn-primary" data-done-step="6">Done</button>
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                        data-bs-target="#step1Body">
+                            <span class="step-number">1</span>
+                            <span class="step-check"></span>
+                            <span class="step-title">Prepare the season</span>
+                            <span class="step-outcome text-body-secondary" id="step1Outcome"></span>
+                        </button>
+                    </h2>
+                    <div id="step1Body" class="accordion-collapse collapse" data-bs-parent="#stepAccordion">
+                        <div class="accordion-body">
+                            <p class="text-body-secondary">Only fill fields to override defaults.</p>
+
+                            <div class="row g-3">
+                                <div class="col-sm-6">
+                                    <label for="startDate" class="form-label">Start date</label>
+                                    <input type="date" class="form-control" id="startDate">
+                                    <div class="form-text" id="startDateDefault"></div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <label for="endDate" class="form-label">End date</label>
+                                    <input type="date" class="form-control" id="endDate">
+                                    <div class="form-text" id="endDateDefault"></div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <label for="priceWindowStart" class="form-label">Price window start</label>
+                                    <input type="date" class="form-control" id="priceWindowStart">
+                                    <div class="form-text" id="priceWindowStartDefault"></div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <label for="priceWindowEnd" class="form-label">Price window end</label>
+                                    <input type="date" class="form-control" id="priceWindowEnd">
+                                    <div class="form-text" id="priceWindowEndDefault"></div>
+                                </div>
+                            </div>
+
+                            <fieldset class="mt-4">
+                                <legend class="form-label fs-6">Staples from</legend>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="metaSource" id="metaSourceMtgGoldfish"
+                                           value="mtggoldfish" checked>
+                                    <label class="form-check-label" for="metaSourceMtgGoldfish">MtgGoldfish</label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="metaSource" id="metaSourceMtgTop8" value="mtgtop8">
+                                    <label class="form-check-label" for="metaSourceMtgTop8">MTGTop8</label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="metaSource" id="metaSourceFiles" value="files">
+                                    <label class="form-check-label" for="metaSourceFiles">Uploaded files</label>
+                                </div>
+                            </fieldset>
+
+                            <p id="mtgTop8warning" class="mt-3 text-warning d-none">
+                                MTGTop8 does not necessarily arrive at the same meta share numbers as MtgGoldfish, compare the results.
+                            </p>
+
+                            <div id="banFileInputs" class="row g-3 d-none">
+                                <div class="col-sm-6">
+                                    <label for="bansFile" class="form-label">bans.json</label>
+                                    <input type="file" class="form-control" id="bansFile" accept=".json,application/json">
+                                </div>
+                                <div class="col-sm-6">
+                                    <label for="extendedBansFile" class="form-label">extended-bans.json</label>
+                                    <input type="file" class="form-control" id="extendedBansFile" accept=".json,application/json">
+                                </div>
+                                <p class="col-sm-12">Same format as <code>/legacy/season/##/bans.json</code>.</p>
+                            </div>
+
+                            <div class="d-flex justify-content-end gap-2 mt-4">
+                                <button type="button" class="btn btn-outline-secondary d-none" id="cancelButton">Give up on it</button>
+                                <button type="button" class="btn btn-primary" id="prepareButton">Prepare</button>
+                            </div>
+
+                            <div id="prepareError" class="alert alert-danger mt-3 d-none" role="alert"></div>
+
+                            <div id="preparationProgress" class="mt-4 d-none">
+                                <ol class="list-unstyled" id="preparationSteps">
+                                    <li class="preparation-step" data-step="1">Reading AllPrintings.json</li>
+                                    <li class="preparation-step" data-step="2">Reading AllPrices.json</li>
+                                    <li class="preparation-step" data-step="3">Reading the meta shares</li>
+                                    <li class="preparation-step" data-step="4">Calculating budget points and assembling the draft</li>
+                                    <li class="preparation-step" data-step="5">Storing the season draft</li>
+                                </ol>
+                                <p class="text-body-secondary mb-0" id="preparationClock"></p>
+                                <p class="text-body-secondary">
+                                    This takes a few minutes.<br />
+                                    Cancelling still finishes the current step before discarding the progress.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        <div class="accordion-item">
-          <h2 class="accordion-header">
-            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                    data-bs-target="#step7Body">
-              <span class="step-number">7</span>
-              <span class="step-check"></span>
-              <span class="step-title">Communication</span>
-              <span class="step-outcome text-body-secondary" id="step7Outcome"></span>
-            </button>
-          </h2>
-          <div id="step7Body" class="accordion-collapse collapse" data-bs-parent="#stepAccordion">
-            <div class="accordion-body">
-              <div id="step7Empty" class="text-body-secondary">Commit the season first.</div>
-              <div id="step7Data" class="d-none">
-                <p>Post for <a href="https://discord.com/channels/1102011546051301427/1102343126963728446">Discord's 📢ankündigungen</a>, the &lt;&lt;...&gt;&gt; part is yours.</p>
-                <div class="mb-2">
-                  <textarea class="form-control deck-list" id="announcementText" readonly></textarea>
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                        data-bs-target="#step2Body">
+                            <span class="step-number">2</span>
+                            <span class="step-check"></span>
+                            <span class="step-title">Review the draft</span>
+                            <span class="step-outcome text-body-secondary" id="step2Outcome"></span>
+                        </button>
+                    </h2>
+                    <div id="step2Body" class="accordion-collapse collapse" data-bs-parent="#stepAccordion">
+                        <div class="accordion-body">
+                            <div id="step2Empty" class="text-body-secondary">No draft yet.</div>
+                            <div id="step2Data" class="d-none">
+                                <div id="draftError" class="alert alert-danger mt-3 d-none" role="alert"></div>
+                                <div id="draftHeader" class="mb-4"></div>
+
+                                <h3>Sanity check</h3>
+                                <p class="text-body-secondary">
+                                    50 and 150 rows per format, one price per day, no card counted twice. Doesn't add up?
+                                    MtgGoldfish changed their page or blocked half the requests --> don't commit that.
+                                </p>
+                                <ul class="list-unstyled" id="sanityChecks"></ul>
+
+                                <div id="reportSections"></div>
+
+                                <hr>
+                                <div class="d-flex justify-content-between align-items-center gap-2">
+                                    <div>
+                                        <button type="button" class="btn btn-outline-danger btn-sm" id="discardButton">
+                                            Discard draft
+                                        </button>
+                                    </div>
+                                    <button type="button" class="btn btn-primary" data-done-step="2" title="Looks good to me">
+                                        LGTM
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="d-flex justify-content-end gap-2 mt-4">
-                  <button type="button" class="btn btn-outline-secondary" data-copy-target="announcementText">
-                    Copy post
-                  </button>
-                  <button type="button" class="btn btn-primary" data-done-step="7">Done</button>
+
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                        data-bs-target="#step3Body">
+                            <span class="step-number">3</span>
+                            <span class="step-check"></span>
+                            <span class="step-title">Commit</span>
+                            <span class="step-outcome text-body-secondary" id="step3Outcome"></span>
+                        </button>
+                    </h2>
+                    <div id="step3Body" class="accordion-collapse collapse" data-bs-parent="#stepAccordion">
+                        <div class="accordion-body">
+                            <p>
+                                Hot phase!<br />
+                                This is not instant, as the caches will be warmed with the new season data.
+                                Clients get the new season data as soon as you see the loading here finished.
+                            </p>
+
+                            <div class="mb-3">
+                                <label for="githubTokenInput" class="form-label">GitHub token <span
+                                        class="text-body-secondary">(optional)</span></label>
+                                <div class="form-text">
+                                    Create a <a href="https://github.com/settings/personal-access-tokens/new" target="_blank">new GitHub
+                                    Access Token</a> if you don't have one.
+                                </div>
+                                <input type="password" class="form-control" id="githubTokenInput" autocomplete="off"
+                                       placeholder="github_pat_...">
+                                <div class="form-text">
+                                    If a token is provided, the new season migrations becomes a Pull Request, so Step 4 becomes a single
+                                    click.
+                                </div>
+                            </div>
+
+                            <div id="commitBlocked" class="alert alert-warning d-none" role="alert">
+                                <div id="commitBlockedReason"></div>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" id="commitAnyway">
+                                    <label class="form-check-label" for="commitAnyway">I've looked at it, commit anyway</label>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-end gap-2 mt-4">
+                                <button type="button" class="btn btn-outline-secondary d-none" id="reloadCacheButton">Reload the card
+                                    cache
+                                </button>
+                                <button type="button" class="btn btn-danger" id="commitButton" disabled="disabled">Commit the season</button>
+                            </div>
+
+                            <div id="commitError" class="alert alert-danger mt-3 d-none" role="alert"></div>
+                            <div id="commitResult" class="mt-4 d-none">
+                                <div class="alert alert-success">Season <span id="committedAlertSeason"></span> is live.</div>
+                                <table class="table table-sm data-table">
+                                    <tr>
+                                        <th class="fw-normal text-body-secondary">Season</th>
+                                        <td id="committedSeason"></td>
+                                    </tr>
+                                    <tr>
+                                        <th class="fw-normal text-body-secondary">Starts</th>
+                                        <td id="committedStartDate"></td>
+                                    </tr>
+                                    <tr>
+                                        <th class="fw-normal text-body-secondary">Finals Friday</th>
+                                        <td id="committedFinalsFriday"></td>
+                                    </tr>
+                                    <tr>
+                                        <th class="fw-normal text-body-secondary">Ends</th>
+                                        <td id="committedEndDate"></td>
+                                    </tr>
+                                    <tr>
+                                        <th class="fw-normal text-body-secondary">Next season starts</th>
+                                        <td id="committedNextSeasonStart"></td>
+                                    </tr>
+                                    <tr>
+                                        <th class="fw-normal text-body-secondary">Cards inserted</th>
+                                        <td id="committedInsertedCards"></td>
+                                    </tr>
+                                    <tr>
+                                        <th class="fw-normal text-body-secondary">Card season data</th>
+                                        <td id="committedCardSeasonData"></td>
+                                    </tr>
+                                    <tr>
+                                        <th class="fw-normal text-body-secondary">Cards remapped</th>
+                                        <td id="committedRemappedCards"></td>
+                                    </tr>
+                                    <tr>
+                                        <th class="fw-normal text-body-secondary">Names updated</th>
+                                        <td id="committedUpdatedCardNames"></td>
+                                    </tr>
+                                    <tr id="committedPullRequestRow" class="d-none">
+                                        <th class="fw-normal text-body-secondary">Pull request</th>
+                                        <td id="committedPullRequest"></td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <div id="liveChecks" class="mt-4 d-none">
+                                <h3>Verification</h3>
+                                <p class="text-body-secondary" id="liveCheckSeason"></p>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="banListChecked">
+                                    <label class="form-check-label" for="banListChecked">
+                                        <a href="./bans" target="_blank" rel="noreferrer">The ban list page</a> shows the new season
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="extensionChecked">
+                                    <label class="form-check-label" for="extensionChecked">A card looked up with the extension on
+                                        Scryfall shows the new budget points</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-              </div>
+
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                        data-bs-target="#step4Body">
+                            <span class="step-number">4</span>
+                            <span class="step-check"></span>
+                            <span class="step-title">Migrations into git</span>
+                            <span class="step-outcome text-body-secondary" id="step4Outcome"></span>
+                        </button>
+                    </h2>
+                    <div id="step4Body" class="accordion-collapse collapse" data-bs-parent="#stepAccordion">
+                        <div class="accordion-body">
+                            <div id="step4Empty" class="text-body-secondary">No draft yet.</div>
+                            <div id="step4Data" class="d-none">
+                                <div id="pullRequestResult" class="alert alert-success d-none" role="alert">
+                                    1 to 4 are done: the three migrations are in
+                                    <a id="pullRequestLink" target="_blank" rel="noreferrer">pull request #<span
+                                            id="pullRequestNumber"></span></a>. Merge it, then run the deploy workflow. The
+                                    downloads are still here if you want them anyway.
+                                </div>
+                                <div id="downloadWarning" class="alert alert-warning d-none" role="alert">
+                                    Before the commit these carry the preparation time and name, not the commit ones. Works
+                                    too, just don't mix the two.
+                                </div>
+                                <ol id="gitChecklist">
+                                    <li class="checklist-step" data-checklist-step="1">
+                                        Download the three migration files
+                                        <div class="d-flex flex-wrap gap-2 my-2">
+                                            <button type="button" class="btn btn-primary btn-sm" id="downloadAllButton">Download all
+                                                three
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary btn-sm" data-sql-part="00_add_season">00_add_season</button>
+                                            <button type="button" class="btn btn-outline-primary btn-sm" data-sql-part="01_insert_cards">01_insert_cards</button>
+                                            <button type="button" class="btn btn-outline-primary btn-sm" data-sql-part="02_insert_card_season_data">02_insert_card_season_data</button>
+                                        </div>
+                                        <div class="form-text">
+                                            All three share the timestamp, so <code>00</code> runs first. The browser asks once
+                                            whether it may save several files - say yes.
+                                        </div>
+                                        <div id="downloadError" class="alert alert-danger mt-2 d-none" role="alert"></div>
+                                    </li>
+                                    <li class="checklist-step" data-checklist-step="2">
+                                        Copy them into
+                                        <code>casual-challenge-application/src/main/resources/db/changelog/migrations</code>
+                                    </li>
+                                    <li class="checklist-step" data-checklist-step="3">Commit them</li>
+                                    <li class="checklist-step" data-checklist-step="4">Push to master</li>
+                                    <li class="checklist-step" data-checklist-step="5">
+                                        Run the
+                                        <a href="https://github.com/r-zander/casual-challenge-application/actions/workflows/spring-boot-workflow.yml"
+                                           target="_blank" rel="noreferrer">deploy workflow</a>
+                                        <div class="form-text">
+                                            On the server the migrations change nothing, the commit already wrote all of it -
+                                            they're there so the database can be rebuilt from the repository alone. If the app
+                                            doesn't come back up afterwards, it's them. Time to hit up Raoul.
+                                        </div>
+                                    </li>
+                                </ol>
+                                <div class="d-flex justify-content-end mt-4">
+                                    <button type="button" class="btn btn-primary" data-done-step="4">Done</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                        data-bs-target="#step5Body">
+                            <span class="step-number">5</span>
+                            <span class="step-check"></span>
+                            <span class="step-title">Update Season History</span>
+                            <span class="step-outcome text-body-secondary" id="step5Outcome"></span>
+                        </button>
+                    </h2>
+                    <div id="step5Body" class="accordion-collapse collapse" data-bs-parent="#stepAccordion">
+                        <div class="accordion-body">
+                            <div id="step5Empty" class="text-body-secondary">No draft yet.</div>
+                            <div id="step5Data" class="d-none">
+                                <p>
+                                    Add the new season as top most row in
+                                    <a href="https://docs.google.com/document/d/1gaq2iZPVopdZGCNhQEgCsbry6gziJ5KgHM5VzrBYOdc/edit?tab=t.0#heading=h.442edbgnzano"
+                                       target="_blank" rel="noreferrer"><b>CC - Organisation</b> &gt; Season History</a>.
+                                </p>
+                                <div id="seasonHistoryTable"></div>
+                                <p class="text-body-secondary">
+                                    Insert an empty row at the top of the table, select its six cells, then paste - the row lands
+                                    cell by cell.
+                                </p>
+                                <div class="d-flex justify-content-end gap-2 mt-4">
+                                    <button type="button" class="btn btn-outline-secondary" data-copy-html="seasonHistoryRow">
+                                        Copy the row
+                                    </button>
+                                    <button type="button" class="btn btn-primary" data-done-step="5">Done</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                        data-bs-target="#step6Body">
+                            <span class="step-number">6</span>
+                            <span class="step-check"></span>
+                            <span class="step-title">Scryfall decks</span>
+                            <span class="step-outcome text-body-secondary" id="step6Outcome"></span>
+                        </button>
+                    </h2>
+                    <div id="step6Body" class="accordion-collapse collapse" data-bs-parent="#stepAccordion">
+                        <div class="accordion-body">
+                            <div id="step6Empty" class="text-body-secondary">No draft yet.</div>
+                            <div id="step6Data" class="text-body-secondary d-none">
+                                <p>
+                                    Already filtered: unbans without the paper bans, the restricted ones and anything above
+                                    2500 BP, current bans without anything above 2500 BP.<br />
+                                    Paste as they are.<br />
+                                    Replace the current bans deck, don't add a new one.
+                                </p>
+                                <div id="scryfallDecks"></div>
+                                <div class="d-flex justify-content-end mt-4">
+                                    <button type="button" class="btn btn-primary" data-done-step="6">Done</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                        data-bs-target="#step7Body">
+                            <span class="step-number">7</span>
+                            <span class="step-check"></span>
+                            <span class="step-title">Communication</span>
+                            <span class="step-outcome text-body-secondary" id="step7Outcome"></span>
+                        </button>
+                    </h2>
+                    <div id="step7Body" class="accordion-collapse collapse" data-bs-parent="#stepAccordion">
+                        <div class="accordion-body">
+                            <div id="step7Empty" class="text-body-secondary">Commit the season first.</div>
+                            <div id="step7Data" class="d-none">
+                                <p>Post for <a href="https://discord.com/channels/1102011546051301427/1102343126963728446">Discord's 📢ankündigungen</a>, the &lt;&lt;...&gt;&gt; part is yours.</p>
+                                <div class="mb-2">
+                                    <textarea class="form-control deck-list" id="announcementText" readonly></textarea>
+                                </div>
+                                <div class="d-flex justify-content-end gap-2 mt-4">
+                                    <button type="button" class="btn btn-outline-secondary" data-copy-target="announcementText">
+                                        Copy post
+                                    </button>
+                                    <button type="button" class="btn btn-primary" data-done-step="7">Done</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
-          </div>
+
+            <details class="danger-zone mt-5" id="removalZone">
+                <summary>Remove a season</summary>
+                <div class="pt-3">
+                    <p>
+                        Allows to undo committing the last season.<br/>
+                        Only works <i>before</i> the migrations have ever run.<br/>
+                        What it does exactly:
+                    </p>
+                    <ul>
+                        <li>Removes the season entry</li>
+                        <li>Removes the season card data</li>
+                        <li>Roles back all renames and oracle id remaps</li>
+                        <li>Sets the previous season back to its previous end date, so it's the active season again</li>
+                        <li>(Optional) Closes the GitHub Pull Request</li>
+                    </ul>
+
+                    <div class="row g-2 align-items-end">
+                        <div class="col-auto">
+                            <label for="removalSeasonInput" class="form-label">Season</label>
+                            <input type="number" class="form-control" id="removalSeasonInput" style="width: 7em">
+                        </div>
+                        <div class="col-auto">
+                            <button type="button" class="btn btn-outline-secondary" id="removalPreviewButton">What would go?
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="removalError" class="alert alert-danger mt-3 d-none" role="alert"></div>
+                    <div id="removalPreview" class="mt-4 d-none"></div>
+
+                    <div id="removalConfirm" class="mt-4 d-none">
+                        <div class="mb-3 d-none" id="removalTokenBlock">
+                            <label for="removalGithubToken" class="form-label">GitHub token</label>
+                            <input type="password" class="form-control" id="removalGithubToken" autocomplete="off"
+                                   placeholder="github_pat_...">
+                            <div class="form-text">
+                                The migrations of this season went to GitHub. The branch goes with the season, and that closes the
+                                pull request.
+                            </div>
+                        </div>
+                        <div class="row g-2 align-items-end">
+                            <div class="col-auto">
+                                <label for="removalConfirmInput" class="form-label">Type the season number to confirm</label>
+                                <input type="text" class="form-control" id="removalConfirmInput" style="width: 7em"
+                                       autocomplete="off">
+                            </div>
+                            <div class="col-auto">
+                                <button type="button" class="btn btn-danger" id="removalButton" disabled>Remove the season</button>
+                            </div>
+                        </div>
+                        <div class="form-text">
+                            Takes a few seconds: the card season data, the cards, the renames and the card cache on top.
+                        </div>
+                    </div>
+
+                    <div id="removalResult" class="mt-4 d-none">
+                        <div class="alert alert-success">
+                            Season <span id="removedSeason"></span> is gone. Season <span id="removedPreviousSeason"></span> ends
+                            <span id="removedPreviousSeasonEndDate"></span> again. Reload the page before the next run.
+                        </div>
+                        <ul>
+                            <li id="removedCardSeasonData"></li>
+                            <li id="removedCards"></li>
+                            <li id="removedRenames"></li>
+                            <li id="removedPullRequest" class="d-none"></li>
+                            <li id="removedArchive" class="d-none">the season folder in the archive is gone</li>
+                        </ul>
+                    </div>
+                </div>
+            </details>
         </div>
+    </main>
 
-      </div>
-
-      <details class="danger-zone mt-5" id="removalZone">
-        <summary>Remove a season</summary>
-        <div class="pt-3">
-          <p>
-            Allows to undo committing the last season.<br/>
-            Only works <i>before</i> the migrations have ever run.<br/>
-            What it does exactly:
-          </p>
-          <ul>
-            <li>Removes the season entry</li>
-            <li>Removes the season card data</li>
-            <li>Roles back all renames and oracle id remaps</li>
-            <li>Sets the previous season back to its previous end date, so it's the active season again</li>
-            <li>(Optional) Closes the GitHub Pull Request</li>
-          </ul>
-
-          <div class="row g-2 align-items-end">
-            <div class="col-auto">
-              <label for="removalSeasonInput" class="form-label">Season</label>
-              <input type="number" class="form-control" id="removalSeasonInput" style="width: 7em">
-            </div>
-            <div class="col-auto">
-              <button type="button" class="btn btn-outline-secondary" id="removalPreviewButton">What would go?
-              </button>
-            </div>
-          </div>
-
-          <div id="removalError" class="alert alert-danger mt-3 d-none" role="alert"></div>
-          <div id="removalPreview" class="mt-4 d-none"></div>
-
-          <div id="removalConfirm" class="mt-4 d-none">
-            <div class="mb-3 d-none" id="removalTokenBlock">
-              <label for="removalGithubToken" class="form-label">GitHub token</label>
-              <input type="password" class="form-control" id="removalGithubToken" autocomplete="off"
-                     placeholder="github_pat_...">
-              <div class="form-text">
-                The migrations of this season went to GitHub. The branch goes with the season, and that closes the
-                pull request.
-              </div>
-            </div>
-            <div class="row g-2 align-items-end">
-              <div class="col-auto">
-                <label for="removalConfirmInput" class="form-label">Type the season number to confirm</label>
-                <input type="text" class="form-control" id="removalConfirmInput" style="width: 7em"
-                       autocomplete="off">
-              </div>
-              <div class="col-auto">
-                <button type="button" class="btn btn-danger" id="removalButton" disabled>Remove the season</button>
-              </div>
-            </div>
-            <div class="form-text">
-              Takes a few seconds: the card season data, the cards, the renames and the card cache on top.
-            </div>
-          </div>
-
-          <div id="removalResult" class="mt-4 d-none">
-            <div class="alert alert-success">
-              Season <span id="removedSeason"></span> is gone. Season <span id="removedPreviousSeason"></span> ends
-              <span id="removedPreviousSeasonEndDate"></span> again. Reload the page before the next run.
-            </div>
-            <ul>
-              <li id="removedCardSeasonData"></li>
-              <li id="removedCards"></li>
-              <li id="removedRenames"></li>
-              <li id="removedPullRequest" class="d-none"></li>
-              <li id="removedArchive" class="d-none">the season folder in the archive is gone</li>
-            </ul>
-          </div>
-        </div>
-      </details>
-    </div>
-  </main>
-
-  <footer th:replace="~{fragments/layout :: footer}"></footer>
+    <footer th:replace="~{fragments/layout :: footer}"></footer>
 </div>
 
 <p class="credit p-3">
-  <a href="https://scryfall.com/card/cns/58/cogwork-librarian" target="_blank" rel="noreferrer">Cogwork Librarian</a>
-  by <a href="https://danscottart.com/" target="_blank" rel="noreferrer">Dan Murayama Scott</a>
+    <a href="https://scryfall.com/card/cns/58/cogwork-librarian" target="_blank" rel="noreferrer">Cogwork Librarian</a>
+    by <a href="https://danscottart.com/" target="_blank" rel="noreferrer">Dan Murayama Scott</a>
 </p>
 
 <script th:replace="~{fragments/layout :: scripts}"></script>

@@ -6,10 +6,15 @@ import gg.casualchallenge.application.model.type.AppliedRule;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
 import gg.casualchallenge.application.model.values.CardDataBatchVO;
+import gg.casualchallenge.application.model.values.CardExplanationVO;
+import gg.casualchallenge.application.model.values.CardPriceDetailsVO;
 import gg.casualchallenge.application.model.values.CardVO;
 import gg.casualchallenge.application.model.values.CardWithDataVO;
+import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
+import gg.casualchallenge.application.model.values.SeasonDraftVO;
 import gg.casualchallenge.application.persistence.CardRepository;
 import gg.casualchallenge.application.persistence.CardSeasonDataRepository;
+import gg.casualchallenge.application.persistence.SeasonDraftRepository;
 import gg.casualchallenge.application.persistence.SeasonRepository;
 import gg.casualchallenge.application.persistence.entity.Card;
 import gg.casualchallenge.application.persistence.entity.CardSeasonData;
@@ -38,6 +43,7 @@ public class CasualChallengeService {
     private final SeasonRepository seasonRepository;
     private final CardRepository cardRepository;
     private final CardSeasonDataRepository cardSeasonDataRepository;
+    private final SeasonDraftRepository seasonDraftRepository;
 
     // Requests wait for a season commit instead of answering from a cache without the new cards
     private final ReentrantReadWriteLock cacheLock = new ReentrantReadWriteLock();
@@ -48,11 +54,13 @@ public class CasualChallengeService {
     public CasualChallengeService(
             SeasonRepository seasonRepository,
             CardRepository cardRepository,
-            CardSeasonDataRepository cardSeasonDataRepository
+            CardSeasonDataRepository cardSeasonDataRepository,
+            SeasonDraftRepository seasonDraftRepository
     ) {
         this.seasonRepository = seasonRepository;
         this.cardRepository = cardRepository;
         this.cardSeasonDataRepository = cardSeasonDataRepository;
+        this.seasonDraftRepository = seasonDraftRepository;
     }
 
     @PostConstruct
@@ -129,6 +137,109 @@ public class CasualChallengeService {
         } finally {
             cacheLock.readLock().unlock();
         }
+    }
+
+    /** @param seasonNumber null = current season */
+    public CardExplanationVO explainCard(Integer seasonNumber, String cardName) {
+        cacheLock.readLock().lock();
+        try {
+            Season season = getSeason(seasonNumber);
+            if (season == null) {
+                if (seasonNumber == null) throw new IllegalArgumentException("There is no current season.");
+                throw new IllegalArgumentException("There is no season " + seasonNumber + ".");
+            }
+
+            CardVO cardVO = cardCacheByNormalizedName.get(CardNameNormalizer.normalize(cardName));
+            if (cardVO == null) throw new IllegalArgumentException("There is no card '" + cardName + "'.");
+
+            List<CardSeasonData> cardDataList =
+                    cardSeasonDataRepository.findAllBySeasonAndCardOracleIdIn(season, List.of(cardVO.getOracleId()));
+            if (cardDataList.isEmpty()) {
+                throw new IllegalArgumentException("'" + cardVO.getName() + "' has no data"
+                        + " in season " + season.getSeasonNumber() + ".");
+            }
+
+            if (isBasicLand(cardVO.getName())) {
+                throw new IllegalArgumentException("'" + cardVO.getName() + "' is a basic land,"
+                        + " its budget points are always 0 - there are no prices to explain.");
+            }
+
+            CardSeasonData cardSeasonData = cardDataList.get(0);
+            CardPriceDetailsVO priceDetails = seasonDraftRepository.findPriceDetails(cardSeasonData.getId());
+            if (priceDetails == null) {
+                throw new IllegalArgumentException("'" + cardVO.getName() + "' exists,"
+                        + " but has no price details for season " + season.getSeasonNumber() + "."
+                        + " Try running POST /admin/v1/season/" + season.getSeasonNumber() + "/price-details"
+                        + " to generate them.");
+            }
+
+            return toExplanation(
+                    cardVO.getName(),
+                    cardVO.getOracleId(),
+                    season.getSeasonNumber(),
+                    cardSeasonData,
+                    priceDetails
+            );
+        } finally {
+            cacheLock.readLock().unlock();
+        }
+    }
+
+    public CardExplanationVO explainDraftCard(String cardName) {
+        SeasonDraftVO draft = seasonDraftRepository.findUncommittedDraft();
+        if (draft == null) throw new IllegalArgumentException("There is no draft to explain.");
+
+        String normalizedName = CardNameNormalizer.normalize(cardName);
+        SeasonDraftCardVO draftCard = seasonDraftRepository.findDraftCard(draft.getId(), normalizedName);
+        if (draftCard == null) throw new IllegalArgumentException("'" + cardName + "' is not in the draft.");
+        if (isBasicLand(draftCard.getName())) {
+            throw new IllegalArgumentException("'" + draftCard.getName() + "' is a basic land,"
+                    + " its budget points are always 0 - there are no prices to explain.");
+        }
+        if (draftCard.getPriceDetails() == null) {
+            throw new IllegalArgumentException("'" + draftCard.getName() + "' is in the draft,"
+                    + " but has no price details. Prepare the season again to get them.");
+        }
+
+        // The draft knows its new cards before the card cache does, so the draft card is all there is to go by
+        CardSeasonData cardSeasonData = new CardSeasonData();
+        cardSeasonData.setCardOracleId(draftCard.getOracleId());
+        cardSeasonData.setBudgetPoints(draftCard.getBudgetPoints());
+        cardSeasonData.setLegality(draftCard.getLegality());
+        cardSeasonData.setMetaShareStandard(draftCard.getMetaShareStandard());
+        cardSeasonData.setMetaSharePioneer(draftCard.getMetaSharePioneer());
+        cardSeasonData.setMetaShareModern(draftCard.getMetaShareModern());
+        cardSeasonData.setMetaShareLegacy(draftCard.getMetaShareLegacy());
+        cardSeasonData.setMetaShareVintage(draftCard.getMetaShareVintage());
+        cardSeasonData.setMetaSharePauper(draftCard.getMetaSharePauper());
+        cardSeasonData.setBannedIn(draftCard.getBannedIn());
+        cardSeasonData.setVintageRestricted(draftCard.isVintageRestricted());
+
+        return toExplanation(
+                draftCard.getName(),
+                draftCard.getOracleId(),
+                draft.getSeasonNumber(),
+                cardSeasonData,
+                draftCard.getPriceDetails()
+        );
+    }
+
+    private CardExplanationVO toExplanation(
+            String cardName,
+            UUID oracleId,
+            int seasonNumber,
+            CardSeasonData cardSeasonData,
+            CardPriceDetailsVO priceDetails
+    ) {
+        return new CardExplanationVO(
+                cardName,
+                oracleId,
+                seasonNumber,
+                cardSeasonData.getBudgetPoints(),
+                cardSeasonData.getLegality(),
+                determineReason(cardName, cardSeasonData, true),
+                priceDetails
+        );
     }
 
     private List<CardWithDataVO> buildCardWithDataVOs(boolean displayExtended, List<CardSeasonData> cardDataList, Map<UUID, CardVO> cardCacheByOracleId) {

@@ -3,6 +3,7 @@ package gg.casualchallenge.application.model.values;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
 import lombok.Value;
+import lombok.With;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -25,4 +26,7 @@ public class SeasonDraftCardVO {
     boolean vintageRestricted;
     boolean isNewCard;
     String skipReason;
+    /** {@code findDraftCards()} leaves it out, the migrations don't need 33k documents */
+    @With
+    CardPriceDetailsVO priceDetails;
 }

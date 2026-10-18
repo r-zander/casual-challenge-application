@@ -38,6 +38,7 @@ casual-challenge:
       base-branch: master
     archive-directory: ${java.io.tmpdir}/casual-challenge-seasons # the MTGJSON downloads land in here as well, even with archived-seasons 0
     archived-seasons: 5 # 0 = don't keep the raw input of a run, season folders from before stay where they are
+    price-details-seasons: 5 # the commit drops the price details of every older season
     export-directory: "" # empty = don't write the files
     price-window-days: 70
     length-in-weeks: 10

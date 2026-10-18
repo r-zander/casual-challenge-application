@@ -8,6 +8,8 @@ import java.util.UUID;
 public class MtgJsonPrinting {
     UUID uuid;
     String cardName;
+    String setCode;
+    String number;
     boolean foil;
     boolean nonFoil;
 }

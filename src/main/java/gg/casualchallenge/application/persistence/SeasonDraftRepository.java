@@ -1,5 +1,8 @@
 package gg.casualchallenge.application.persistence;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import gg.casualchallenge.application.model.values.CardPriceDetailsVO;
 import gg.casualchallenge.application.model.values.CommittedSeasonCountsVO;
 import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
 import gg.casualchallenge.application.model.values.SeasonDraftReportVO;
@@ -35,13 +38,22 @@ public class SeasonDraftRepository {
 
     private static final String SELECT_DRAFT = "SELECT id, season_number, start_date, end_date, price_window_start, price_window_end, previous_season_id, previous_season_end_date, previous_season_updated_at, mtgjson_date, meta_source, prepared_at, prepared_by, committed_at, committed_by, migration_branch, pull_request_url, removed_at, removed_by, report FROM public.season_draft";
 
-    private static final String INSERT_DRAFT_CARD = "INSERT INTO public.season_draft_card (season_draft_id, oracle_id, previous_oracle_id, name, normalized_name, budget_points, legality, meta_share_standard, meta_share_pioneer, meta_share_modern, meta_share_legacy, meta_share_vintage, meta_share_pauper, banned_in, vintage_restricted, is_new_card, skip_reason)" +
-            " VALUES (?, ?, ?, ?, ?, ?, ?::legality, ?, ?, ?, ?, ?, ?, ?::mtg_format, ?, ?, ?)";
+    private static final String INSERT_DRAFT_CARD = "INSERT INTO public.season_draft_card"
+            + " (season_draft_id, oracle_id, previous_oracle_id, name, normalized_name, budget_points, legality,"
+            + " meta_share_standard, meta_share_pioneer, meta_share_modern, meta_share_legacy, meta_share_vintage,"
+            + " meta_share_pauper, banned_in, vintage_restricted, is_new_card, skip_reason, price_details)"
+            + " VALUES (?, ?, ?, ?, ?, ?, ?::legality, ?, ?, ?, ?, ?, ?, ?::mtg_format, ?, ?, ?, ?::jsonb)";
+
+    private static final String INSERT_PRICE_DETAILS = "INSERT INTO public.card_season_price_details"
+            + " (card_season_data_id, details)"
+            + " SELECT id, ?::jsonb FROM public.card_season_data WHERE season_id = ? AND card_oracle_id = ?";
 
     private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
 
-    public SeasonDraftRepository(JdbcTemplate jdbcTemplate) {
+    public SeasonDraftRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
         this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
     }
 
     /** There is only ever one draft to work on, so the old one is dropped. Committed drafts stay, they are the only record of a season start. */
@@ -89,7 +101,8 @@ public class SeasonDraftRepository {
                     MTG_FORMAT_CONVERTER.convertToDatabaseColumn(card.getBannedIn()),
                     card.isVintageRestricted(),
                     card.isNewCard(),
-                    card.getSkipReason()
+                    card.getSkipReason(),
+                    toJson(card.getOracleId(), card.getPriceDetails())
             });
             if (batch.size() == BATCH_SIZE) {
                 jdbcTemplate.batchUpdate(INSERT_DRAFT_CARD, batch);
@@ -122,6 +135,35 @@ public class SeasonDraftRepository {
                 draftId);
     }
 
+    /** null = not in the draft */
+    public SeasonDraftCardVO findDraftCard(int draftId, String normalizedName) {
+        List<SeasonDraftCardVO> cards = jdbcTemplate.query(
+                "SELECT oracle_id, previous_oracle_id, name, normalized_name, budget_points, legality,"
+                        + " meta_share_standard, meta_share_pioneer, meta_share_modern, meta_share_legacy,"
+                        + " meta_share_vintage, meta_share_pauper, banned_in, vintage_restricted, is_new_card,"
+                        + " skip_reason, price_details"
+                        + " FROM public.season_draft_card"
+                        + " WHERE season_draft_id = ? AND normalized_name = ? AND skip_reason IS NULL ORDER BY id",
+                (resultSet, rowNumber) -> {
+                    UUID oracleId = resultSet.getObject("oracle_id", UUID.class);
+                    CardPriceDetailsVO priceDetails = fromJson(resultSet.getString("price_details"), oracleId);
+                    return toDraftCardVO(resultSet, rowNumber).withPriceDetails(priceDetails);
+                },
+                draftId,
+                normalizedName);
+        if (cards.isEmpty()) return null;
+        return cards.get(0);
+    }
+
+    public CardPriceDetailsVO findPriceDetails(long cardSeasonDataId) {
+        List<String> priceDetails = jdbcTemplate.queryForList(
+                "SELECT details FROM public.card_season_price_details WHERE card_season_data_id = ?",
+                String.class,
+                cardSeasonDataId);
+        if (priceDetails.isEmpty()) return null;
+        return fromJson(priceDetails.get(0), cardSeasonDataId);
+    }
+
     @Transactional
     public CommittedSeasonCountsVO commit(
             int draftId,
@@ -129,7 +171,8 @@ public class SeasonDraftRepository {
             LocalDateTime committedAt,
             String committedBy,
             String migrationBranch,
-            String pullRequestUrl
+            String pullRequestUrl,
+            int priceDetailsSeasons
     ) {
         List<SeasonDraftVO> drafts = jdbcTemplate.query(SELECT_DRAFT + " WHERE id = ? FOR UPDATE", SeasonDraftRepository::toDraftVO, draftId);
         if (drafts.isEmpty()) {
@@ -242,6 +285,30 @@ public class SeasonDraftRepository {
                         " vintage_restricted = EXCLUDED.vintage_restricted",
                 seasonNumber,
                 draftId);
+
+        // Step: the price details move over to the season data, the draft has no use for its copy any more
+        jdbcTemplate.update(
+                "INSERT INTO public.card_season_price_details (card_season_data_id, details)"
+                        + " SELECT data.id, draft_card.price_details"
+                        + " FROM public.season_draft_card draft_card"
+                        + " JOIN public.card_season_data data"
+                        + " ON data.season_id = ? AND data.card_oracle_id = draft_card.oracle_id"
+                        + " WHERE draft_card.season_draft_id = ? AND draft_card.skip_reason IS NULL"
+                        + " AND draft_card.price_details IS NOT NULL"
+                        + " ON CONFLICT (card_season_data_id) DO UPDATE SET details = EXCLUDED.details",
+                seasonNumber,
+                draftId);
+        jdbcTemplate.update(
+                "UPDATE public.season_draft_card SET price_details = NULL"
+                        + " WHERE season_draft_id = ? AND price_details IS NOT NULL",
+                draftId);
+        // A season's worth of details is big, and beyond the archive there is nothing to rebuild them from anyway
+        // --> only the newest seasons keep theirs
+        jdbcTemplate.update(
+                "DELETE FROM public.card_season_price_details price_details USING public.card_season_data data"
+                        + " WHERE data.id = price_details.card_season_data_id"
+                        + " AND data.season_id NOT IN (SELECT id FROM public.season ORDER BY start_date DESC LIMIT ?)",
+                priceDetailsSeasons);
 
         // Not now(): the database runs in local time while prepared_at is UTC, and the two of them name the migration files
         jdbcTemplate.update("UPDATE public.season_draft SET committed_at = ?, committed_by = ?, migration_branch = ?, pull_request_url = ? WHERE id = ?",
@@ -362,6 +429,55 @@ public class SeasonDraftRepository {
         return new SeasonRemovalCountsVO(cardSeasonDataRows, deletedCards, oracleIdChanges.size(), undoneRenames);
     }
 
+    private String toJson(UUID oracleId, CardPriceDetailsVO priceDetails) {
+        if (priceDetails == null) return null;
+
+        try {
+            return objectMapper.writeValueAsString(priceDetails);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Couldn't write the price details of '" + oracleId + "'.", e);
+        }
+    }
+
+    private CardPriceDetailsVO fromJson(String priceDetails, Object id) {
+        if (priceDetails == null) return null;
+
+        try {
+            return objectMapper.readValue(priceDetails, CardPriceDetailsVO.class);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Couldn't read the price details of '" + id + "'.", e);
+        }
+    }
+
+    /** Replaces the season's details, so nothing of an older format stays behind. */
+    @Transactional
+    public int replacePriceDetails(int seasonId, Map<UUID, CardPriceDetailsVO> priceDetailsByOracleId) {
+        jdbcTemplate.update(
+                "DELETE FROM public.card_season_price_details price_details USING public.card_season_data data"
+                        + " WHERE data.id = price_details.card_season_data_id AND data.season_id = ?",
+                seasonId);
+
+        List<Object[]> batch = new ArrayList<>(BATCH_SIZE);
+        for (Map.Entry<UUID, CardPriceDetailsVO> entry : priceDetailsByOracleId.entrySet()) {
+            batch.add(new Object[]{toJson(entry.getKey(), entry.getValue()), seasonId, entry.getKey()});
+            if (batch.size() == BATCH_SIZE) {
+                jdbcTemplate.batchUpdate(INSERT_PRICE_DETAILS, batch);
+                batch.clear();
+            }
+        }
+        if (!batch.isEmpty()) {
+            jdbcTemplate.batchUpdate(INSERT_PRICE_DETAILS, batch);
+        }
+
+        Integer storedCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM public.card_season_price_details price_details"
+                        + " JOIN public.card_season_data data ON data.id = price_details.card_season_data_id"
+                        + " WHERE data.season_id = ?",
+                Integer.class,
+                seasonId);
+        return storedCount != null ? storedCount : 0;
+    }
+
     private static SeasonVO toSeasonVO(ResultSet resultSet, int rowNumber) throws SQLException {
         return new SeasonVO(
                 resultSet.getInt("id"),
@@ -412,6 +528,7 @@ public class SeasonDraftRepository {
                 MTG_FORMAT_CONVERTER.convertToEntityAttribute(resultSet.getString("banned_in")),
                 resultSet.getBoolean("vintage_restricted"),
                 resultSet.getBoolean("is_new_card"),
-                resultSet.getString("skip_reason"));
+                resultSet.getString("skip_reason"),
+                null);
     }
 }

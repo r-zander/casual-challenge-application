@@ -41,6 +41,7 @@ public class SeasonDraftService {
     private final SeasonDates seasonDates;
     private final ObjectMapper objectMapper;
     private final String exportDirectory;
+    private final int priceDetailsSeasons;
 
     public SeasonDraftService(
             SeasonDraftRepository seasonDraftRepository,
@@ -48,7 +49,8 @@ public class SeasonDraftService {
             GitHubClient gitHubClient,
             SeasonDates seasonDates,
             ObjectMapper objectMapper,
-            @Value("${casual-challenge.season.export-directory}") String exportDirectory
+            @Value("${casual-challenge.season.export-directory}") String exportDirectory,
+            @Value("${casual-challenge.season.price-details-seasons}") int priceDetailsSeasons
     ) {
         this.seasonDraftRepository = seasonDraftRepository;
         this.casualChallengeService = casualChallengeService;
@@ -56,6 +58,7 @@ public class SeasonDraftService {
         this.seasonDates = seasonDates;
         this.objectMapper = objectMapper;
         this.exportDirectory = exportDirectory;
+        this.priceDetailsSeasons = priceDetailsSeasons;
     }
 
     public SeasonDraftReportVO report() {
@@ -98,7 +101,8 @@ public class SeasonDraftService {
                         committedAt,
                         committedBy,
                         pullRequest != null ? pullRequest.getBranch() : null,
-                        pullRequest != null ? pullRequest.getUrl() : null);
+                        pullRequest != null ? pullRequest.getUrl() : null,
+                        priceDetailsSeasons);
             } catch (RuntimeException e) {
                 if (pullRequest == null) throw e;
 

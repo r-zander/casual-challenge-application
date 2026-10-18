@@ -1,7 +1,12 @@
 package gg.casualchallenge.application.persistence;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import gg.casualchallenge.application.model.type.Finish;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
+import gg.casualchallenge.application.model.type.PriceProvider;
+import gg.casualchallenge.application.model.values.CardPriceDetailsVO;
 import gg.casualchallenge.application.model.values.CommittedSeasonCountsVO;
 import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
 import gg.casualchallenge.application.model.values.SeasonDraftReportVO;
@@ -14,6 +19,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -23,7 +29,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -49,6 +57,7 @@ class SeasonDraftRepositoryTest {
     private static final LocalDateTime PREPARED_AT = LocalDateTime.of(2026, 6, 7, 18, 30, 0);
     private static final LocalDateTime COMMITTED_AT = LocalDateTime.of(2026, 6, 8, 9, 15, 0);
     private static final LocalDateTime REMOVED_AT = LocalDateTime.of(2026, 6, 8, 11, 40, 0);
+    private static final int PRICE_DETAILS_SEASONS = 5;
 
     private static final List<SeasonDraftReportVO.OracleIdChangeVO> ORACLE_ID_CHANGES =
             List.of(new SeasonDraftReportVO.OracleIdChangeVO("Joven and Chandler", JOVEN_OLD, JOVEN_NEW, "ATQ"));
@@ -73,7 +82,10 @@ class SeasonDraftRepositoryTest {
 
         jdbcTemplate = new JdbcTemplate(dataSource);
         transactionTemplate = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
-        seasonDraftRepository = new SeasonDraftRepository(jdbcTemplate);
+        ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json()
+                .featuresToDisable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .build();
+        seasonDraftRepository = new SeasonDraftRepository(jdbcTemplate, objectMapper);
     }
 
     @AfterAll
@@ -118,6 +130,64 @@ class SeasonDraftRepositoryTest {
         assertEquals("janik_nissen", seasonDraftRepository.findDraft().getCommittedBy());
         assertEquals("raoul_zander", seasonDraftRepository.findDraft().getPreparedBy());
         assertNull(seasonDraftRepository.findUncommittedDraft());
+    }
+
+    @Test
+    void testCommit_withPriceDetails() {
+        seedPreviousSeason();
+        seedPriceDetailsOfPreviousSeason();
+        int draftId = replaceDraft();
+
+        commitDraftInTransaction(draftId);
+        long ancestorsChosenId = jdbcTemplate.queryForObject(
+                "SELECT id FROM public.card_season_data WHERE season_id = 21 AND card_oracle_id = ?",
+                Long.class,
+                ANCESTORS_CHOSEN);
+        CardPriceDetailsVO ancestorsChosen = seasonDraftRepository.findPriceDetails(ancestorsChosenId);
+
+        assertEquals(2, countPriceDetails(21));
+        assertEquals(priceDetails("10E", "Tenth Edition", "1", 12), ancestorsChosen);
+        assertEquals("32", selectFromPriceDetails("details #>> '{cardmarket,averageCents}'", 21, JOVEN_NEW));
+        assertEquals(3, countPriceDetails(20));
+        assertEquals("{}", selectFromPriceDetails("details", 20, JOVEN_NEW));
+    }
+
+    @Test
+    void testCommit_withOnePriceDetailsSeason() {
+        seedPreviousSeason();
+        seedPriceDetailsOfPreviousSeason();
+        int draftId = replaceDraft();
+
+        transactionTemplate.execute(transactionStatus ->
+                seasonDraftRepository.commit(draftId, PREPARED_AT, COMMITTED_AT, "janik_nissen", null, null, 1));
+
+        assertEquals(0, countPriceDetails(20));
+        assertEquals(2, countPriceDetails(21));
+        assertEquals(3, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM public.card_season_data WHERE season_id = 20",
+                Integer.class));
+        assertEquals(0, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM public.season_draft_card WHERE price_details IS NOT NULL",
+                Integer.class));
+    }
+
+    @Test
+    void testReplacePriceDetails() {
+        seedPreviousSeason();
+        seedPriceDetailsOfPreviousSeason();
+        int draftId = replaceDraft();
+        commitDraftInTransaction(draftId);
+
+        int storedCards = seasonDraftRepository.replacePriceDetails(20, Map.of(
+                ANCESTORS_CHOSEN, priceDetails("10E", "Tenth Edition", "1", 6),
+                JOVEN_NEW, priceDetails("HML", "Homelands", "77", 32)
+        ));
+
+        assertEquals(2, storedCards);
+        assertEquals(2, countPriceDetails(20));
+        assertEquals("6", selectFromPriceDetails("details #>> '{cardmarket,averageCents}'", 20, ANCESTORS_CHOSEN));
+        assertEquals("32", selectFromPriceDetails("details #>> '{cardmarket,averageCents}'", 20, JOVEN_NEW));
+        assertEquals(2, countPriceDetails(21));
     }
 
     @Test
@@ -214,6 +284,36 @@ class SeasonDraftRepositoryTest {
         assertEquals(JOVEN_OLD, cards.get(1).getPreviousOracleId());
         assertEquals("duplicate normalized name", cards.get(2).getSkipReason());
         assertTrue(cards.get(3).isNewCard());
+        assertNull(cards.get(0).getPriceDetails());
+        assertEquals("2026-03-30", selectFromDraftCard("price_details ->> 'priceWindowStart'", ANCESTORS_CHOSEN));
+        assertEquals("cardmarket", selectFromDraftCard("price_details ->> 'pricedBy'", ANCESTORS_CHOSEN));
+        assertEquals(
+                "10E",
+                selectFromDraftCard("price_details #>> '{cardmarket,printings,0,setCode}'", ANCESTORS_CHOSEN)
+        );
+        assertEquals(
+                "nonfoil",
+                selectFromDraftCard("price_details #>> '{cardmarket,printings,0,finish}'", ANCESTORS_CHOSEN)
+        );
+        assertNull(selectFromDraftCard("price_details", FRESH_FACE));
+    }
+
+    @Test
+    void testFindDraftCard() {
+        seedPreviousSeason();
+        int committedDraftId = replaceDraft();
+        commitDraftInTransaction(committedDraftId);
+        int draftId = replaceDraft();
+
+        SeasonDraftCardVO ancestorsChosen = seasonDraftRepository.findDraftCard(draftId, "ancestors-chosen");
+
+        assertNull(seasonDraftRepository.findDraftCard(committedDraftId, "ancestors-chosen").getPriceDetails());
+        assertEquals("Ancestor's Chosen", ancestorsChosen.getName());
+        assertEquals(Legality.EXTENDED, ancestorsChosen.getLegality());
+        assertEquals(priceDetails("10E", "Tenth Edition", "1", 12), ancestorsChosen.getPriceDetails());
+        assertNull(seasonDraftRepository.findDraftCard(draftId, "fresh-face").getPriceDetails());
+        assertNull(seasonDraftRepository.findDraftCard(draftId, "black-lotus"));
+        assertNull(seasonDraftRepository.findDraftCard(draftId, "wonky-man"));
     }
 
     @Test
@@ -281,6 +381,21 @@ class SeasonDraftRepositoryTest {
         assertEquals("raoul_zander", jdbcTemplate.queryForObject("SELECT removed_by FROM public.season_draft WHERE id = ?", String.class, draftId));
         assertNull(seasonDraftRepository.findCommittedDraft(21));
         assertNull(seasonDraftRepository.findDraft()); // the row is still there as the record of that start, it just isn't the draft any more
+    }
+
+    @Test
+    void testRemove_withPriceDetails() {
+        seedPreviousSeason();
+        seedPriceDetailsOfPreviousSeason();
+        int draftId = replaceDraft();
+        commitDraftInTransaction(draftId);
+
+        removeSeasonInTransaction(draftId);
+
+        assertEquals(3, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM public.card_season_price_details",
+                Integer.class));
+        assertEquals("{}", selectFromPriceDetails("details", 20, JOVEN_OLD));
     }
 
     @Test
@@ -361,6 +476,37 @@ class SeasonDraftRepositoryTest {
         jdbcTemplate.update("INSERT INTO public.card_season_data (season_id, card_oracle_id, budget_points, legality, vintage_restricted) VALUES (20, ?, 599200, 'not_legal'::legality, TRUE)", BLACK_LOTUS);
     }
 
+    private static void seedPriceDetailsOfPreviousSeason() {
+        jdbcTemplate.update("INSERT INTO public.card_season_price_details (card_season_data_id, details)"
+                + " SELECT id, '{}' FROM public.card_season_data WHERE season_id = 20");
+    }
+
+    private static int countPriceDetails(int seasonId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM public.card_season_price_details price_details"
+                        + " JOIN public.card_season_data data ON data.id = price_details.card_season_data_id"
+                        + " WHERE data.season_id = ?",
+                Integer.class,
+                seasonId);
+    }
+
+    private static String selectFromPriceDetails(String expression, int seasonId, UUID oracleId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT " + expression + " FROM public.card_season_price_details price_details"
+                        + " JOIN public.card_season_data data ON data.id = price_details.card_season_data_id"
+                        + " WHERE data.season_id = ? AND data.card_oracle_id = ?",
+                String.class,
+                seasonId,
+                oracleId);
+    }
+
+    private static String selectFromDraftCard(String expression, UUID oracleId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT " + expression + " FROM public.season_draft_card WHERE oracle_id = ?",
+                String.class,
+                oracleId);
+    }
+
     private static int replaceDraft() {
         SeasonDraftVO draft = new SeasonDraftVO(
                 0,
@@ -386,20 +532,62 @@ class SeasonDraftRepositoryTest {
 
         List<SeasonDraftCardVO> cards = new ArrayList<>(4);
         cards.add(new SeasonDraftCardVO(ANCESTORS_CHOSEN, null, "Ancestor's Chosen", "ancestors-chosen", 12, Legality.EXTENDED,
-                null, null, new BigDecimal("0.120"), null, null, null, null, false, false, null));
+                null, null, new BigDecimal("0.120"), null, null, null, null, false, false, null,
+                priceDetails("10E", "Tenth Edition", "1", 12)));
         cards.add(new SeasonDraftCardVO(JOVEN_NEW, JOVEN_OLD, "Joven and Chandler", "joven-and-chandler", 32, Legality.BANNED,
-                null, null, null, null, null, null, MtgFormat.LEGACY, false, true, null));
+                null, null, null, null, null, null, MtgFormat.LEGACY, false, true, null,
+                priceDetails("HML", "Homelands", "77", 32)));
         cards.add(new SeasonDraftCardVO(BLACK_LOTUS, null, "Black Lotus", "black-lotus", 599200, Legality.NOT_LEGAL,
-                null, null, null, null, null, null, null, true, false, "duplicate normalized name"));
+                null, null, null, null, null, null, null, true, false, "duplicate normalized name",
+                priceDetails("LEA", "Limited Edition Alpha", "232", 599200)));
         cards.add(new SeasonDraftCardVO(FRESH_FACE, null, "Fresh Face", "fresh-face", 4, Legality.LEGAL,
-                null, null, null, null, null, null, null, false, true, null));
+                null, null, null, null, null, null, null, false, true, null, null));
 
         seasonDraftRepository.replace(draft, cards);
         return seasonDraftRepository.findDraft().getId();
     }
 
+    private static CardPriceDetailsVO priceDetails(String setCode, String setName, String number, int cents) {
+        CardPriceDetailsVO.PrintingPriceVO printing = new CardPriceDetailsVO.PrintingPriceVO(
+                setCode,
+                setName,
+                number,
+                Finish.NONFOIL,
+                70,
+                70,
+                cents,
+                cents,
+                cents,
+                true
+        );
+        CardPriceDetailsVO.MarketPricesVO cardmarket = new CardPriceDetailsVO.MarketPricesVO(
+                70,
+                cents,
+                true,
+                List.of(printing),
+                Collections.nCopies(70, cents),
+                Collections.nCopies(70, 0)
+        );
+        return new CardPriceDetailsVO(
+                LocalDate.of(2026, 3, 30),
+                LocalDate.of(2026, 6, 8),
+                PriceProvider.CARDMARKET,
+                null,
+                cardmarket,
+                new CardPriceDetailsVO.MarketPricesVO(0, 0, false, List.of(), List.of(), List.of()),
+                List.of());
+    }
+
     private static CommittedSeasonCountsVO commitDraftInTransaction(int draftId) { // in the application the @Transactional proxy opens it
-        return transactionTemplate.execute(transactionStatus -> seasonDraftRepository.commit(draftId, PREPARED_AT, COMMITTED_AT, "janik_nissen", null, null));
+        return transactionTemplate.execute(transactionStatus -> seasonDraftRepository.commit(
+                draftId,
+                PREPARED_AT,
+                COMMITTED_AT,
+                "janik_nissen",
+                null,
+                null,
+                PRICE_DETAILS_SEASONS
+        ));
     }
 
     private static SeasonRemovalCountsVO removeSeasonInTransaction(int draftId) {

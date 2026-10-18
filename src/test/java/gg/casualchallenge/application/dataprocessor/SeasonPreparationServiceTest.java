@@ -6,18 +6,24 @@ import gg.casualchallenge.application.common.SeasonDates;
 import gg.casualchallenge.application.dataprocessor.model.AssembledDraftVO;
 import gg.casualchallenge.application.dataprocessor.model.CardPrices;
 import gg.casualchallenge.application.dataprocessor.model.Cents;
+import gg.casualchallenge.application.dataprocessor.model.MatchedPriceDetailsVO;
 import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
 import gg.casualchallenge.application.dataprocessor.model.MetaSharesVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonCard;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPricesVO;
+import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrinting;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrintingsVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonSet;
 import gg.casualchallenge.application.dataprocessor.model.PriceWindowVO;
 import gg.casualchallenge.application.dataprocessor.model.Staple;
+import gg.casualchallenge.application.model.type.Finish;
 import gg.casualchallenge.application.model.type.Legality;
 import gg.casualchallenge.application.model.type.MtgFormat;
 import gg.casualchallenge.application.model.type.MtgSetType;
+import gg.casualchallenge.application.model.type.PriceProvider;
+import gg.casualchallenge.application.model.values.CardPriceDetailsVO;
 import gg.casualchallenge.application.model.values.MtgSetVO;
+import gg.casualchallenge.application.model.values.RebuiltPriceDetailsVO;
 import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
 import gg.casualchallenge.application.model.values.SeasonDraftReportVO;
 import gg.casualchallenge.application.model.values.SeasonPreparationRequestVO;
@@ -37,6 +43,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -55,16 +62,24 @@ class SeasonPreparationServiceTest {
     private static final UUID BEE_BEE_GUN = UUID.fromString("8d4a1c07-3f52-4b6e-91a8-5c0e7d2b4396");
     private static final UUID BEE_BEE_GUN_AGAIN = UUID.fromString("1c6f8b30-7e94-4d25-83a1-6b0d5e2f7c48");
     private static final UUID BLACK_LOTUS = UUID.fromString("5089ec1a-f881-4d55-af14-5d996171203b");
+    private static final UUID BLOOMVINE_REGENT = UUID.fromString("da1e019c-2ffb-412d-90d7-f2e5e5c44c4b");
     private static final UUID BRAINSTORM = UUID.fromString("36cd2364-d113-47d1-b2c4-b088d9eb88dd");
     private static final UUID CHAOS_ORB = UUID.fromString("edb455f4-8dc9-4b7c-b25c-cb51b7dfbb41");
     private static final UUID DAWNING_ARCHAIC = UUID.fromString("a3e10b9b-9349-4b44-a46c-c825293dbd05");
     private static final UUID DELVER_OF_SECRETS = UUID.fromString("edd531b9-f615-4399-8c8c-1c5e18c4acbf");
+    private static final MtgJsonPrinting DELVER_INR_60_FRONT = new MtgJsonPrinting(null, null, "INR", "60", true, true);
+    private static final MtgJsonPrinting DELVER_INR_60_BACK = new MtgJsonPrinting(null, null, "INR", "60", true, true);
+    private static final MtgJsonPrinting DELVER_ISD_51_FRONT = new MtgJsonPrinting(null, null, "ISD", "51", true, true);
+    private static final MtgJsonPrinting DELVER_ISD_51_BACK = new MtgJsonPrinting(null, null, "ISD", "51", true, true);
+    private static final MtgJsonPrinting DELVER_MID_47_FRONT = new MtgJsonPrinting(null, null, "MID", "47", true, true);
+    private static final MtgJsonPrinting DELVER_MID_47_BACK = new MtgJsonPrinting(null, null, "MID", "47", true, true);
     private static final UUID DINA_ESSENCE_BREWER = UUID.fromString("f61c1dc4-2f09-4b50-957f-ee656c659072");
     private static final UUID EMRAKUL_THE_EXIGENT_DOOM = UUID.fromString("4421ab7d-6d9b-4edd-b5a0-53a8ed84da6f");
     private static final UUID FRESH_FACE = UUID.fromString("bb1c9a77-4e6d-4f2a-9b3c-0a1d2e3f4a5b");
     private static final UUID FRESH_FACE_AGAIN = UUID.fromString("3f7d2b91-5a08-4c64-9e17-8d0b6c4a2f35");
     private static final UUID GLIMPSE_THE_UNTHINKABLE = UUID.fromString("552f0163-a19d-4671-888f-044fc0354875");
     private static final UUID GLIMPSE_THE_UNTHINKABLE_PLAYTEST = UUID.fromString("ab6b0048-0be6-4ff2-916e-b6a246eb765f");
+    private static final UUID ISLAND = UUID.fromString("b2c6aa39-2d2a-459c-a555-fb48ba993373");
     private static final UUID JOVEN_NEW = UUID.fromString("11db8545-eca6-43f5-b9e8-f302acef53a5");
     private static final UUID JOVEN_OLD = UUID.fromString("86b47725-1764-4716-993d-e4dfcea2346c");
     private static final UUID LAVA_AXE = UUID.fromString("387b6b07-a283-412d-94c3-f7f1dc76e858");
@@ -120,16 +135,202 @@ class SeasonPreparationServiceTest {
         assertNull(cards.get(0).getMetaShareModern());
         assertNull(cards.get(0).getMetaShareVintage());
         assertNull(cards.get(0).getMetaSharePauper());
+        assertEquals(PriceProvider.CARDMARKET, cards.get(0).getPriceDetails().getPricedBy());
+        assertNull(cards.get(0).getPriceDetails().getAdjustedExchangeRate());
+        assertEquals(50, cards.get(0).getPriceDetails().getCardmarket().getAverageCents());
+        assertEquals(75, cards.get(0).getPriceDetails().getTcgplayer().getAverageCents());
 
         assertEquals("Sol Ring", cards.get(1).getName());
         assertEquals(320, cards.get(1).getBudgetPoints().intValue());
+        assertEquals(PriceProvider.TCGPLAYER, cards.get(1).getPriceDetails().getPricedBy());
+        assertEquals(1.25, cards.get(1).getPriceDetails().getAdjustedExchangeRate());
+        assertEquals(400, cards.get(1).getPriceDetails().getTcgplayer().getAverageCents());
+        assertEquals(0, cards.get(1).getPriceDetails().getCardmarket().getPricedDays());
 
         assertEquals("Lava, Axe", cards.get(2).getName());
         assertEquals("lava-axe", cards.get(2).getNormalizedName());
         assertNotNull(cards.get(2).getBudgetPoints());
         assertEquals(0, cards.get(2).getBudgetPoints().intValue());
+        assertNull(cards.get(2).getPriceDetails().getPricedBy());
+        assertEquals(0, cards.get(2).getPriceDetails().getCardmarket().getPrintings().size());
+        assertEquals(0, cards.get(2).getPriceDetails().getTcgplayer().getPricedDays());
 
         assertEquals(1, assembledDraft.getReport().getCounts().getPricesFixedByExchangeRateCount());
+    }
+
+    @Test
+    void testAssemble_withSeveralPrintings() {
+        String cardName = "Delver of Secrets // Insectile Aberration";
+        List<MtgJsonSet> sets = List.of(
+                new MtgJsonSet(
+                        "Innistrad Remastered",
+                        "INR",
+                        LocalDate.of(2025, 1, 24),
+                        MtgSetType.MASTERS,
+                        null,
+                        false,
+                        List.of()
+                ),
+                new MtgJsonSet(
+                        "Innistrad",
+                        "ISD",
+                        LocalDate.of(2011, 9, 30),
+                        MtgSetType.EXPANSION,
+                        null,
+                        false,
+                        List.of()
+                ),
+                new MtgJsonSet(
+                        "Innistrad: Midnight Hunt",
+                        "MID",
+                        LocalDate.of(2021, 9, 24),
+                        MtgSetType.EXPANSION,
+                        null,
+                        false,
+                        List.of()
+                )
+        );
+        MtgJsonPrintingsVO printings = new MtgJsonPrintingsVO(
+                Map.of(cardName, card(cardName, DELVER_OF_SECRETS)),
+                Map.of(),
+                Map.of(cardName, List.of(
+                        new MtgJsonPrinting(null, null, "INR", "60", true, false),
+                        new MtgJsonPrinting(null, null, "INR", "60", true, false)
+                )),
+                sets,
+                MTGJSON_DATE,
+                "5.2.2+20260913"
+        );
+
+        CardPrices delverOfSecrets = new CardPrices(5);
+        delverOfSecrets.getEur().addPrinting(DELVER_INR_60_BACK, Finish.NONFOIL, cents(55, 51, 48, 46, 46));
+        delverOfSecrets.getEur().addPrinting(DELVER_ISD_51_FRONT, Finish.NONFOIL, cents(63, 58, 56, 55, 52));
+        delverOfSecrets.getEur().addPrinting(DELVER_ISD_51_BACK, Finish.NONFOIL, cents(63, 58, 56, 55, 52));
+        delverOfSecrets.getEur().addPrinting(DELVER_INR_60_FRONT, Finish.NONFOIL, cents(55, 51, 48, 46, 46));
+        delverOfSecrets.getEur().addPrinting(DELVER_MID_47_FRONT, Finish.NONFOIL, cents(46, 45, 50, 50, 44));
+        delverOfSecrets.getEur().addPrinting(DELVER_MID_47_BACK, Finish.NONFOIL, cents(46, 45, 50, 50, 44));
+        SeasonPreparationRequestVO request = new SeasonPreparationRequestVO(
+                START_DATE,
+                END_DATE,
+                new PriceWindowVO(LocalDate.of(2026, 7, 30), LocalDate.of(2026, 8, 4)),
+                MetaShareSource.FILES,
+                null,
+                null,
+                "raoul_zander"
+        );
+
+        AssembledDraftVO assembledDraft = SeasonPreparationService.assemble(
+                printings,
+                new MtgJsonPricesVO(Map.of(cardName, delverOfSecrets), 5),
+                MetaSharesVO.fromBanFiles(List.of(), List.of()),
+                List.of(),
+                List.of(),
+                request,
+                currentSeason(),
+                SEASON_DATES
+        );
+        CardPriceDetailsVO priceDetails = assembledDraft.getCards().get(0).getPriceDetails();
+        CardPriceDetailsVO.MarketPricesVO cardmarket = priceDetails.getCardmarket();
+
+        assertEquals(3, cardmarket.getPrintings().size());
+        assertEquals("MID", cardmarket.getPrintings().get(0).getSetCode());
+        assertEquals("Innistrad: Midnight Hunt", cardmarket.getPrintings().get(0).getSetName());
+        assertEquals(3, cardmarket.getPrintings().get(0).getCheapestDays());
+        assertEquals("INR", cardmarket.getPrintings().get(1).getSetCode());
+        assertEquals(2, cardmarket.getPrintings().get(1).getCheapestDays());
+        assertEquals(49, cardmarket.getPrintings().get(1).getAverageCents());
+        assertEquals("ISD", cardmarket.getPrintings().get(2).getSetCode());
+        assertEquals(0, cardmarket.getPrintings().get(2).getCheapestDays());
+        assertEquals(List.of(46, 45, 48, 46, 44), cardmarket.getCheapestCentsPerDay());
+        assertEquals(List.of(0, 0, 1, 1, 0), cardmarket.getCheapestPrintingPerDay());
+        assertEquals(LocalDate.of(2026, 7, 30), priceDetails.getPriceWindowStart());
+        assertEquals(
+                List.of(new CardPriceDetailsVO.IgnoredPrintingVO("INR", "60", Finish.FOIL)),
+                priceDetails.getIgnoredPrintings()
+        );
+    }
+
+    @Test
+    void testMatchPriceDetails() {
+        String flipStyleName = "Bloomvine Regent // Claim Territory // Bloomvine Regent // Claim Territory";
+        MtgJsonPrintingsVO printings = printings(
+                List.of(),
+                card("Brainstorm", BRAINSTORM),
+                card("Sol Ring", SOL_RING),
+                card("Island", ISLAND),
+                card("Lava, Axe", LAVA_AXE),
+                card("Joven", JOVEN_OLD),
+                card("Bloomvine Regent // Claim Territory", BLOOMVINE_REGENT),
+                card(flipStyleName, BLOOMVINE_REGENT),
+                card("Delver of Secrets // Delver of Secrets", DELVER_OF_SECRETS),
+                card("Delver of Secrets // Insectile Aberration", DELVER_OF_SECRETS),
+                card("Lightning Bolt", LIGHTNING_BOLT)
+        );
+
+        Map<String, CardPrices> pricesByCardName = new HashMap<>();
+        pricesByCardName.put("Brainstorm", cardPrices(50, 75));
+        pricesByCardName.put("Sol Ring", cardPrices(0, 400));
+        pricesByCardName.put("Joven", cardPrices(32, 48));
+        pricesByCardName.put("Bloomvine Regent // Claim Territory", cardPrices(40, 60));
+        pricesByCardName.put(flipStyleName, cardPrices(400, 600));
+        pricesByCardName.put("Delver of Secrets // Insectile Aberration", cardPrices(44, 66));
+        pricesByCardName.put("Lightning Bolt", cardPrices(60, 90));
+
+        List<Card> existingCards = List.of(
+                existingCard("Brainstorm", "brainstorm", BRAINSTORM),
+                existingCard("Sol Ring", "sol-ring", SOL_RING),
+                existingCard("Island", "island", ISLAND),
+                existingCard("Bee-Bee Gun", "bee-bee-gun", BEE_BEE_GUN),
+                existingCard("Black Lotus", "black-lotus", BLACK_LOTUS),
+                existingCard("Joven", "joven", JOVEN_NEW)
+        );
+        CardSeasonData lightningBolt = previousSeasonData(LIGHTNING_BOLT, 0, Legality.LEGAL);
+        lightningBolt.setBudgetPoints(null);
+        List<CardSeasonData> seasonData = List.of(
+                previousSeasonData(BRAINSTORM, 50, Legality.BANNED),
+                previousSeasonData(SOL_RING, 300, Legality.LEGAL),
+                previousSeasonData(ISLAND, 0, Legality.LEGAL),
+                previousSeasonData(BEE_BEE_GUN, 0, Legality.NOT_LEGAL),
+                previousSeasonData(BLACK_LOTUS, 599200, Legality.NOT_LEGAL),
+                previousSeasonData(JOVEN_NEW, 32, Legality.BANNED),
+                previousSeasonData(BLOOMVINE_REGENT, 40, Legality.LEGAL),
+                previousSeasonData(DELVER_OF_SECRETS, 44, Legality.LEGAL),
+                lightningBolt
+        );
+        MtgJsonPricesVO prices = new MtgJsonPricesVO(pricesByCardName, WINDOW_LENGTH);
+        PriceWindowVO window = PriceWindowVO.of(START_DATE, 70);
+
+        MatchedPriceDetailsVO matchedPriceDetails =
+                SeasonPreparationService.matchPriceDetails(printings, prices, existingCards, seasonData, window);
+        Map<UUID, CardPriceDetailsVO> priceDetailsByOracleId = matchedPriceDetails.getPriceDetailsByOracleId();
+
+        assertEquals(
+                Set.of(
+                        BRAINSTORM,
+                        SOL_RING,
+                        BEE_BEE_GUN,
+                        JOVEN_NEW,
+                        BLOOMVINE_REGENT,
+                        DELVER_OF_SECRETS,
+                        LIGHTNING_BOLT
+                ),
+                priceDetailsByOracleId.keySet()
+        );
+        assertEquals(PriceProvider.CARDMARKET, priceDetailsByOracleId.get(BRAINSTORM).getPricedBy());
+        assertEquals(32, priceDetailsByOracleId.get(JOVEN_NEW).getCardmarket().getAverageCents());
+        assertEquals(PriceProvider.TCGPLAYER, priceDetailsByOracleId.get(SOL_RING).getPricedBy());
+        assertNull(priceDetailsByOracleId.get(BEE_BEE_GUN).getPricedBy());
+        assertEquals(
+                List.of(
+                        new RebuiltPriceDetailsVO.MismatchVO("Lightning Bolt", null, 60),
+                        new RebuiltPriceDetailsVO.MismatchVO("Sol Ring", 300, 320)
+                ),
+                matchedPriceDetails.getMismatches()
+        );
+        assertEquals(
+                List.of(new RebuiltPriceDetailsVO.UnmatchedCardVO("Black Lotus", 599200)),
+                matchedPriceDetails.getUnmatchedCards()
+        );
     }
 
     @Test
@@ -224,6 +425,8 @@ class SeasonPreparationServiceTest {
         assertEquals(Legality.NOT_LEGAL, cards.get(9).getLegality());
         assertEquals(0, cards.get(9).getBudgetPoints().intValue());
         assertFalse(cards.get(9).isNewCard());
+        assertNotNull(cards.get(9).getPriceDetails());
+        assertNull(cards.get(9).getPriceDetails().getPricedBy());
         assertEquals("The Superlatorium", cards.get(10).getName());
         assertEquals(2, report.getMissingCards().size());
         assertEquals("Bee-Bee Gun", report.getMissingCards().get(0).getName());
@@ -556,7 +759,7 @@ class SeasonPreparationServiceTest {
             cardsByName.put(card.getName(), card);
         }
 
-        return new MtgJsonPrintingsVO(cardsByName, Map.of(), sets, MTGJSON_DATE, "5.2.2+20260913");
+        return new MtgJsonPrintingsVO(cardsByName, Map.of(), Map.of(), sets, MTGJSON_DATE, "5.2.2+20260913");
     }
 
     private static MtgJsonCard card(String cardName, UUID oracleId) {
@@ -564,11 +767,21 @@ class SeasonPreparationServiceTest {
     }
 
     private static CardPrices cardPrices(long eurCents, long usdCents) {
+        MtgJsonPrinting printing = new MtgJsonPrinting(null, null, "LEA", null, false, true);
         CardPrices cardPrices = new CardPrices(WINDOW_LENGTH);
-        if (eurCents > 0) cardPrices.getEur().addPrinting(new Cents[]{Cents.of(eurCents), Cents.of(eurCents)});
-        if (usdCents > 0) cardPrices.getUsd().addPrinting(new Cents[]{Cents.of(usdCents), Cents.of(usdCents)});
+        if (eurCents > 0) cardPrices.getEur().addPrinting(printing, Finish.NONFOIL, cents(eurCents, eurCents));
+        if (usdCents > 0) cardPrices.getUsd().addPrinting(printing, Finish.NONFOIL, cents(usdCents, usdCents));
 
         return cardPrices;
+    }
+
+    private static Cents[] cents(long... amounts) {
+        Cents[] centsPerDay = new Cents[amounts.length];
+        for (int day = 0; day < amounts.length; day++) {
+            centsPerDay[day] = Cents.of(amounts[day]);
+        }
+
+        return centsPerDay;
     }
 
     private static Card existingCard(String cardName, String normalizedName, UUID oracleId) {

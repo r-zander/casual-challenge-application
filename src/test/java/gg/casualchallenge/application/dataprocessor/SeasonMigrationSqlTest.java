@@ -122,13 +122,17 @@ class SeasonMigrationSqlTest {
     void testInsertCardSeasonData() {
         List<SeasonDraftCardVO> cards = List.of(
                 new SeasonDraftCardVO(SOL_RING, null, "Sol Ring", "sol-ring", 12, Legality.LEGAL,
-                        null, null, null, null, null, null, null, false, false, null),
+                        null, null, null, null, null, null, null,
+                        false, false, null, null),
                 new SeasonDraftCardVO(ANCESTRAL_RECALL, null, "Ancestral Recall", "ancestral-recall", 65924, Legality.BANNED,
-                        null, null, null, null, new BigDecimal("0.680"), null, MtgFormat.LEGACY, true, false, null),
+                        null, null, null, null, new BigDecimal("0.680"), null, MtgFormat.LEGACY,
+                        true, false, null, null),
                 new SeasonDraftCardVO(BRAINSTORM, null, "Brainstorm", "brainstorm", 300, Legality.BANNED,
-                        new BigDecimal("0.050"), null, null, new BigDecimal("0.400"), null, null, null, false, false, null),
+                        new BigDecimal("0.050"), null, null, new BigDecimal("0.400"), null, null, null,
+                        false, false, null, null),
                 new SeasonDraftCardVO(BLACK_LOTUS, null, "Black Lotus", "black-lotus", 599200, Legality.NOT_LEGAL,
-                        null, null, null, null, null, null, null, true, false, "duplicate normalized name")
+                        null, null, null, null, null, null, null,
+                        true, false, "duplicate normalized name", null)
         );
 
         String sql = SeasonMigrationSql.insertCardSeasonData(21, cards);
@@ -188,11 +192,11 @@ class SeasonMigrationSqlTest {
 
     private static SeasonDraftCardVO newCard(UUID oracleId, String name, String normalizedName, String skipReason) {
         return new SeasonDraftCardVO(oracleId, null, name, normalizedName, 10, Legality.LEGAL,
-                null, null, null, null, null, null, null, false, true, skipReason);
+                null, null, null, null, null, null, null, false, true, skipReason, null);
     }
 
     private static SeasonDraftCardVO knownCard(UUID oracleId, String name, String normalizedName) {
         return new SeasonDraftCardVO(oracleId, null, name, normalizedName, 10, Legality.LEGAL,
-                null, null, null, null, null, null, null, false, false, null);
+                null, null, null, null, null, null, null, false, false, null, null);
     }
 }

@@ -1,0 +1,20 @@
+root = true
+
+[*]
+indent_style = space
+indent_size = 4
+max_line_length = 120
+
+[*.{yml,yaml,json}]
+indent_size = 2
+
+[src/main/resources/templates/{season-wizard.html,season-wizard/*.html}]
+indent_size = 2
+
+[*.java]
+ij_continuation_indent_size = 8
+ij_java_if_brace_force = if_multiline
+ij_java_keep_control_statement_in_one_line = true
+ij_java_binary_operation_sign_on_next_line = true
+ij_java_class_count_to_use_import_on_demand = 999
+ij_java_names_count_to_use_import_on_demand = 999

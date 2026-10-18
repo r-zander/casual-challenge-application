@@ -1,7 +1,11 @@
 package gg.casualchallenge.application.api;
 
+import gg.casualchallenge.application.api.datamodel.CardExplanationResponse;
 import gg.casualchallenge.application.api.datamodel.CardsResponse;
+import gg.casualchallenge.application.model.mapper.CardExplanationMapper;
 import gg.casualchallenge.application.model.mapper.CardsResponseMapper;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -51,5 +55,21 @@ public class ApiControllerV1 {
         return CardsResponseMapper.INSTANCE.toResponse(
                 this.casualChallengeService.getAllCardData(null, getPresenceBoolean(displayExtended))
         );
+    }
+
+    @GetMapping(path = "/cards/explain")
+    @Operation(
+            summary = "Explain the budget points and legality of one card",
+            description = "budgetPoints is the average of the cheapest price per day over the price window (its end date excluded), in euro cents. tcgplayer (USD cents) only steps in through the exchange rate when Cardmarket comes to 0, pricedBy says which one it was. A printing whose price never moved over the whole window is flat and only counts when every printing of the card is flat. legality as stored, EXTENDED included. 404 for an unknown season or card, a card without data in that season, a basic land or a card without stored price details - the message says which."
+    )
+    public CardExplanationResponse explainCard(
+            @Parameter(description = "The card name, found the same way /v1/cards finds it.") @RequestParam String name,
+            @Parameter(description = "The season number, default is the current season.") @RequestParam(required = false) Integer season
+    ) {
+        try {
+            return CardExplanationMapper.INSTANCE.toResponse(this.casualChallengeService.explainCard(season, name));
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        }
     }
 }

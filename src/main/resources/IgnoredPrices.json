@@ -1,3 +1,14 @@
 {
-  "Tundra": ["SUM"]
+  "Tundra": [
+    {
+      "set": "SUM"
+    }
+  ],
+  "Through the Breach": [
+    {
+      "set": "UMA",
+      "number": "152",
+      "finish": "foil"
+    }
+  ]
 }

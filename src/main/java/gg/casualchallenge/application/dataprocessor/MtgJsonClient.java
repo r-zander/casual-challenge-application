@@ -5,8 +5,10 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import gg.casualchallenge.application.dataprocessor.model.CardPrices;
 import gg.casualchallenge.application.dataprocessor.model.Cents;
+import gg.casualchallenge.application.dataprocessor.model.IgnoredPriceVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonCard;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrinting;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPricesVO;
@@ -74,7 +76,7 @@ public class MtgJsonClient {
 
     private final String mtgJsonBaseUrl;
     private final Path archiveDirectory;
-    private final Map<String, List<String>> ignoredPriceSetsByCardName;
+    private final Map<String, List<IgnoredPriceVO>> ignoredPricesByCardName;
 
     public MtgJsonClient(
             @Value("${casual-challenge.season.mtgjson-base-url}") String mtgJsonBaseUrl,
@@ -83,9 +85,8 @@ public class MtgJsonClient {
         this.mtgJsonBaseUrl = mtgJsonBaseUrl;
         this.archiveDirectory = Paths.get(archiveDirectory);
 
-        ObjectMapper objectMapper = new ObjectMapper();
         try (InputStream ignoredPrices = new ClassPathResource(IGNORED_PRICES_FILE).getInputStream()) {
-            this.ignoredPriceSetsByCardName = objectMapper.readValue(ignoredPrices, new TypeReference<Map<String, List<String>>>() {});
+            this.ignoredPricesByCardName = readIgnoredPrices(ignoredPrices, IGNORED_PRICES_FILE);
         } catch (IOException e) {
             throw new RuntimeException("Couldn't read '" + IGNORED_PRICES_FILE + "'.", e);
         }
@@ -93,6 +94,7 @@ public class MtgJsonClient {
 
     /** @param seasonDirectory null = download into a temp directory in the archive directory and throw it away afterwards */
     public MtgJsonPrintingsVO fetchPrintings(Path seasonDirectory) {
+        if (seasonDirectory != null) archiveIgnoredPrices(seasonDirectory);
         Path directory = seasonDirectory != null ? seasonDirectory : createDownloadDirectory();
         try (ZipInputStream zipStream = new ZipInputStream(new BufferedInputStream(Files.newInputStream(download(PRINTINGS_ZIP, directory))))) {
             positionOnEntry(zipStream, PRINTINGS_FILE);
@@ -117,8 +119,48 @@ public class MtgJsonClient {
         }
     }
 
+    public MtgJsonPrintingsVO readArchivedPrintings(Path seasonDirectory) {
+        Path zip = seasonDirectory.resolve(PRINTINGS_ZIP);
+        if (!Files.isRegularFile(zip)) throw new IllegalArgumentException("The season archive has no '" + zip + "'.");
+
+        // A season prepared before the ignore list went into the archive is read with the list of today
+        Map<String, List<IgnoredPriceVO>> seasonIgnoredPricesByCardName = ignoredPricesByCardName;
+        Path ignoredPrices = seasonDirectory.resolve(IGNORED_PRICES_FILE);
+        if (Files.isRegularFile(ignoredPrices)) {
+            try (InputStream ignoredPricesJson = Files.newInputStream(ignoredPrices)) {
+                seasonIgnoredPricesByCardName = readIgnoredPrices(ignoredPricesJson, ignoredPrices.toString());
+            } catch (IOException e) {
+                throw new RuntimeException("Couldn't read '" + ignoredPrices + "'.", e);
+            }
+        }
+
+        try (ZipInputStream zipStream = new ZipInputStream(new BufferedInputStream(Files.newInputStream(zip)))) {
+            positionOnEntry(zipStream, PRINTINGS_FILE);
+            return readPrintings(zipStream, seasonIgnoredPricesByCardName);
+        } catch (IOException e) {
+            throw new RuntimeException("Couldn't read '" + zip + "'.", e);
+        }
+    }
+
+    public MtgJsonPricesVO readArchivedPrices(Map<UUID, MtgJsonPrinting> printingsByUuid, PriceWindowVO window, Path seasonDirectory) {
+        Path zip = seasonDirectory.resolve(PRICES_ZIP);
+        if (!Files.isRegularFile(zip)) throw new IllegalArgumentException("The season archive has no '" + zip + "'.");
+
+        try (ZipInputStream zipStream = new ZipInputStream(new BufferedInputStream(Files.newInputStream(zip)))) {
+            positionOnEntry(zipStream, PRICES_FILE);
+            return readPrices(zipStream, printingsByUuid, window);
+        } catch (IOException e) {
+            throw new RuntimeException("Couldn't read '" + zip + "'.", e);
+        }
+    }
+
     public MtgJsonPrintingsVO readPrintings(InputStream allPrintingsJson) {
+        return readPrintings(allPrintingsJson, ignoredPricesByCardName);
+    }
+
+    public MtgJsonPrintingsVO readPrintings(InputStream allPrintingsJson, Map<String, List<IgnoredPriceVO>> ignoredPricesByCardName) {
         Map<UUID, MtgJsonPrinting> printingsByUuid = new HashMap<>();
+        Map<String, List<MtgJsonPrinting>> ignoredPrintingsByCardName = new HashMap<>();
         Map<String, IdentityCandidate> identitiesByName = new LinkedHashMap<>();
         List<MtgJsonSet> sets = new ArrayList<>();
         LocalDate metaDate = null;
@@ -147,7 +189,7 @@ public class MtgJsonClient {
                         while (parser.nextToken() != JsonToken.END_OBJECT) {
                             String setCode = parser.currentName();
                             parser.nextToken();
-                            sets.add(readSet(parser, setCode, identitiesByName, printingsByUuid));
+                            sets.add(readSet(parser, setCode, identitiesByName, printingsByUuid, ignoredPrintingsByCardName, ignoredPricesByCardName));
                         }
                         break;
                     default:
@@ -164,7 +206,7 @@ public class MtgJsonClient {
         }
 
         log.info("Read {} sets with {} cards and {} printings.", sets.size(), cardsByName.size(), printingsByUuid.size());
-        return new MtgJsonPrintingsVO(cardsByName, printingsByUuid, sets, metaDate, metaVersion);
+        return new MtgJsonPrintingsVO(cardsByName, printingsByUuid, ignoredPrintingsByCardName, sets, metaDate, metaVersion);
     }
 
     public MtgJsonPricesVO readPrices(InputStream allPricesJson, Map<UUID, MtgJsonPrinting> printingsByUuid, PriceWindowVO window) {
@@ -268,7 +310,9 @@ public class MtgJsonClient {
             JsonParser parser,
             String setCode,
             Map<String, IdentityCandidate> identitiesByName,
-            Map<UUID, MtgJsonPrinting> printingsByUuid
+            Map<UUID, MtgJsonPrinting> printingsByUuid,
+            Map<String, List<MtgJsonPrinting>> ignoredPrintingsByCardName,
+            Map<String, List<IgnoredPriceVO>> ignoredPricesByCardName
     ) throws IOException {
         List<IdentityCandidate> identityCandidates = new ArrayList<>();
         List<MtgJsonSet.MtgJsonDeck> decks = new ArrayList<>();
@@ -299,7 +343,7 @@ public class MtgJsonClient {
                     break;
                 case "cards":
                     while (parser.nextToken() != JsonToken.END_ARRAY) {
-                        readCard(parser, setCode, identityCandidates, printingsByUuid);
+                        readCard(parser, setCode, identityCandidates, printingsByUuid, ignoredPrintingsByCardName, ignoredPricesByCardName);
                     }
                     break;
                 case "decks":
@@ -332,7 +376,9 @@ public class MtgJsonClient {
             JsonParser parser,
             String setCode,
             List<IdentityCandidate> identityCandidates,
-            Map<UUID, MtgJsonPrinting> printingsByUuid
+            Map<UUID, MtgJsonPrinting> printingsByUuid,
+            Map<String, List<MtgJsonPrinting>> ignoredPrintingsByCardName,
+            Map<String, List<IgnoredPriceVO>> ignoredPricesByCardName
     ) throws IOException {
         Map<MtgFormat, String> legalities = new EnumMap<>(MtgFormat.class);
         String cardName = null;
@@ -409,9 +455,17 @@ public class MtgJsonClient {
 
         if (!isPaper || isOversized || "silver".equals(borderColor) || "gold".equals(borderColor)) return;
 
-        if (!isIgnoredForPrices(cardName, setCode)) {
-            UUID printingUuid = UUID.fromString(uuid);
-            printingsByUuid.put(printingUuid, new MtgJsonPrinting(printingUuid, cardName, foil, nonFoil));
+        UUID printingUuid = UUID.fromString(uuid);
+        MtgJsonPrinting printing = new MtgJsonPrinting(printingUuid, cardName, setCode, number, foil, nonFoil);
+        boolean isFoilIgnored = foil && isIgnoredForPrices(cardName, setCode, number, "foil", ignoredPricesByCardName);
+        boolean isNonFoilIgnored = nonFoil && isIgnoredForPrices(cardName, setCode, number, "nonfoil", ignoredPricesByCardName);
+        if (isFoilIgnored || isNonFoilIgnored) {
+            ignoredPrintingsByCardName.computeIfAbsent(cardName, name -> new ArrayList<>()).add(new MtgJsonPrinting(printingUuid, cardName, setCode, number, isFoilIgnored, isNonFoilIgnored));
+            if (foil && !isFoilIgnored || nonFoil && !isNonFoilIgnored) {
+                printingsByUuid.put(printingUuid, new MtgJsonPrinting(printingUuid, cardName, setCode, number, foil && !isFoilIgnored, nonFoil && !isNonFoilIgnored));
+            }
+        } else {
+            printingsByUuid.put(printingUuid, printing);
         }
         if (isRebalanced) return;
         if (isFunny && !legalities.containsKey(MtgFormat.VINTAGE)) return; // MTGJSON flags every Unfinity card as funny, but the eternal legal ones are real cards
@@ -494,7 +548,7 @@ public class MtgJsonClient {
                 parser.nextToken();
                 // Foil and non-foil are two separate "printings" for the price calculation
                 if ("normal".equals(finish) && printing.isNonFoil() || "foil".equals(finish) && printing.isFoil()) {
-                    series.addPrinting(readPricesPerDay(parser, window, pricedDays));
+                    series.addPrinting(printing, "foil".equals(finish), readPricesPerDay(parser, window, pricedDays));
                 } else {
                     parser.skipChildren();
                 }
@@ -535,9 +589,45 @@ public class MtgJsonClient {
         );
     }
 
-    private boolean isIgnoredForPrices(String cardName, String setCode) {
-        List<String> ignoredSets = ignoredPriceSetsByCardName.get(cardName);
-        return ignoredSets != null && ignoredSets.contains(setCode);
+    private static boolean isIgnoredForPrices(String cardName, String setCode, String number, String finish, Map<String, List<IgnoredPriceVO>> ignoredPricesByCardName) {
+        List<IgnoredPriceVO> ignoredPrices = ignoredPricesByCardName.get(cardName);
+        if (ignoredPrices == null) return false;
+
+        for (IgnoredPriceVO ignoredPrice : ignoredPrices) {
+            if (ignoredPrice.getSet().equals(setCode)
+                    && (ignoredPrice.getNumber() == null || ignoredPrice.getNumber().equals(number))
+                    && (ignoredPrice.getFinish() == null || ignoredPrice.getFinish().equals(finish))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Not Spring's ObjectMapper: this one refuses unknown keys, so a typo like "finsh" can't quietly ignore the whole printing
+    private static Map<String, List<IgnoredPriceVO>> readIgnoredPrices(InputStream ignoredPricesJson, String fileName) throws IOException {
+        ObjectMapper objectMapper = new ObjectMapper().registerModule(new ParameterNamesModule());
+        Map<String, List<IgnoredPriceVO>> ignoredPricesByCardName = objectMapper.readValue(ignoredPricesJson, new TypeReference<Map<String, List<IgnoredPriceVO>>>() {});
+        for (Map.Entry<String, List<IgnoredPriceVO>> entry : ignoredPricesByCardName.entrySet()) {
+            String cardName = entry.getKey();
+            for (IgnoredPriceVO ignoredPrice : entry.getValue()) {
+                String finish = ignoredPrice.getFinish();
+                if (ignoredPrice.getSet() == null) throw new RuntimeException("'" + cardName + "' has an entry without a set in '" + fileName + "': " + ignoredPrice + ".");
+                if (finish != null && ignoredPrice.getNumber() == null) throw new RuntimeException("'" + cardName + "' has an entry with a finish, but without a number in '" + fileName + "': " + ignoredPrice + ". A finish only works for one printing.");
+                if (finish != null && !"foil".equals(finish) && !"nonfoil".equals(finish)) throw new RuntimeException("'" + cardName + "' has an entry with the finish '" + finish + "' in '" + fileName + "': " + ignoredPrice + ". It's either foil or nonfoil.");
+            }
+        }
+
+        return ignoredPricesByCardName;
+    }
+
+    // A rebuild of the season's price details has to ignore the very same prices, whatever IgnoredPrices.json says by then
+    private static void archiveIgnoredPrices(Path seasonDirectory) {
+        try (InputStream ignoredPrices = new ClassPathResource(IGNORED_PRICES_FILE).getInputStream()) {
+            Files.copy(ignoredPrices, seasonDirectory.resolve(IGNORED_PRICES_FILE), StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            throw new RuntimeException("Couldn't copy '" + IGNORED_PRICES_FILE + "' into '" + seasonDirectory + "'.", e);
+        }
     }
 
 

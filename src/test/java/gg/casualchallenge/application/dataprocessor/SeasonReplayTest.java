@@ -1,25 +1,32 @@
 package gg.casualchallenge.application.dataprocessor;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import gg.casualchallenge.application.api.legacy.datamodel.BanDTO;
 import gg.casualchallenge.application.common.SeasonDates;
 import gg.casualchallenge.application.dataprocessor.model.AssembledDraftVO;
 import gg.casualchallenge.application.dataprocessor.model.CardPrices;
 import gg.casualchallenge.application.dataprocessor.model.Cents;
+import gg.casualchallenge.application.dataprocessor.model.IgnoredPriceVO;
+import gg.casualchallenge.application.dataprocessor.model.MatchedPriceDetailsVO;
 import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
 import gg.casualchallenge.application.dataprocessor.model.MetaSharesVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrinting;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPricesVO;
 import gg.casualchallenge.application.dataprocessor.model.MtgJsonPrintingsVO;
 import gg.casualchallenge.application.dataprocessor.model.PriceWindowVO;
+import gg.casualchallenge.application.model.values.CardPriceDetailsVO;
 import gg.casualchallenge.application.model.values.SeasonDraftCardVO;
 import gg.casualchallenge.application.model.values.SeasonPreparationRequestVO;
+import gg.casualchallenge.application.persistence.entity.CardSeasonData;
 import gg.casualchallenge.application.persistence.entity.Season;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
@@ -37,9 +44,11 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 // ./gradlew replayTest -Dreplay.dir=C:\Users\XieLong\workspaces\chrome-extension-casual-challenge
@@ -73,6 +82,9 @@ class SeasonReplayTest {
     private static final Set<String> DRIFTING_COLUMNS = Set.of("name", "normalized_name", "legality", "banned_in", "vintage_restricted");
 
     private static final LocalDateTime ADDED_AT = LocalDateTime.of(2026, 9, 15, 12, 0);
+
+    // What IgnoredPrices.json said when seasons 18 to 21 were priced, the file has moved on since
+    private static final Map<String, List<IgnoredPriceVO>> IGNORED_PRICES_BY_CARD_NAME = Map.of("Tundra", List.of(new IgnoredPriceVO("SUM", null, null)));
 
     private final MtgJsonClient mtgJsonClient = new MtgJsonClient("https://mtgjson.com/api/v5", System.getProperty("java.io.tmpdir"));
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new ParameterNamesModule()); // the ban files map onto constructors, just like they do in the controller
@@ -181,6 +193,53 @@ class SeasonReplayTest {
             assertTrue(budgetPointDiff.halfCentTies.size() <= 10);
             assertTrue(budgetPointDiff.unknownToUs.size() + budgetPointDiff.pricedByUsOnly.size() <= 10);
             assertTrue(budgetPointDiff.droppedByIdentityRule.size() <= 1000);
+
+            // Cardmarket's price trend for the UMA foil was stuck at 2 and 5 cents the whole window, that's where the 4 budget points come from
+            SeasonDraftCardVO throughTheBreach = findCard(cards, "Through the Breach");
+            CardPriceDetailsVO.MarketPricesVO cardmarket = throughTheBreach.getPriceDetails().getCardmarket();
+            CardPriceDetailsVO.MarketPricesVO tcgplayer = throughTheBreach.getPriceDetails().getTcgplayer();
+            int july6 = PriceWindowVO.of(startDate, PRICE_WINDOW_DAYS).dayIndex(LocalDate.of(2026, 7, 6));
+            printPriceDetails(cards);
+
+            assertEquals(4, throughTheBreach.getBudgetPoints());
+            assertEquals("cardmarket", throughTheBreach.getPriceDetails().getPricedBy());
+            assertEquals(65, cardmarket.getPricedDays());
+            assertEquals(4, cardmarket.getAverageCents());
+            assertEquals("UMA", cardmarket.getPrintings().get(0).getSetCode());
+            assertEquals("152", cardmarket.getPrintings().get(0).getNumber());
+            assertEquals("foil", cardmarket.getPrintings().get(0).getFinish());
+            assertEquals(65, cardmarket.getPrintings().get(0).getPricedDays());
+            assertEquals(65, cardmarket.getPrintings().get(0).getCheapestDays());
+            assertEquals(4, cardmarket.getPrintings().get(0).getAverageCents());
+            assertEquals(2, cardmarket.getCheapestCentsPerDay().get(july6));
+            assertEquals(0, cardmarket.getCheapestPrintingPerDay().get(july6));
+            assertEquals("INR", tcgplayer.getPrintings().get(0).getSetCode());
+            assertEquals("175", tcgplayer.getPrintings().get(0).getNumber());
+            assertEquals("nonfoil", tcgplayer.getPrintings().get(0).getFinish());
+            assertEquals(68, tcgplayer.getPrintings().get(0).getCheapestDays());
+            assertEquals(44, tcgplayer.getPrintings().get(0).getAverageCents());
+            assertNull(findCard(cards, "Island").getPriceDetails());
+
+            // A rebuild matches the season's rows by oracle id instead of assembling a draft --> on the same input it has to come to the very same documents
+            List<CardSeasonData> seasonData = new ArrayList<>(cards.size());
+            for (SeasonDraftCardVO card : cards) {
+                if (card.getSkipReason() != null) continue;
+
+                CardSeasonData cardSeasonData = new CardSeasonData();
+                cardSeasonData.setCardOracleId(card.getOracleId());
+                cardSeasonData.setBudgetPoints(card.getBudgetPoints());
+                seasonData.add(cardSeasonData);
+            }
+            MatchedPriceDetailsVO matchedPriceDetails = SeasonPreparationService.matchPriceDetails(printings, new MtgJsonPricesVO(pricesByCardName, PRICE_WINDOW_DAYS), List.of(), seasonData, PriceWindowVO.of(startDate, PRICE_WINDOW_DAYS));
+            int differentDocuments = 0;
+            for (SeasonDraftCardVO card : cards) {
+                if (card.getSkipReason() != null) continue;
+                if (!Objects.equals(card.getPriceDetails(), matchedPriceDetails.getPriceDetailsByOracleId().get(card.getOracleId()))) differentDocuments++;
+            }
+
+            assertEquals(0, matchedPriceDetails.getMismatches().size());
+            assertEquals(0, matchedPriceDetails.getUnmatchedCards().size());
+            assertEquals(0, differentDocuments);
         }
 
         Map<String, String[]> ourCards = rowsByOracleId(SeasonMigrationSql.insertCards(cards, ADDED_AT), 0);
@@ -240,7 +299,7 @@ class SeasonReplayTest {
 
     private MtgJsonPrintingsVO readPrintings(Path allPrintingsJson) throws IOException {
         try (InputStream printings = new BufferedInputStream(Files.newInputStream(allPrintingsJson))) {
-            return mtgJsonClient.readPrintings(printings);
+            return mtgJsonClient.readPrintings(printings, IGNORED_PRICES_BY_CARD_NAME);
         }
     }
 
@@ -281,7 +340,7 @@ class SeasonReplayTest {
         Map<String, CardPrices> pricesByCardName = new HashMap<>(budgetPointsByCardName.size());
         for (Map.Entry<String, Integer> entry : budgetPointsByCardName.entrySet()) {
             CardPrices cardPrices = new CardPrices(1);
-            cardPrices.getEur().addPrinting(new Cents[]{Cents.of(entry.getValue())});
+            cardPrices.getEur().addPrinting(new MtgJsonPrinting(null, entry.getKey(), null, null, false, true), false, new Cents[]{Cents.of(entry.getValue())});
             pricesByCardName.put(entry.getKey(), cardPrices);
         }
 
@@ -314,6 +373,14 @@ class SeasonReplayTest {
 
         AssembledDraftVO assembledDraft = SeasonPreparationService.assemble(printings, new MtgJsonPricesVO(pricesByCardName, PRICE_WINDOW_DAYS), metaShares, List.of(), List.of(), request, previousSeason, SEASON_DATES);
         return assembledDraft.getCards();
+    }
+
+    private static SeasonDraftCardVO findCard(List<SeasonDraftCardVO> cards, String cardName) {
+        for (SeasonDraftCardVO card : cards) {
+            if (card.getName().equals(cardName)) return card;
+        }
+
+        return null;
     }
 
     private static BudgetPointDiff compareBudgetPoints(
@@ -521,6 +588,21 @@ class SeasonReplayTest {
         for (int line = 0; line < lines.size() && line < MAX_PRINTED_LINES; line++) {
             System.out.println("    " + lines.get(line));
         }
+    }
+
+    // What the commit writes into card_season_price_details, before Postgres compresses it
+    private static void printPriceDetails(List<SeasonDraftCardVO> cards) throws JsonProcessingException {
+        ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json().featuresToDisable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS).build(); // the dates like Spring Boot writes them
+        long characters = 0;
+        int documents = 0;
+        for (SeasonDraftCardVO card : cards) {
+            if (card.getPriceDetails() == null) continue;
+
+            characters += objectMapper.writeValueAsString(card.getPriceDetails()).length();
+            documents++;
+        }
+
+        System.out.println("  Price details: " + documents + " documents, " + characters / documents + " characters on average, " + characters / (1024 * 1024) + " MB in all.");
     }
 
     private static void printHeap() {

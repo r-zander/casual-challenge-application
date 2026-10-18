@@ -15,7 +15,12 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
-public final class SeasonMigrationSql { // the files data-preparer.py used to write, so a season start stays reproducible from the repository alone
+/**
+ * The files data-preparer.py used to write, so a season start stays reproducible from the repository alone.
+ * Not the price details though, ~80 MB per season --> they only live in the database the season was committed to,
+ * and the season archive can rebuild them.
+ */
+public final class SeasonMigrationSql {
 
     private static final int CHUNK_SIZE = 1000;
 

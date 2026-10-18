@@ -1,11 +1,13 @@
 package gg.casualchallenge.application.api;
 
+import gg.casualchallenge.application.api.datamodel.CardExplanationResponse;
 import gg.casualchallenge.application.api.datamodel.CommittedSeasonResponse;
 import gg.casualchallenge.application.api.datamodel.SeasonCommitRequest;
 import gg.casualchallenge.application.api.datamodel.SeasonDraftReportResponse;
 import gg.casualchallenge.application.dataprocessor.SeasonDraftService;
 import gg.casualchallenge.application.dataprocessor.model.SeasonSqlFile;
 import gg.casualchallenge.application.dataprocessor.model.SeasonSqlFileVO;
+import gg.casualchallenge.application.model.mapper.CardExplanationMapper;
 import gg.casualchallenge.application.model.mapper.CommittedSeasonMapper;
 import gg.casualchallenge.application.model.mapper.SeasonDraftReportMapper;
 import gg.casualchallenge.application.model.values.SeasonDraftReportVO;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
@@ -35,9 +38,14 @@ import java.security.Principal;
 public class SeasonDraftControllerV1 {
 
     private final SeasonDraftService seasonDraftService;
+    private final CasualChallengeService casualChallengeService;
 
-    public SeasonDraftControllerV1(SeasonDraftService seasonDraftService) {
+    public SeasonDraftControllerV1(
+            SeasonDraftService seasonDraftService,
+            CasualChallengeService casualChallengeService
+    ) {
         this.seasonDraftService = seasonDraftService;
+        this.casualChallengeService = casualChallengeService;
     }
 
     @GetMapping(path = "/season/draft")
@@ -52,6 +60,21 @@ public class SeasonDraftControllerV1 {
         }
 
         return SeasonDraftReportMapper.INSTANCE.toResponse(report);
+    }
+
+    @GetMapping(path = "/season/draft/explain")
+    @Operation(
+            summary = "Explain a card of the open draft",
+            description = "The same answer as /v1/cards/explain, for a card of the open draft - new cards included. The commit moves the details over to the season, from then on /v1/cards/explain answers for it. 404 when there is no open draft, or the card is not in it, is a basic land or has no price details. A skipped card counts as not in it, it never makes it into the season."
+    )
+    public CardExplanationResponse explainDraftCard(
+            @Parameter(description = "The card name, found the same way /v1/cards finds it.") @RequestParam String name
+    ) {
+        try {
+            return CardExplanationMapper.INSTANCE.toResponse(this.casualChallengeService.explainDraftCard(name));
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        }
     }
 
     @GetMapping(path = "/season/draft/sql/{part}", produces = "text/plain;charset=utf-8")

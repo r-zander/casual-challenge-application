@@ -1,12 +1,15 @@
 package gg.casualchallenge.application.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import gg.casualchallenge.application.api.datamodel.RebuiltPriceDetailsResponse;
 import gg.casualchallenge.application.api.datamodel.SeasonPreparationStatusResponse;
 import gg.casualchallenge.application.api.legacy.datamodel.BanDTO;
 import gg.casualchallenge.application.dataprocessor.SeasonPreparationService;
 import gg.casualchallenge.application.dataprocessor.model.MetaShareSource;
 import gg.casualchallenge.application.dataprocessor.model.PriceWindowVO;
+import gg.casualchallenge.application.model.mapper.RebuiltPriceDetailsMapper;
 import gg.casualchallenge.application.model.mapper.SeasonPreparationStatusMapper;
+import gg.casualchallenge.application.model.values.RebuiltPriceDetailsVO;
 import gg.casualchallenge.application.model.values.SeasonPreparationRequestVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -17,6 +20,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -59,7 +63,7 @@ public class SeasonPreparationControllerV1 {
     @ResponseStatus(HttpStatus.ACCEPTED)
     @Operation(
             summary = "Start preparing the next season",
-            description = "Answers right away with the status, the work happens in the background. 409 while another preparation is still running. 400 when the dates don't work out, metaSource is none of the three or metaSource=files comes without the two files. Every parameter is optional, the defaults are with the parameters."
+            description = "Answers right away with the status, the work happens in the background. 409 while another preparation or a rebuild of price details is still running. 400 when the dates don't work out, metaSource is none of the three or metaSource=files comes without the two files. Every parameter is optional, the defaults are with the parameters."
     )
     public SeasonPreparationStatusResponse prepareSeason(
             @Parameter(description = "First day of the new season, today (UTC) if you leave it out.")
@@ -113,6 +117,29 @@ public class SeasonPreparationControllerV1 {
     )
     public void cancelSeasonPreparation() {
         this.seasonPreparationService.cancel();
+    }
+
+    @PostMapping(path = "/season/{seasonNumber}/price-details")
+    @Operation(
+            summary = "Rebuild the price details of a season",
+            description = "Prices the season again from the MTGJSON files its preparation left in the archive and replaces all of the season's price details with the result, so it only works while the archive is still there. Synchronous and takes a few minutes - behind Cloudflare the answer may never arrive, the rebuild finishes anyway and logs the same numbers. mismatches are cards priced differently than their stored budget points, unmatchedCards ones with budget points but no card in the archive. 404 for a season that doesn't exist or has no archive. 409 while a preparation or another rebuild is running, and when the archive holds another run of the season than the one that was committed."
+    )
+    public RebuiltPriceDetailsResponse rebuildPriceDetails(
+            @Parameter(description = "The season to rebuild, the number not the id - they happen to be the same.") @PathVariable("seasonNumber") int seasonNumber
+    ) {
+        RebuiltPriceDetailsVO rebuiltPriceDetails;
+        try {
+            rebuiltPriceDetails = this.seasonPreparationService.rebuildPriceDetails(seasonNumber);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage()); // the archive or a file in it is missing
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
+        }
+        if (rebuiltPriceDetails == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "There is no season " + seasonNumber + ".");
+        }
+
+        return RebuiltPriceDetailsMapper.INSTANCE.toResponse(rebuiltPriceDetails);
     }
 
 

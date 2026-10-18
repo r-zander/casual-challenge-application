@@ -10,8 +10,8 @@ class BudgetPointsUtilTest {
     @Test
     void testFromSeries() {
         PriceSeries priceSeries = new PriceSeries(3);
-        priceSeries.addPrinting(new Cents[]{Cents.of(100), Cents.of(150), null});
-        priceSeries.addPrinting(new Cents[]{Cents.of(120), Cents.of(300), Cents.of(90)});
+        priceSeries.addPrinting(null, false, new Cents[]{Cents.of(100), Cents.of(150), null});
+        priceSeries.addPrinting(null, false, new Cents[]{Cents.of(120), Cents.of(300), Cents.of(90)});
 
         assertEquals(Cents.of(113), BudgetPointsUtil.fromSeries(priceSeries));
         assertEquals(Cents.of(0), BudgetPointsUtil.fromSeries(new PriceSeries(3)));

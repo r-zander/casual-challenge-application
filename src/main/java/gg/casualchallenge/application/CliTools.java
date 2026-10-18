@@ -42,7 +42,7 @@ public class CliTools {
 
                 // Dynamically resolve the project root directory
                 Path projectRoot = Paths.get("").toAbsolutePath();
-                Path secretFile = projectRoot.resolve("jwt_private_key.txt");
+                Path secretFile = projectRoot.resolve("secrets/jwt_private_key.txt");
                 String secretKey = Files.readString(secretFile).trim();
 
                 JwtService jwtService = new JwtService(secretKey);
